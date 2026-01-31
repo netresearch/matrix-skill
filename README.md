@@ -1,10 +1,10 @@
-# Netresearch Matrix Skill
+# Matrix Skill
 
-A Claude Code skill for Matrix chat communication at matrix.netresearch.de.
+A Claude Code skill for Matrix chat communication.
 
 ## Overview
 
-This skill enables Claude Code to send messages to Matrix chat rooms on behalf of users. Messages are sent using the user's own access token, so they appear as coming from the user.
+This skill enables Claude Code to send messages to Matrix chat rooms on behalf of users. Messages are sent using the user's own access token, so they appear as coming from the user. Works with any Matrix homeserver.
 
 ## Features
 
@@ -21,7 +21,7 @@ Create `~/.config/matrix/config.json`:
 
 ```json
 {
-  "homeserver": "https://matrix.netresearch.de",
+  "homeserver": "https://matrix.org",
   "access_token": "syt_..."
 }
 ```

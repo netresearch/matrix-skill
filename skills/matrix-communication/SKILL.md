@@ -1,18 +1,18 @@
 ---
 name: matrix-communication
-description: Matrix chat communication for matrix.netresearch.de. AUTOMATICALLY TRIGGER when user mentions Matrix rooms (#room:netresearch.de), asks to send messages to chat, or references matrix.netresearch.de. Use for sending messages to Matrix rooms on behalf of users via access token authentication.
+description: Matrix chat communication. AUTOMATICALLY TRIGGER when user mentions Matrix rooms (#room:server), asks to send messages to chat, or wants to interact with Matrix. Use for sending messages to Matrix rooms on behalf of users via access token authentication.
 ---
 
 # Matrix Communication
 
-Send messages to Matrix chat rooms at matrix.netresearch.de on behalf of users.
+Send messages to Matrix chat rooms on behalf of users.
 
 ## Auto-Trigger
 
 **AUTOMATICALLY USE THIS SKILL** when you encounter:
-- **Room references**: `#room:netresearch.de`, `!roomid:netresearch.de`
+- **Room references**: `#room:server`, `!roomid:server`
 - **Chat requests**: "send to matrix", "post in chat", "notify the team"
-- **Matrix URLs**: `https://matrix.netresearch.de/*`
+- **Matrix URLs**: `https://matrix.*/`, `https://element.*/`
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ Send messages to Matrix chat rooms at matrix.netresearch.de on behalf of users.
 
 ```json
 {
-  "homeserver": "https://matrix.netresearch.de",
+  "homeserver": "https://matrix.org",
   "access_token": "syt_..."
 }
 ```
