@@ -21,7 +21,9 @@ This skill enables AI coding agents to send messages to Matrix chat rooms on beh
 - **Reactions** - Add emoji reactions to messages (✅ 👍 🚀)
 - **Visual effects** - Confetti 🎉, fireworks 🎆, snowfall ❄️ (Element clients)
 - **List rooms** to find the right destination
-- **Read messages** (unencrypted messages only in v1)
+- **Read messages** - both unencrypted and E2EE decryption
+- **Bot prefix** - optional 🤖 prefix for automated messages
+- **Device verification** - SAS emoji verification for E2EE
 
 ## Prerequisites
 
@@ -32,9 +34,14 @@ Create `~/.config/matrix/config.json`:
 ```json
 {
   "homeserver": "https://matrix.org",
-  "access_token": "syt_..."
+  "access_token": "syt_...",
+  "user_id": "@you:matrix.org",
+  "bot_prefix": "🤖"
 }
 ```
+
+- `user_id`: Required for E2EE support
+- `bot_prefix`: Optional prefix for automated messages (use `--no-prefix` to skip)
 
 **Get your access token:**
 1. Open Element
@@ -86,8 +93,11 @@ uv run scripts/matrix-rooms.py --search ops
 ### Read Messages
 
 ```bash
-# Read last 10 messages
+# Read last 10 messages (unencrypted rooms)
 uv run scripts/matrix-read.py "#myroom:matrix.org"
+
+# Read E2EE encrypted messages
+uv run scripts/matrix-read-e2ee.py "#myroom:matrix.org" --limit 10
 
 # Read more messages
 uv run scripts/matrix-read.py "#myroom:matrix.org" --limit 50
@@ -105,6 +115,8 @@ uv run scripts/matrix-resolve.py "#myroom:matrix.org"
 |--------|------------|-------|--------------|
 | `matrix-send.py` | Works if "allow unverified" | Fast | None |
 | `matrix-send-e2ee.py` | Full encryption | Slower* | libolm |
+| `matrix-read-e2ee.py` | Decrypts messages | Slower* | libolm |
+| `matrix-e2ee-verify.py` | Device verification | - | libolm |
 
 *First run ~5-10s (key sync), subsequent runs faster.
 
@@ -115,7 +127,15 @@ sudo dnf install libolm-devel  # Fedora
 brew install libolm            # macOS
 ```
 
-**Reading**: Currently unencrypted messages only.
+**Setup options:**
+- Just use `access_token` from config (works immediately)
+- Or create dedicated device: `uv run scripts/matrix-e2ee-setup.py "PASSWORD"`
+
+**Device verification** (optional):
+```bash
+uv run scripts/matrix-e2ee-verify.py --timeout 120
+# Then start verification from Element: Settings → Security → Sessions
+```
 
 ## Structure
 
@@ -124,10 +144,15 @@ matrix-skill/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest
 ├── scripts/
-│   ├── matrix-send.py           # Send messages
+│   ├── matrix-send.py           # Send messages (fast, non-E2EE)
+│   ├── matrix-send-e2ee.py      # Send messages (E2EE encrypted)
+│   ├── matrix-read.py           # Read messages (unencrypted)
+│   ├── matrix-read-e2ee.py      # Read messages (E2EE decryption)
 │   ├── matrix-rooms.py          # List joined rooms
-│   ├── matrix-read.py           # Read messages
-│   └── matrix-resolve.py        # Resolve room aliases
+│   ├── matrix-resolve.py        # Resolve room aliases
+│   ├── matrix-react.py          # React to messages
+│   ├── matrix-e2ee-setup.py     # E2EE device setup
+│   └── matrix-e2ee-verify.py    # Device verification
 ├── skills/
 │   └── matrix-communication/
 │       ├── SKILL.md             # Skill instructions
