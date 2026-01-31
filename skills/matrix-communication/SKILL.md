@@ -285,6 +285,21 @@ Thanks to everyone who contributed."
 | `M_UNKNOWN_TOKEN` | Invalid/expired token | Get new token from Element |
 | `M_NOT_FOUND` | Room doesn't exist | Check room alias spelling |
 
+## Bash Quoting
+
+**Important:** When message ends with `!`, use single quotes or `$'...'` to avoid bash history expansion adding backslashes.
+
+```bash
+# WRONG - bash escapes !" to \!
+uv run scripts/matrix-send.py "#room:server" "Done!"
+
+# CORRECT - single quotes
+uv run scripts/matrix-send.py "#room:server" 'Done!'
+
+# CORRECT - $'...' syntax
+uv run scripts/matrix-send.py "#room:server" $'Done!'
+```
+
 ## Related
 
 - [Matrix Client-Server API](https://spec.matrix.org/latest/client-server-api/)
