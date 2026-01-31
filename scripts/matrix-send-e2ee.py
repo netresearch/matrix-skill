@@ -44,9 +44,7 @@ try:
         AsyncClientConfig,
         RoomResolveAliasResponse,
         RoomSendResponse,
-        LoginResponse,
     )
-    from nio.store import SqliteStore
 except ImportError as e:
     if "olm" in str(e).lower():
         print("Error: libolm library not found.", file=sys.stderr)
@@ -69,22 +67,17 @@ def load_config() -> dict:
         print("Create it with:", file=sys.stderr)
         print(json.dumps({
             "homeserver": "https://matrix.org",
-            "access_token": "syt_...",
-            "user_id": "@user:matrix.org",
-            "device_id": "DEVICEID"
+            "user_id": "@user:matrix.org"
         }, indent=2), file=sys.stderr)
         sys.exit(1)
 
     with open(config_path) as f:
         config = json.load(f)
 
-    # Validate required fields for E2EE
-    required = ["homeserver", "access_token", "user_id"]
+    required = ["homeserver", "user_id"]
     missing = [f for f in required if f not in config]
     if missing:
         print(f"Error: Config missing required fields: {', '.join(missing)}", file=sys.stderr)
-        print("E2EE requires: homeserver, access_token, user_id", file=sys.stderr)
-        print("Optional: device_id (will be auto-generated if missing)", file=sys.stderr)
         sys.exit(1)
 
     return config
@@ -92,11 +85,24 @@ def load_config() -> dict:
 
 def get_store_path() -> Path:
     """Get or create the E2EE key store directory."""
-    # Use XDG_DATA_HOME or default to ~/.local/share
     xdg_data = os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")
     store_path = Path(xdg_data) / "matrix-skill" / "store"
     store_path.mkdir(parents=True, exist_ok=True)
     return store_path
+
+
+def get_credentials_path() -> Path:
+    """Get path for stored E2EE device credentials."""
+    return get_store_path() / "credentials.json"
+
+
+def load_credentials() -> dict | None:
+    """Load stored device credentials if they exist."""
+    creds_path = get_credentials_path()
+    if creds_path.exists():
+        with open(creds_path) as f:
+            return json.load(f)
+    return None
 
 
 async def send_message_e2ee(
@@ -112,46 +118,68 @@ async def send_message_e2ee(
 
     store_path = get_store_path()
 
+    # Check for existing E2EE device credentials
+    stored_creds = load_credentials()
+
+    if not stored_creds or stored_creds.get("user_id") != config["user_id"]:
+        return {
+            "error": "E2EE device not set up. Run: uv run scripts/matrix-e2ee-setup.py YOUR_PASSWORD"
+        }
+
+    device_id = stored_creds["device_id"]
+    access_token = stored_creds["access_token"]
+
+    if debug:
+        print(f"Store path: {store_path}", file=sys.stderr)
+        print(f"Using device: {device_id}", file=sys.stderr)
+
     # Configure client for E2EE
     client_config = AsyncClientConfig(
         store_sync_tokens=True,
         encryption_enabled=True,
     )
 
+    # Create client
     client = AsyncClient(
         homeserver=config["homeserver"],
         user=config["user_id"],
-        device_id=config.get("device_id"),
+        device_id=device_id,
         store_path=str(store_path),
         config=client_config,
     )
 
     try:
-        # Set access token directly (no password login needed)
-        client.access_token = config["access_token"]
-        client.user_id = config["user_id"]
+        # Restore session from stored credentials
+        client.restore_login(
+            user_id=config["user_id"],
+            device_id=device_id,
+            access_token=access_token,
+        )
+        if debug:
+            print(f"Session restored", file=sys.stderr)
 
         if debug:
-            print(f"Store path: {store_path}", file=sys.stderr)
+            print(f"Store initialized: {client.store is not None}", file=sys.stderr)
+            print(f"Olm initialized: {client.olm is not None}", file=sys.stderr)
 
-        # Check if we have an existing device_id in config or need to get one
-        if not client.device_id:
-            # Get device_id from whoami endpoint
-            from nio import WhoamiResponse
-            whoami = await client.whoami()
-            if isinstance(whoami, WhoamiResponse):
-                client.device_id = whoami.device_id
-                if debug:
-                    print(f"Got device ID from server: {client.device_id}", file=sys.stderr)
-            else:
-                return {"error": f"Failed to get device info: {whoami}"}
-
-        if debug:
-            print(f"Device ID: {client.device_id}", file=sys.stderr)
-
-        # Load existing keys from store if available
+        # Load existing crypto keys from store
         if client.store:
             client.load_store()
+            if debug:
+                print(f"Keys loaded. Olm account shared: {client.olm_account_shared}", file=sys.stderr)
+
+        # Upload device keys if needed
+        if client.should_upload_keys:
+            if debug:
+                print("Uploading device keys...", file=sys.stderr)
+            from nio import KeysUploadResponse
+            keys_response = await client.keys_upload()
+            if isinstance(keys_response, KeysUploadResponse):
+                if debug:
+                    print(f"Keys uploaded successfully", file=sys.stderr)
+            else:
+                if debug:
+                    print(f"Keys upload response: {keys_response}", file=sys.stderr)
 
         # Resolve room alias if needed
         room_id = room
@@ -175,18 +203,54 @@ async def send_message_e2ee(
         if debug:
             print(f"Sync complete. Rooms: {len(client.rooms)}", file=sys.stderr)
 
-        # Trust all devices in the room (TOFU - Trust On First Use)
+        # Get room object and check encryption
         room_obj = client.rooms.get(room_id)
+        if debug:
+            print(f"Room object: {room_obj is not None}", file=sys.stderr)
+            if room_obj:
+                print(f"Room encrypted: {room_obj.encrypted}", file=sys.stderr)
+            print(f"Olm loaded: {client.olm is not None}", file=sys.stderr)
+
         if room_obj and room_obj.encrypted and client.olm:
+            # Query device keys for all room members
+            if client.should_query_keys:
+                if debug:
+                    print("Querying device keys...", file=sys.stderr)
+                from nio import KeysQueryResponse
+                keys_query_response = await client.keys_query()
+                if debug:
+                    if isinstance(keys_query_response, KeysQueryResponse):
+                        print(f"Keys query successful", file=sys.stderr)
+                    else:
+                        print(f"Keys query response: {keys_query_response}", file=sys.stderr)
+
+            # Claim one-time keys for devices we don't have sessions with
+            try:
+                users_to_claim = client.get_users_for_key_claiming()
+                if users_to_claim:
+                    if debug:
+                        print(f"Claiming keys for {len(users_to_claim)} users...", file=sys.stderr)
+                    from nio import KeysClaimResponse
+                    claim_response = await client.keys_claim(users_to_claim)
+                    if debug:
+                        if isinstance(claim_response, KeysClaimResponse):
+                            print(f"Keys claimed successfully", file=sys.stderr)
+                        else:
+                            print(f"Keys claim response: {claim_response}", file=sys.stderr)
+            except Exception as e:
+                if debug:
+                    print(f"Key claiming skipped: {e}", file=sys.stderr)
+
+            # Trust all devices in the room (TOFU - Trust On First Use)
             if debug:
                 print(f"Room is encrypted. Trusting devices...", file=sys.stderr)
             for member_id in room_obj.users:
                 try:
-                    for device_id, device in client.device_store.active_user_devices(member_id):
+                    for dev_id, device in client.device_store.active_user_devices(member_id):
                         if not device.verified:
                             client.verify_device(device)
                             if debug:
-                                print(f"Trusted: {member_id}/{device_id}", file=sys.stderr)
+                                print(f"Trusted: {member_id}/{dev_id}", file=sys.stderr)
                 except Exception as e:
                     if debug:
                         print(f"Could not verify devices for {member_id}: {e}", file=sys.stderr)
@@ -210,11 +274,12 @@ async def send_message_e2ee(
                 "m.in_reply_to": {"event_id": reply_id}
             }
 
-        # Send message
+        # Send message (ignore unverified devices for TOFU model)
         response = await client.room_send(
             room_id=room_id,
             message_type="m.room.message",
             content=content,
+            ignore_unverified_devices=True,
         )
 
         if isinstance(response, RoomSendResponse):

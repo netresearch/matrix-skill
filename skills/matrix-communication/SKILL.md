@@ -43,7 +43,8 @@ All scripts are in the `scripts/` directory. Run with `uv run`.
 | Script | Purpose |
 |--------|---------|
 | `matrix-send.py` | Send message (fast, non-E2EE) |
-| `matrix-send-e2ee.py` | Send message (E2EE capable, requires libolm) |
+| `matrix-send-e2ee.py` | Send message (E2EE encrypted) |
+| `matrix-e2ee-setup.py` | One-time E2EE device setup |
 | `matrix-react.py` | React to a message with emoji |
 | `matrix-rooms.py` | List joined rooms |
 | `matrix-read.py` | Read recent messages (unencrypted only) |
@@ -213,25 +214,58 @@ URLs are automatically shortened to readable links:
 |----------|--------|-------|
 | Unencrypted room | `matrix-send.py` | Fast, no deps |
 | E2EE room with "allow unverified" | `matrix-send.py` | Works but not encrypted |
-| E2EE room, proper encryption | `matrix-send-e2ee.py` | Requires libolm |
+| E2EE room, proper encryption | `matrix-send-e2ee.py` | Requires libolm + setup |
+
+### E2EE First-Time Setup
+
+E2EE requires a dedicated Matrix device with its own encryption keys. This is a **one-time setup** using `matrix-e2ee-setup.py`.
+
+**Agent workflow for E2EE:**
+1. Try `matrix-send-e2ee.py` - if it fails with "E2EE device not set up":
+2. Ask user for their Matrix password (explain: used once, not stored)
+3. Run: `uv run scripts/matrix-e2ee-setup.py 'USER_PASSWORD'`
+4. On success, `matrix-send-e2ee.py` works without password
+
+```bash
+# One-time setup (password used once, not stored)
+uv run scripts/matrix-e2ee-setup.py 'USER_PASSWORD'
+
+# Check setup status
+uv run scripts/matrix-e2ee-setup.py --status
+
+# After setup, send messages without password
+uv run scripts/matrix-send-e2ee.py '#room:server' 'Encrypted message'
+
+# To remove device (if needed)
+uv run scripts/matrix-e2ee-setup.py --logout
+```
+
+**Why password is needed once:**
+- Matrix access tokens are bound to specific devices
+- Creating a new device with E2EE keys requires a login
+- The login creates device "Matrix Skill E2EE" visible in user's session list
+- After login, only the device's access token is stored (not the password)
 
 ### E2EE Script Usage
 
 ```bash
-# First run is slow (~5-10s) - syncs keys
+# First run after setup is slow (~5-10s) - syncs keys
 uv run scripts/matrix-send-e2ee.py '#encrypted-room:server' 'Secret message'
 
 # Subsequent runs faster (uses cached keys)
 uv run scripts/matrix-send-e2ee.py '#encrypted-room:server' 'Another message'
 ```
 
-Key storage: `~/.local/share/matrix-skill/store/`
+Storage locations:
+- Device credentials: `~/.local/share/matrix-skill/store/credentials.json`
+- Encryption keys: `~/.local/share/matrix-skill/store/*.db`
 
 ### Limitations
 
 - **Reading E2EE**: Not yet implemented (use `matrix-read.py` for unencrypted only)
 - **First sync**: Initial run is slow due to key exchange
 - **Device trust**: Auto-trusts devices (TOFU model)
+- **Setup required**: First use requires user's Matrix password (one-time only)
 
 ## Common Patterns
 
