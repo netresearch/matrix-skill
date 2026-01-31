@@ -236,6 +236,10 @@ class VerificationHandler:
                 self._debug(traceback.format_exc())
 
         elif isinstance(event, KeyVerificationMac):
+            if self.verified:
+                self._debug("Already verified, ignoring duplicate MAC")
+                return
+
             self._debug("Received MAC from other device")
             sas = self.client.key_verifications.get(event.transaction_id)
             if sas:
@@ -249,14 +253,24 @@ class VerificationHandler:
 
                     if sas.verified:
                         self.verified = True
-                        print("\n✓ Verification successful! Device is now verified.")
+                        print("\n✓ Verification successful!")
 
-                        # Mark device as verified in our store
-                        try:
-                            # The verification should automatically mark the device
-                            self._debug("Verification complete")
-                        except Exception as e:
-                            self._debug(f"Error marking verified: {e}")
+                        # Send m.key.verification.done to complete the flow
+                        self._debug("Sending done message...")
+                        done_content = {
+                            "transaction_id": event.transaction_id,
+                        }
+
+                        done_msg = ToDeviceMessage(
+                            type="m.key.verification.done",
+                            recipient=event.sender,
+                            recipient_device=sas.other_device_id if hasattr(sas, 'other_device_id') else sas.other_olm_device.device_id,
+                            content=done_content,
+                        )
+
+                        await self.client.to_device(done_msg)
+                        self._debug("Done message sent")
+                        print("Device is now verified.")
                     else:
                         self._debug("SAS not marked as verified after MAC")
 
