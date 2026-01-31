@@ -13,32 +13,78 @@ Send messages to Matrix chat rooms on behalf of users.
 - **Room references**: `#room:server`, `!roomid:server`
 - **Chat requests**: "send to matrix", "post in chat", "notify the team"
 - **Matrix URLs**: `https://matrix.*/`, `https://element.*/`
+- **Setup requests**: "configure matrix", "set up matrix skill"
 
-## Prerequisites
+## Setup Guide (for Agent)
 
-**Config file:** `~/.config/matrix/config.json`
+When user asks to set up Matrix, guide them through these steps:
 
-```json
+### Step 1: Check if already configured
+
+```bash
+cat ~/.config/matrix/config.json 2>/dev/null && echo "Config exists" || echo "Not configured"
+```
+
+### Step 2: If not configured, ask user for:
+
+1. **Homeserver URL** - e.g., `https://matrix.org` or `https://matrix.company.com`
+2. **User ID** - e.g., `@username:matrix.org`
+3. **Matrix password** - for E2EE device creation (not stored, used once)
+4. **Bot prefix** (optional) - e.g., `🤖` to mark automated messages
+
+### Step 3: Create config file
+
+```bash
+mkdir -p ~/.config/matrix
+cat > ~/.config/matrix/config.json << 'EOF'
 {
-  "homeserver": "https://matrix.org",
-  "access_token": "syt_...",
-  "user_id": "@you:matrix.org",
+  "homeserver": "USER_PROVIDED_HOMESERVER",
+  "user_id": "USER_PROVIDED_USER_ID",
   "bot_prefix": "🤖"
 }
+EOF
+chmod 600 ~/.config/matrix/config.json
 ```
 
-Get your access token from Element: Settings → Help & About → Access Token
+### Step 4: Set up E2EE device (recommended)
 
-**Optional fields:**
-- `bot_prefix`: Emoji/text prefix for automated messages (e.g., `"🤖"`). Use `--no-prefix` to skip.
-
-**For E2EE support** (optional):
 ```bash
-# Install libolm
-sudo apt install libolm-dev    # Debian/Ubuntu
-sudo dnf install libolm-devel  # Fedora
-brew install libolm            # macOS
+uv run scripts/matrix-e2ee-setup.py "USER_PROVIDED_PASSWORD"
 ```
+
+This creates a dedicated "Matrix Skill E2EE" device. The password is used once and not stored.
+
+### Step 5: Verify setup
+
+```bash
+uv run scripts/matrix-e2ee-setup.py --status
+uv run scripts/matrix-rooms.py
+```
+
+### Troubleshooting
+
+If E2EE setup fails with libolm error:
+```bash
+# Debian/Ubuntu
+sudo apt install libolm-dev
+
+# Fedora
+sudo dnf install libolm-devel
+
+# macOS
+brew install libolm
+```
+
+## Config Reference
+
+**File:** `~/.config/matrix/config.json`
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `homeserver` | Yes | Matrix server URL |
+| `user_id` | Yes | Full Matrix user ID |
+| `bot_prefix` | No | Prefix for messages (e.g., `🤖`) |
+| `access_token` | No | Auto-created by E2EE setup |
 
 ## Scripts
 

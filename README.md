@@ -27,45 +27,43 @@ This skill enables AI coding agents to send messages to Matrix chat rooms on beh
 - **Bot prefix** - optional 🤖 prefix for automated messages
 - **Device verification** - SAS emoji verification for E2EE
 
-## Prerequisites
+## Installation & Setup
 
-### Configuration
-
-Create `~/.config/matrix/config.json`:
-
-```json
-{
-  "homeserver": "https://matrix.org",
-  "access_token": "syt_...",
-  "user_id": "@you:matrix.org",
-  "bot_prefix": "🤖"
-}
-```
-
-- `user_id`: Required for E2EE support
-- `bot_prefix`: Optional prefix for automated messages (use `--no-prefix` to skip)
-
-**Get your access token:**
-1. Open Element
-2. Go to Settings → Help & About
-3. Scroll to "Access Token"
-4. Copy the token (starts with `syt_`)
-
-### File Permissions
+### 1. Install the Skill
 
 ```bash
-chmod 600 ~/.config/matrix/config.json
+# Via Netresearch marketplace
+/install-plugin netresearch/matrix-skill
+
+# Or manually
+/install-plugin https://github.com/netresearch/matrix-skill
 ```
 
-## Installation
+### 2. Let the Agent Configure It
 
-### Via Claude Code Marketplace
+Just ask:
+> "Set up the Matrix skill for me"
 
-The skill is available in the Netresearch skill marketplace.
+The agent will guide you through:
+- Your Matrix homeserver URL
+- Your Matrix user ID
+- Your Matrix password (for E2EE device, used once, not stored)
+- Optional bot prefix (e.g., 🤖)
 
-### Manual
+### 3. Done!
 
-Clone this repository and reference the skill in your Claude configuration.
+Start using it:
+> "Send 'Hello!' to #general:matrix.org"
+
+## Prerequisites
+
+**For E2EE support** (most Matrix rooms), install libolm:
+
+```bash
+sudo apt install libolm-dev    # Debian/Ubuntu
+sudo dnf install libolm-devel  # Fedora
+brew install libolm            # macOS
+```
 
 ## Usage
 
@@ -113,27 +111,15 @@ uv run scripts/matrix-resolve.py "#myroom:matrix.org"
 
 ## E2EE Support
 
-| Script | E2EE Rooms | Speed | Dependencies |
-|--------|------------|-------|--------------|
-| `matrix-send.py` | Works if "allow unverified" | Fast | None |
-| `matrix-send-e2ee.py` | Full encryption | Slower* | libolm |
-| `matrix-read-e2ee.py` | Decrypts messages | Slower* | libolm |
-| `matrix-e2ee-verify.py` | Device verification | - | libolm |
+E2EE is set up automatically when you configure the skill via the agent. The agent creates a dedicated "Matrix Skill E2EE" device that works alongside your Element client without conflicts.
 
-*First run ~5-10s (key sync), subsequent runs faster.
+| Script | Purpose |
+|--------|---------|
+| `matrix-send-e2ee.py` | Send encrypted messages |
+| `matrix-read-e2ee.py` | Read/decrypt messages |
+| `matrix-e2ee-verify.py` | Device verification |
 
-**Install libolm for E2EE:**
-```bash
-sudo apt install libolm-dev    # Debian/Ubuntu
-sudo dnf install libolm-devel  # Fedora
-brew install libolm            # macOS
-```
-
-**Setup (recommended):**
-```bash
-# Create dedicated E2EE device (avoids key sync issues with Element)
-uv run scripts/matrix-e2ee-setup.py "YOUR_MATRIX_PASSWORD"
-```
+*First run ~5-10s (key sync), subsequent runs faster.*
 
 ⚠️ Using `access_token` fallback causes key sync conflicts - use dedicated device.
 
