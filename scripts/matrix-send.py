@@ -119,23 +119,57 @@ def shorten_service_urls(text: str) -> str:
 
 
 def markdown_to_html(text: str) -> str:
-    """Convert markdown to Matrix HTML with smart link shortening.
+    """Convert markdown to Matrix HTML with smart features.
 
     Supports:
     - **bold**, *italic*, `code`, ~~strikethrough~~
     - [text](url) links
     - ||spoiler|| text (Discord-style)
+    - ```lang code blocks ```
+    - > blockquotes
     - - list items
+    - @user:server mentions (clickable pills)
+    - #room:server room links (clickable)
     - Auto-shortens Jira, GitHub, GitLab URLs
     """
     # First, shorten service URLs (before other processing)
     html = shorten_service_urls(text)
+
+    # Extract and protect code blocks from other processing
+    code_blocks = []
+    def save_code_block(match):
+        lang = match.group(1) or ''
+        code = match.group(2)
+        idx = len(code_blocks)
+        if lang:
+            code_blocks.append(f'<pre><code class="language-{lang}">{code}</code></pre>')
+        else:
+            code_blocks.append(f'<pre><code>{code}</code></pre>')
+        return f'{{{{CODEBLOCK_{idx}}}}}'
+
+    html = re.sub(r'```(\w*)\n(.*?)```', save_code_block, html, flags=re.DOTALL)
 
     # Spoilers: ||text|| -> <span data-mx-spoiler>text</span>
     html = re.sub(r'\|\|(.+?)\|\|', r'<span data-mx-spoiler>\1</span>', html)
 
     # Markdown links: [text](url) -> <a href="url">text</a>
     html = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', html)
+
+    # Matrix user mentions: @user:server -> clickable pill
+    # Only match if not already inside a link
+    html = re.sub(
+        r'(?<!["\'/])(@[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
+        r'<a href="https://matrix.to/#/\1">\1</a>',
+        html
+    )
+
+    # Matrix room links: #room:server -> clickable link
+    # Only match if not already inside a link
+    html = re.sub(
+        r'(?<!["\'/])(#[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
+        r'<a href="https://matrix.to/#/\1">\1</a>',
+        html
+    )
 
     # Strikethrough: ~~text~~ -> <del>text</del>
     html = re.sub(r'~~(.+?)~~', r'<del>\1</del>', html)
@@ -146,41 +180,71 @@ def markdown_to_html(text: str) -> str:
     # Italic: *text* -> <em>text</em>
     html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
 
-    # Code: `text` -> <code>text</code>
+    # Inline code: `text` -> <code>text</code>
     html = re.sub(r'`(.+?)`', r'<code>\1</code>', html)
 
     # Normalize multiple newlines
     html = re.sub(r'\n{2,}', '\n', html)
 
-    # Lists: - item -> <ul><li>item</li></ul>
-    # Process lists and convert non-list newlines to <br>
+    # Process line-based formatting (lists, blockquotes)
     lines = html.split('\n')
     in_list = False
+    in_quote = False
     result = []
+
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith('- '):
+
+        # Blockquotes: > text
+        if stripped.startswith('> '):
+            if not in_quote:
+                if in_list:
+                    result.append('</ul>')
+                    in_list = False
+                result.append('<blockquote>')
+                in_quote = True
+            result.append(stripped[2:])
+        # Lists: - item
+        elif stripped.startswith('- '):
+            if in_quote:
+                result.append('</blockquote>')
+                in_quote = False
             if not in_list:
                 result.append('<ul>')
                 in_list = True
             result.append(f'<li>{stripped[2:]}</li>')
         elif stripped == '':
-            # Skip empty lines
+            # End blockquote on empty line
+            if in_quote:
+                result.append('</blockquote>')
+                in_quote = False
             continue
         else:
+            if in_quote:
+                result.append('</blockquote>')
+                in_quote = False
             if in_list:
                 result.append('</ul>')
                 in_list = False
             result.append(line)
+
+    # Close any open tags
+    if in_quote:
+        result.append('</blockquote>')
     if in_list:
         result.append('</ul>')
 
-    # Join with special marker, then convert to <br> only outside HTML tags
+    # Join with special marker, then convert to <br> only outside block elements
     html = '{{BR}}'.join(result)
-    # Don't add <br> after block elements
-    html = re.sub(r'\{\{BR\}\}(?=<ul>|<li>|</ul>|</li>)', '', html)
-    html = re.sub(r'(?<=</ul>|</li>)\{\{BR\}\}', '', html)
+    # Don't add <br> around block elements
+    html = re.sub(r'\{\{BR\}\}(?=<ul>|<li>|</ul>|</li>|<blockquote>|</blockquote>|<pre>)', '', html)
+    html = re.sub(r'(</ul>|</li>|</blockquote>|</pre>)\{\{BR\}\}', r'\1', html)
+    html = re.sub(r'(<blockquote>)\{\{BR\}\}', r'\1', html)  # Remove BR right after blockquote open
     html = html.replace('{{BR}}', '<br>')
+
+    # Restore code blocks
+    for idx, block in enumerate(code_blocks):
+        html = html.replace(f'{{{{CODEBLOCK_{idx}}}}}', block)
 
     return html
 
