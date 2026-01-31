@@ -101,11 +101,13 @@ uv run scripts/matrix-resolve.py "#myroom:matrix.org"
 
 ## E2EE Support
 
-| Version | Sending | Reading |
-|---------|---------|---------|
-| **v1** (current) | Works (if room allows unverified devices) | Unencrypted only |
-| v2 (planned) | Same | Full unencrypted support |
-| v3 (future) | Full E2EE | Full E2EE |
+**Current status:**
+- **Sending**: Works to E2EE rooms (if room allows unverified devices)
+- **Reading**: Unencrypted messages only (API-sent, webhooks, bots)
+
+**Roadmap:**
+- Improved read support for unencrypted rooms
+- Full E2EE with Megolm key management (requires matrix-nio or similar SDK)
 
 ## Structure
 

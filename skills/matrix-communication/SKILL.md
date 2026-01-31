@@ -197,12 +197,11 @@ URLs are automatically shortened to readable links:
 
 ## E2EE Limitations
 
-**V1 (Current):**
-- Sending: Works to E2EE rooms (if "allow unverified devices" is enabled)
-- Reading: Only unencrypted messages (webhooks, API-sent messages)
+**Current:**
+- **Sending**: Works to E2EE rooms (if "allow unverified devices" is enabled)
+- **Reading**: Only unencrypted messages (webhooks, API-sent, bot messages)
 
-**V2 (Planned):** Full read support for unencrypted rooms
-**V3 (Future):** Full E2EE support with Megolm key management
+**Future:** Full E2EE requires Megolm key management (matrix-nio SDK)
 
 ## Common Patterns
 
