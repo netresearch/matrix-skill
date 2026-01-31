@@ -33,7 +33,8 @@ All scripts are in the `scripts/` directory. Run with `uv run`.
 
 | Script | Purpose |
 |--------|---------|
-| `matrix-send.py` | Send message to a room |
+| `matrix-send.py` | Send message to a room (supports emotes, threads, replies) |
+| `matrix-react.py` | React to a message with emoji |
 | `matrix-rooms.py` | List joined rooms |
 | `matrix-read.py` | Read recent messages (unencrypted only) |
 | `matrix-resolve.py` | Resolve room alias to room ID |
@@ -59,6 +60,78 @@ uv run scripts/matrix-read.py "#myroom:matrix.org" --limit 10
 # Resolve room alias to ID
 uv run scripts/matrix-resolve.py "#myroom:matrix.org"
 ```
+
+## Message Types
+
+### Regular Messages (m.text)
+Default - use for most communication.
+
+### Emote Messages (m.emote)
+Like IRC `/me` - displays as action. Use `--emote` flag.
+```bash
+# Appears as: "* username is deploying to production"
+uv run scripts/matrix-send.py "#ops:matrix.org" "is deploying to production" --emote
+```
+**When to use:** Status updates, actions, presence indicators.
+
+### Thread Replies
+Reply in a thread to keep discussions organized. Use `--thread` with root event ID.
+```bash
+# Start a thread or reply to existing thread
+uv run scripts/matrix-send.py "#dev:matrix.org" "Update: tests passing" --thread '$rootEventId'
+```
+**When to use:** Ongoing updates to a topic, multi-step processes, avoiding main room clutter.
+
+### Direct Replies
+Reply to a specific message. Use `--reply` with event ID.
+```bash
+uv run scripts/matrix-send.py "#team:matrix.org" "Agreed, let's proceed" --reply '$eventId'
+```
+
+## Reactions
+
+Add emoji reactions to messages to indicate status without new messages.
+
+```bash
+# React with checkmark (task done)
+uv run scripts/matrix-react.py "#ops:matrix.org" '$eventId' "✅"
+
+# Thumbs up (acknowledged)
+uv run scripts/matrix-react.py "#dev:matrix.org" '$eventId' "👍"
+
+# Eyes (looking into it)
+uv run scripts/matrix-react.py "#support:matrix.org" '$eventId' "👀"
+```
+
+### Common Reaction Patterns
+
+| Emoji | Meaning | Use Case |
+|-------|---------|----------|
+| ✅ | Done/Complete | Mark task as finished |
+| 👍 | Acknowledged | Confirm receipt |
+| 👀 | Looking into it | Started investigating |
+| 🚀 | Deployed/Shipped | Indicate release |
+| ⏳ | In progress | Working on it |
+| ❌ | Failed/Blocked | Indicate problem |
+
+**Workflow example:** Send "Going to reboot server" → later add ✅ reaction when complete.
+
+## Visual Effects (Element Clients)
+
+Include specific emoji to trigger visual effects in Element/SchildiChat:
+
+| Emoji | Effect | Use Case |
+|-------|--------|----------|
+| 🎉 🎊 | Confetti | Celebrations, milestones |
+| 🎆 | Fireworks | Major achievements |
+| ❄️ | Snowfall | Seasonal, cool features |
+
+```bash
+# Celebrate a release
+uv run scripts/matrix-send.py "#team:matrix.org" "🎉 Version 2.0 released!"
+```
+
+**Note:** Effects only show for Element/SchildiChat users. Other clients see the emoji normally.
 
 ## Message Formatting
 
@@ -180,6 +253,28 @@ uv run scripts/matrix-rooms.py | grep -i ops
 
 # Then send
 uv run scripts/matrix-send.py "#ops-team:matrix.org" "Message here"
+```
+
+### Server maintenance with status updates
+```bash
+# 1. Announce (save event ID from output)
+uv run scripts/matrix-send.py "#ops:matrix.org" "⏳ Starting server maintenance..."
+# Output: Event ID: $abc123
+
+# 2. Update status via reaction
+uv run scripts/matrix-react.py "#ops:matrix.org" '$abc123' "✅"
+
+# 3. Or add thread update
+uv run scripts/matrix-send.py "#ops:matrix.org" "Maintenance complete, all services restored" --thread '$abc123'
+```
+
+### Celebrate milestone
+```bash
+uv run scripts/matrix-send.py "#team:matrix.org" "🎉 **Milestone reached!**
+
+We hit 1000 users today!
+
+Thanks to everyone who contributed."
 ```
 
 ## Error Handling

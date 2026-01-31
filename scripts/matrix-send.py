@@ -2,7 +2,7 @@
 """Send a message to a Matrix room.
 
 Usage:
-    matrix-send.py ROOM MESSAGE [--format FORMAT]
+    matrix-send.py ROOM MESSAGE [OPTIONS]
     matrix-send.py --help
 
 Arguments:
@@ -11,10 +11,17 @@ Arguments:
 
 Options:
     --format FORMAT   Message format: text or markdown [default: markdown]
+    --emote           Send as /me action (m.emote)
+    --thread EVENT    Reply in thread (event ID of thread root)
+    --reply EVENT     Reply to message (event ID to reply to)
     --json            Output as JSON
     --quiet           Minimal output
     --debug           Show debug information
     --help            Show this help
+
+Effects (Element clients):
+    Include emoji in message to trigger visual effects:
+    🎉 or 🎊 = confetti, 🎆 = fireworks, ❄️ = snowfall
 """
 
 import json
@@ -249,12 +256,23 @@ def markdown_to_html(text: str) -> str:
     return html
 
 
-def send_message(config: dict, room_id: str, message: str, format: str = "markdown") -> dict:
-    """Send a message to a Matrix room."""
+def send_message(config: dict, room_id: str, message: str, format: str = "markdown",
+                 emote: bool = False, thread_id: str = None, reply_id: str = None) -> dict:
+    """Send a message to a Matrix room.
+
+    Args:
+        config: Matrix config with homeserver and access_token
+        room_id: Room ID to send to
+        message: Message content
+        format: "text" or "markdown"
+        emote: If True, send as m.emote (/me action)
+        thread_id: Event ID of thread root (for thread replies)
+        reply_id: Event ID to reply to
+    """
     txn_id = str(int(time.time() * 1000))
 
     content = {
-        "msgtype": "m.text",
+        "msgtype": "m.emote" if emote else "m.text",
         "body": message
     }
 
@@ -263,6 +281,25 @@ def send_message(config: dict, room_id: str, message: str, format: str = "markdo
         if html != message:  # Only add HTML if there's actual formatting
             content["format"] = "org.matrix.custom.html"
             content["formatted_body"] = html
+
+    # Thread reply (MSC3440)
+    if thread_id:
+        content["m.relates_to"] = {
+            "rel_type": "m.thread",
+            "event_id": thread_id,
+            "is_falling_back": True,
+        }
+        # If also replying to a specific message in thread
+        if reply_id and reply_id != thread_id:
+            content["m.relates_to"]["m.in_reply_to"] = {"event_id": reply_id}
+        else:
+            content["m.relates_to"]["m.in_reply_to"] = {"event_id": thread_id}
+
+    # Regular reply (not in thread)
+    elif reply_id:
+        content["m.relates_to"] = {
+            "m.in_reply_to": {"event_id": reply_id}
+        }
 
     return matrix_request(config, "PUT", f"/rooms/{room_id}/send/m.room.message/{txn_id}", content)
 
@@ -275,6 +312,12 @@ def main():
     parser.add_argument("message", help="Message content (markdown supported)")
     parser.add_argument("--format", choices=["text", "markdown"], default="markdown",
                         help="Message format (default: markdown)")
+    parser.add_argument("--emote", action="store_true",
+                        help="Send as /me action (m.emote msgtype)")
+    parser.add_argument("--thread", metavar="EVENT_ID",
+                        help="Reply in thread (event ID of thread root)")
+    parser.add_argument("--reply", metavar="EVENT_ID",
+                        help="Reply to message (event ID)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
@@ -298,7 +341,8 @@ def main():
             sys.exit(1)
 
     # Send message
-    result = send_message(config, room_id, args.message, args.format)
+    result = send_message(config, room_id, args.message, args.format,
+                         emote=args.emote, thread_id=args.thread, reply_id=args.reply)
 
     if "error" in result:
         if args.json:
