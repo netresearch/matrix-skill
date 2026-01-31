@@ -1,0 +1,13 @@
+{
+  "name": "netresearch-matrix",
+  "version": "1.0.0",
+  "description": "Claude Code skill for Matrix chat communication at matrix.netresearch.de - send messages to rooms on behalf of users",
+  "author": {
+    "name": "Netresearch DTT GmbH",
+    "email": "info@netresearch.de"
+  },
+  "repository": "https://github.com/netresearch/netresearch-matrix-skill.git",
+  "license": "MIT",
+  "keywords": ["matrix", "chat", "communication", "netresearch"],
+  "skills": "./skills/"
+}
