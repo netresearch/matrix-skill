@@ -131,13 +131,27 @@ async def send_message_e2ee(
         client.access_token = config["access_token"]
         client.user_id = config["user_id"]
 
-        # Load existing keys from store
-        if client.store:
-            client.load_store()
-
         if debug:
             print(f"Store path: {store_path}", file=sys.stderr)
+
+        # Check if we have an existing device_id in config or need to get one
+        if not client.device_id:
+            # Get device_id from whoami endpoint
+            from nio import WhoamiResponse
+            whoami = await client.whoami()
+            if isinstance(whoami, WhoamiResponse):
+                client.device_id = whoami.device_id
+                if debug:
+                    print(f"Got device ID from server: {client.device_id}", file=sys.stderr)
+            else:
+                return {"error": f"Failed to get device info: {whoami}"}
+
+        if debug:
             print(f"Device ID: {client.device_id}", file=sys.stderr)
+
+        # Load existing keys from store if available
+        if client.store:
+            client.load_store()
 
         # Resolve room alias if needed
         room_id = room
@@ -163,15 +177,19 @@ async def send_message_e2ee(
 
         # Trust all devices in the room (TOFU - Trust On First Use)
         room_obj = client.rooms.get(room_id)
-        if room_obj and room_obj.encrypted:
+        if room_obj and room_obj.encrypted and client.olm:
             if debug:
                 print(f"Room is encrypted. Trusting devices...", file=sys.stderr)
-            for user_id in room_obj.users:
-                for device_id, device in client.device_store.active_user_devices(user_id):
-                    if not client.olm.is_device_verified(device):
-                        client.verify_device(device)
-                        if debug:
-                            print(f"Trusted: {user_id}/{device_id}", file=sys.stderr)
+            for member_id in room_obj.users:
+                try:
+                    for device_id, device in client.device_store.active_user_devices(member_id):
+                        if not device.verified:
+                            client.verify_device(device)
+                            if debug:
+                                print(f"Trusted: {member_id}/{device_id}", file=sys.stderr)
+                except Exception as e:
+                    if debug:
+                        print(f"Could not verify devices for {member_id}: {e}", file=sys.stderr)
 
         # Build message content
         content = {
