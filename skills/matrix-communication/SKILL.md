@@ -62,30 +62,65 @@ uv run scripts/matrix-resolve.py "#myroom:matrix.org"
 
 ## Message Formatting
 
-Matrix supports HTML formatting. The `matrix-send.py` script automatically converts markdown to Matrix HTML format.
+All formatting is automatic - just use markdown syntax.
 
-| Markdown | Result |
-|----------|--------|
-| `**bold**` | **bold** |
-| `*italic*` | *italic* |
-| `` `code` `` | `code` |
-| `~~strike~~` | ~~strikethrough~~ |
-| `[text](url)` | linked text |
-| `\|\|spoiler\|\|` | hidden until clicked |
-| `- item` | bullet list |
+### Basic Formatting
 
-## Smart Link Shortening
+| Syntax | Result | When to Use |
+|--------|--------|-------------|
+| `**bold**` | **bold** | Emphasis, headings, status |
+| `*italic*` | *italic* | Secondary emphasis |
+| `` `code` `` | `code` | Commands, file names, variables |
+| `~~strike~~` | ~~strike~~ | Corrections, outdated info |
+| `[text](url)` | linked text | Custom link labels |
 
-URLs from common services are automatically shortened to readable links:
+### Matrix-Specific Features
+
+| Syntax | Result | When to Use |
+|--------|--------|-------------|
+| `@user:server` | Clickable mention | Notify specific users |
+| `#room:server` | Clickable room link | Reference other rooms |
+| `> quote` | Blockquote | Quote previous messages |
+| `\|\|spoiler\|\|` | Hidden text | Sensitive info, plot spoilers |
+| ` ```lang ``` ` | Code block | Multi-line code with syntax highlighting |
+
+### Smart Link Shortening
+
+URLs are automatically shortened to readable links:
 
 | URL | Displayed As |
 |-----|--------------|
-| `https://jira.example.com/browse/PROJ-123` | PROJ-123 (linked) |
-| `https://github.com/owner/repo/issues/42` | owner/repo#42 (linked) |
-| `https://github.com/owner/repo/pull/42` | owner/repo#42 (linked) |
-| `https://gitlab.example.com/group/proj/-/issues/42` | group/proj#42 (linked) |
+| `https://jira.*/browse/PROJ-123` | PROJ-123 |
+| `https://github.com/owner/repo/issues/42` | owner/repo#42 |
+| `https://github.com/owner/repo/pull/42` | owner/repo#42 |
+| `https://gitlab.*/group/proj/-/issues/42` | group/proj#42 |
 
-This makes messages cleaner while preserving clickable links.
+### Lists
+
+```
+- Item one
+- Item two
+- Item three
+```
+
+## When to Use Each Feature
+
+**Deployment notifications:**
+- Use **bold** for status: `**Deployed**`, `**Failed**`
+- Use lists for changes
+- Link to Jira issue URL (auto-shortened)
+
+**Code sharing:**
+- Use ` ```lang ``` ` for multi-line code
+- Use `` `inline` `` for single commands
+
+**Team communication:**
+- Use `@user:server` to notify specific people
+- Use `#room:server` to reference discussions in other rooms
+- Use `> quote` when replying to earlier messages
+
+**Sensitive information:**
+- Use `||spoiler||` for credentials, secrets in examples
 
 ## E2EE Limitations
 
@@ -98,16 +133,44 @@ This makes messages cleaner while preserving clickable links.
 
 ## Common Patterns
 
-### Notify team about deployment
+### Deployment notification with Jira link
 ```bash
 uv run scripts/matrix-send.py "#ops:matrix.org" \
-  "**Deployment Complete**\n\n- Project: MyApp\n- Version: 1.2.3\n- Environment: Production"
+  "**Deployed** to production
+
+https://jira.example.com/browse/PROJ-123
+
+- Version: 1.2.3
+- Changes: Auth improvements"
 ```
 
-### Send status update
+### Status update with mentions
 ```bash
 uv run scripts/matrix-send.py "#dev:matrix.org" \
-  "Task #1234 completed. Changes deployed to staging."
+  "**Done**: API refactoring complete
+
+@lead:matrix.org ready for review
+
+See #code-review:matrix.org for PR discussion"
+```
+
+### Share code snippet
+```bash
+uv run scripts/matrix-send.py "#dev:matrix.org" \
+  "Fix for the auth bug:
+
+\`\`\`python
+def validate_token(token):
+    return token.startswith('valid_')
+\`\`\`"
+```
+
+### Quote and respond
+```bash
+uv run scripts/matrix-send.py "#team:matrix.org" \
+  "> Should we deploy today?
+
+**Yes** - all tests passing. Deploying now."
 ```
 
 ### Check room before sending
