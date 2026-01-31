@@ -11,7 +11,8 @@ This skill enables AI coding agents to send messages to Matrix chat rooms on beh
 ## Features
 
 - **Send messages** to any joined Matrix room
-- **Markdown support** for formatted messages
+- **Rich formatting** - bold, italic, code, strikethrough, spoilers, lists
+- **Smart link shortening** - Jira, GitHub, GitLab URLs become readable links
 - **List rooms** to find the right destination
 - **Read messages** (unencrypted messages only in v1)
 
@@ -102,7 +103,7 @@ uv run scripts/matrix-resolve.py "#myroom:matrix.org"
 ## Structure
 
 ```
-netresearch-matrix-skill/
+matrix-skill/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest
 ├── scripts/

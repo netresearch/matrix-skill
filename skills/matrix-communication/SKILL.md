@@ -64,12 +64,28 @@ uv run scripts/matrix-resolve.py "#myroom:matrix.org"
 
 Matrix supports HTML formatting. The `matrix-send.py` script automatically converts markdown to Matrix HTML format.
 
-| Markdown | Matrix HTML |
-|----------|-------------|
-| `**bold**` | `<strong>bold</strong>` |
-| `*italic*` | `<em>italic</em>` |
-| `` `code` `` | `<code>code</code>` |
-| `- item` | `<ul><li>item</li></ul>` |
+| Markdown | Result |
+|----------|--------|
+| `**bold**` | **bold** |
+| `*italic*` | *italic* |
+| `` `code` `` | `code` |
+| `~~strike~~` | ~~strikethrough~~ |
+| `[text](url)` | linked text |
+| `\|\|spoiler\|\|` | hidden until clicked |
+| `- item` | bullet list |
+
+## Smart Link Shortening
+
+URLs from common services are automatically shortened to readable links:
+
+| URL | Displayed As |
+|-----|--------------|
+| `https://jira.example.com/browse/PROJ-123` | PROJ-123 (linked) |
+| `https://github.com/owner/repo/issues/42` | owner/repo#42 (linked) |
+| `https://github.com/owner/repo/pull/42` | owner/repo#42 (linked) |
+| `https://gitlab.example.com/group/proj/-/issues/42` | group/proj#42 (linked) |
+
+This makes messages cleaner while preserving clickable links.
 
 ## E2EE Limitations
 
