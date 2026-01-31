@@ -16,6 +16,10 @@ This skill enables AI coding agents to send messages to Matrix chat rooms on beh
 - **Matrix mentions** - `@user:server` becomes clickable user pill
 - **Room links** - `#room:server` becomes clickable room link
 - **Code blocks** - Syntax-highlighted multi-line code
+- **Emotes** - `/me` style action messages (`--emote`)
+- **Thread replies** - Keep discussions organized (`--thread`)
+- **Reactions** - Add emoji reactions to messages (✅ 👍 🚀)
+- **Visual effects** - Confetti 🎉, fireworks 🎆, snowfall ❄️ (Element clients)
 - **List rooms** to find the right destination
 - **Read messages** (unencrypted messages only in v1)
 
