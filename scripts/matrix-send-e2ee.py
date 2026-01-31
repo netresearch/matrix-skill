@@ -34,6 +34,7 @@ Note: First run may be slow (~5-10s) for initial sync and key setup.
 import asyncio
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -103,6 +104,143 @@ def load_credentials() -> dict | None:
         with open(creds_path) as f:
             return json.load(f)
     return None
+
+
+def shorten_service_urls(text: str) -> str:
+    """Convert service URLs to shorter linked text."""
+    # Jira URLs
+    text = re.sub(
+        r'https?://[^/]+/browse/([A-Z][A-Z0-9]+-\d+)',
+        r'[\1](https://\g<0>)',
+        text
+    )
+    text = re.sub(r'\(https://https?://', r'(https://', text)
+
+    # GitHub Issues/PRs
+    text = re.sub(
+        r'https?://github\.com/([^/]+)/([^/]+)/(issues|pull)/(\d+)',
+        r'[\1/\2#\4](\g<0>)',
+        text
+    )
+
+    # GitHub commits
+    text = re.sub(
+        r'https?://github\.com/([^/]+)/([^/]+)/commit/([a-f0-9]{7,40})',
+        r'[\1/\2@\3](\g<0>)',
+        text
+    )
+
+    # GitLab Issues/MRs
+    text = re.sub(
+        r'https?://[^/]+/([^/]+/[^/]+)/-/(issues|merge_requests)/(\d+)',
+        r'[\1#\3](\g<0>)',
+        text
+    )
+
+    return text
+
+
+def markdown_to_html(text: str) -> str:
+    """Convert markdown to Matrix HTML."""
+    html = shorten_service_urls(text)
+
+    # Extract and protect code blocks
+    code_blocks = []
+    def save_code_block(match):
+        lang = match.group(1) or ''
+        code = match.group(2)
+        idx = len(code_blocks)
+        if lang:
+            code_blocks.append(f'<pre><code class="language-{lang}">{code}</code></pre>')
+        else:
+            code_blocks.append(f'<pre><code>{code}</code></pre>')
+        return f'{{{{CODEBLOCK_{idx}}}}}'
+
+    html = re.sub(r'```(\w*)\n(.*?)```', save_code_block, html, flags=re.DOTALL)
+
+    # Spoilers
+    html = re.sub(r'\|\|(.+?)\|\|', r'<span data-mx-spoiler>\1</span>', html)
+
+    # Markdown links
+    html = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', html)
+
+    # Matrix mentions
+    html = re.sub(
+        r'(?<!["\'/])(@[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
+        r'<a href="https://matrix.to/#/\1">\1</a>',
+        html
+    )
+
+    # Room links
+    html = re.sub(
+        r'(?<!["\'/])(#[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
+        r'<a href="https://matrix.to/#/\1">\1</a>',
+        html
+    )
+
+    # Strikethrough, bold, italic, code
+    html = re.sub(r'~~(.+?)~~', r'<del>\1</del>', html)
+    html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+    html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
+    html = re.sub(r'`(.+?)`', r'<code>\1</code>', html)
+
+    # Normalize newlines
+    html = re.sub(r'\n{2,}', '\n', html)
+
+    # Process lists and blockquotes
+    lines = html.split('\n')
+    in_list = False
+    in_quote = False
+    result = []
+
+    for line in lines:
+        stripped = line.strip()
+
+        if stripped.startswith('> '):
+            if not in_quote:
+                if in_list:
+                    result.append('</ul>')
+                    in_list = False
+                result.append('<blockquote>')
+                in_quote = True
+            result.append(stripped[2:])
+        elif stripped.startswith('- '):
+            if in_quote:
+                result.append('</blockquote>')
+                in_quote = False
+            if not in_list:
+                result.append('<ul>')
+                in_list = True
+            result.append(f'<li>{stripped[2:]}</li>')
+        elif stripped == '':
+            if in_quote:
+                result.append('</blockquote>')
+                in_quote = False
+            continue
+        else:
+            if in_quote:
+                result.append('</blockquote>')
+                in_quote = False
+            if in_list:
+                result.append('</ul>')
+                in_list = False
+            result.append(line)
+
+    if in_quote:
+        result.append('</blockquote>')
+    if in_list:
+        result.append('</ul>')
+
+    html = '{{BR}}'.join(result)
+    html = re.sub(r'\{\{BR\}\}(?=<ul>|<li>|</ul>|</li>|<blockquote>|</blockquote>|<pre>)', '', html)
+    html = re.sub(r'(</ul>|</li>|</blockquote>|</pre>)\{\{BR\}\}', r'\1', html)
+    html = re.sub(r'(<blockquote>)\{\{BR\}\}', r'\1', html)
+    html = html.replace('{{BR}}', '<br>')
+
+    for idx, block in enumerate(code_blocks):
+        html = html.replace(f'{{{{CODEBLOCK_{idx}}}}}', block)
+
+    return html
 
 
 async def send_message_e2ee(
@@ -273,11 +411,17 @@ async def send_message_e2ee(
                     if debug:
                         print(f"Could not verify devices for {member_id}: {e}", file=sys.stderr)
 
-        # Build message content
+        # Build message content with HTML formatting
         content = {
             "msgtype": "m.emote" if emote else "m.text",
             "body": message,
         }
+
+        # Add HTML formatting
+        html = markdown_to_html(message)
+        if html != message:
+            content["format"] = "org.matrix.custom.html"
+            content["formatted_body"] = html
 
         # Thread reply
         if thread_id:
