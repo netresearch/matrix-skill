@@ -38,6 +38,8 @@ try:
         KeyVerificationMac,
         KeyVerificationCancel,
         ToDeviceMessage,
+        ToDeviceEvent,
+        UnknownToDeviceEvent,
         ToDeviceError,
         DevicesResponse,
     )
@@ -85,11 +87,69 @@ class VerificationHandler:
         self.emojis = None
         self.verified = False
         self.cancelled = False
-        self.emoji_confirmed = False
+        self.key_sent = False
+        self.sas_accepted = False
 
     def _debug(self, msg):
         if self.debug:
             print(f"[DEBUG] {msg}")
+
+    async def handle_raw_event(self, event):
+        """Handle raw to-device events including unknown verification events."""
+        # Check for m.key.verification.request (not natively supported by nio)
+        if isinstance(event, UnknownToDeviceEvent) and hasattr(event, 'source'):
+            source = event.source
+
+            if source.get('type') == 'm.key.verification.request':
+                content = source.get('content', {})
+                txn_id = content.get('transaction_id')
+                from_device = content.get('from_device')
+                methods = content.get('methods', [])
+                sender = source.get('sender')
+
+                print(f"\nVerification request received!")
+                print(f"  From: {sender} / {from_device}")
+                print(f"  Methods: {methods}")
+
+                if 'm.sas.v1' in methods:
+                    # Respond with m.key.verification.ready
+                    self.current_verification = txn_id
+                    self._debug(f"Sending ready response for {txn_id}")
+
+                    ready_content = {
+                        "from_device": self.client.device_id,
+                        "transaction_id": txn_id,
+                        "methods": ["m.sas.v1"],
+                    }
+
+                    msg = ToDeviceMessage(
+                        type="m.key.verification.ready",
+                        recipient=sender,
+                        recipient_device=from_device,
+                        content=ready_content,
+                    )
+
+                    resp = await self.client.to_device(msg)
+                    self._debug(f"Ready response sent: {type(resp).__name__}")
+                    print("Ready sent, waiting for Element to start verification...")
+                else:
+                    print(f"Unsupported methods: {methods}")
+
+            elif source.get('type') == 'm.key.verification.start':
+                content = source.get('content', {})
+                txn_id = content.get('transaction_id')
+                from_device = content.get('from_device')
+                method = content.get('method')
+                sender = source.get('sender')
+
+                print(f"\nVerification START received (as unknown event)!")
+                print(f"  Method: {method}")
+                self.current_verification = txn_id
+
+                # TODO: Handle start manually if nio doesn't pick it up
+
+            elif source.get('type', '').startswith('m.key.verification.'):
+                self._debug(f"Other verification event: {source.get('type')}")
 
     async def handle_event(self, event):
         """Handle verification events."""
@@ -104,68 +164,115 @@ class VerificationHandler:
             self.current_verification = event.transaction_id
             try:
                 await self.client.accept_key_verification(event.transaction_id)
-                print("Accepted, waiting for key exchange...")
+                print("Accepted request, waiting for start...")
             except Exception as e:
                 self._debug(f"Error accepting request: {e}")
 
         elif isinstance(event, KeyVerificationStart):
-            print(f"\nVerification started")
+            if self.sas_accepted:
+                self._debug("Already accepted start, ignoring duplicate")
+                return
+            print(f"\nVerification started (method: {event.method})")
             self.current_verification = event.transaction_id
             try:
-                await self.client.accept_key_verification(event.transaction_id)
+                resp = await self.client.accept_key_verification(event.transaction_id)
+                self._debug(f"Accept response: {type(resp).__name__}")
+                self.sas_accepted = True
                 print("Accepted, waiting for key exchange...")
             except Exception as e:
                 self._debug(f"Error accepting: {e}")
 
         elif isinstance(event, KeyVerificationAccept):
-            print(f"\nVerification accepted by other device")
-            self._debug(f"Method: {event.method if hasattr(event, 'method') else 'unknown'}")
+            print(f"\nOther device accepted verification")
+            self._debug(f"Commitment: {event.commitment if hasattr(event, 'commitment') else 'N/A'}")
 
         elif isinstance(event, KeyVerificationKey):
-            if self.emoji_confirmed:
-                self._debug("Already confirmed, ignoring duplicate KeyVerificationKey")
+            if self.key_sent:
+                self._debug("Already processed key event, ignoring duplicate")
                 return
 
             sas = self.client.key_verifications.get(event.transaction_id)
-            if sas:
-                try:
-                    self.emojis = sas.get_emoji()
-                    print("\n" + "="*50)
-                    print("VERIFY THESE EMOJIS MATCH ON BOTH DEVICES:")
-                    print("="*50)
-                    for emoji, name in self.emojis:
-                        print(f"  {emoji}  {name}")
-                    print("="*50)
-
-                    # Confirm the short auth string (emojis match)
-                    # This also sends our MAC
-                    print("\nConfirming emojis match...")
-                    await self.client.confirm_short_auth_string(event.transaction_id)
-                    self.emoji_confirmed = True
-                    print("Confirmed! Waiting for other device to confirm...")
-                except Exception as e:
-                    self._debug(f"Error in key verification: {e}")
-            else:
+            if not sas:
                 self._debug(f"No SAS for transaction {event.transaction_id}")
+                self._debug(f"Active verifications: {list(self.client.key_verifications.keys())}")
+                return
+
+            try:
+                self._debug(f"SAS state - their key set: {sas.other_key_set}")
+
+                # Get emojis (requires both keys)
+                self.emojis = sas.get_emoji()
+                print("\n" + "="*50)
+                print("VERIFY THESE EMOJIS MATCH ON BOTH DEVICES:")
+                print("="*50)
+                for emoji, name in self.emojis:
+                    print(f"  {emoji}  {name}")
+                print("="*50)
+
+                # Send our key if not already sent
+                if not self.key_sent:
+                    self._debug("Sending our key...")
+                    key_msg = sas.share_key()
+                    if key_msg:
+                        await self.client.to_device(key_msg)
+                        self._debug("Key sent")
+                    self.key_sent = True
+
+                # Accept the SAS (user confirms emojis match)
+                print("\nConfirming emojis match...")
+                sas.accept_sas()
+                self._debug("SAS accepted")
+
+                # Now send our MAC
+                mac_msg = sas.get_mac()
+                if mac_msg:
+                    await self.client.to_device(mac_msg)
+                    self._debug("MAC sent")
+                print("Waiting for other device to confirm...")
+
+            except Exception as e:
+                self._debug(f"Error in key verification: {e}")
+                import traceback
+                self._debug(traceback.format_exc())
 
         elif isinstance(event, KeyVerificationMac):
+            self._debug("Received MAC from other device")
             sas = self.client.key_verifications.get(event.transaction_id)
             if sas:
                 try:
-                    await self.client.confirm_key_verification(event.transaction_id)
-                    self.verified = True
-                    print("\n✓ Verification successful! Device is now verified.")
+                    self._debug(f"SAS verified state before: {sas.verified}")
+
+                    # Verify their MAC
+                    verified = sas.receive_mac_event(event)
+                    self._debug(f"MAC verification result: {verified}")
+                    self._debug(f"SAS verified state after: {sas.verified}")
+
+                    if sas.verified:
+                        self.verified = True
+                        print("\n✓ Verification successful! Device is now verified.")
+
+                        # Mark device as verified in our store
+                        try:
+                            # The verification should automatically mark the device
+                            self._debug("Verification complete")
+                        except Exception as e:
+                            self._debug(f"Error marking verified: {e}")
+                    else:
+                        self._debug("SAS not marked as verified after MAC")
+
                 except Exception as e:
-                    self._debug(f"Error confirming: {e}")
+                    self._debug(f"Error processing MAC: {e}")
+                    import traceback
+                    self._debug(traceback.format_exc())
             else:
                 self._debug("No SAS for MAC verification")
 
         elif isinstance(event, KeyVerificationCancel):
-            if self.current_verification == event.transaction_id:
+            if self.current_verification == event.transaction_id or self.current_verification is None:
                 print(f"\nVerification cancelled: {event.reason}")
                 self.cancelled = True
             else:
-                self._debug(f"Ignoring cancel for old transaction")
+                self._debug(f"Ignoring cancel for transaction {event.transaction_id}")
 
         else:
             self._debug(f"Unhandled event type: {event_type}")
@@ -215,6 +322,8 @@ async def run_verification(config: dict, request_device: str = None, timeout: in
     handler = VerificationHandler(client, debug=debug)
 
     # Add callbacks for verification events
+    # First, catch unknown events (including m.key.verification.request)
+    client.add_to_device_callback(handler.handle_raw_event, UnknownToDeviceEvent)
     # Use base class to catch ALL verification events
     client.add_to_device_callback(handler.handle_event, KeyVerificationEvent)
     # Also register specific types for compatibility
@@ -231,6 +340,12 @@ async def run_verification(config: dict, request_device: str = None, timeout: in
         if client.store:
             client.load_store()
 
+        # Upload keys if needed
+        if client.should_upload_keys:
+            if debug:
+                print("[DEBUG] Uploading keys...")
+            await client.keys_upload()
+
         # Initial sync
         print("Syncing...")
         await client.sync(timeout=10000)
@@ -239,36 +354,96 @@ async def run_verification(config: dict, request_device: str = None, timeout: in
             print(f"[DEBUG] Active verifications: {list(client.key_verifications.keys())}")
 
         if request_device:
-            # Initiate verification with specific device by sending to-device message
-            print(f"Requesting verification with device {request_device}...")
+            # Query keys to get the device into our store
+            print(f"Querying keys for verification target...")
+            try:
+                await client.keys_query()
+            except Exception as e:
+                if debug:
+                    print(f"[DEBUG] Keys query skipped: {e}")
 
-            import secrets
-            import time
-            txn_id = secrets.token_hex(16)
-            handler.current_verification = txn_id
+            # Try to find the device in our store
+            user_id = config["user_id"]
+            target_device = None
 
-            # Send m.key.verification.request
-            request_content = {
-                "from_device": device_id,
-                "transaction_id": txn_id,
-                "methods": ["m.sas.v1"],
-                "timestamp": int(time.time() * 1000),
-            }
+            if user_id in client.device_store:
+                for dev_id, device in client.device_store[user_id].items():
+                    if dev_id == request_device:
+                        target_device = device
+                        break
 
-            msg = ToDeviceMessage(
-                type="m.key.verification.request",
-                recipient=config["user_id"],
-                recipient_device=request_device,
-                content=request_content,
-            )
+            if target_device:
+                print(f"Found device {request_device}, starting verification...")
+                # Use nio's proper verification start
+                try:
+                    msg = client.create_key_verification(target_device)
+                    if msg:
+                        await client.to_device(msg)
+                        handler.current_verification = list(client.key_verifications.keys())[-1] if client.key_verifications else None
+                        print(f"Verification request sent!")
+                        if handler.current_verification:
+                            print(f"Transaction ID: {handler.current_verification}")
+                except Exception as e:
+                    if debug:
+                        print(f"[DEBUG] create_key_verification failed: {e}")
+                    # Fall back to raw message
+                    print("Falling back to direct request...")
+                    import secrets
+                    import time
+                    txn_id = secrets.token_hex(16)
+                    handler.current_verification = txn_id
 
-            resp = await client.to_device(msg)
-            if isinstance(resp, ToDeviceError):
-                print(f"Error sending request: {resp}", file=sys.stderr)
-                return False
+                    request_content = {
+                        "from_device": device_id,
+                        "transaction_id": txn_id,
+                        "methods": ["m.sas.v1"],
+                        "timestamp": int(time.time() * 1000),
+                    }
 
-            print(f"Verification request sent!")
-            print(f"Transaction ID: {txn_id}")
+                    msg = ToDeviceMessage(
+                        type="m.key.verification.request",
+                        recipient=user_id,
+                        recipient_device=request_device,
+                        content=request_content,
+                    )
+
+                    resp = await client.to_device(msg)
+                    if isinstance(resp, ToDeviceError):
+                        print(f"Error sending request: {resp}", file=sys.stderr)
+                        return False
+
+                    print(f"Verification request sent!")
+                    print(f"Transaction ID: {txn_id}")
+            else:
+                # Device not in store, send raw request
+                print(f"Device {request_device} not in local store, sending direct request...")
+                import secrets
+                import time
+                txn_id = secrets.token_hex(16)
+                handler.current_verification = txn_id
+
+                request_content = {
+                    "from_device": device_id,
+                    "transaction_id": txn_id,
+                    "methods": ["m.sas.v1"],
+                    "timestamp": int(time.time() * 1000),
+                }
+
+                msg = ToDeviceMessage(
+                    type="m.key.verification.request",
+                    recipient=user_id,
+                    recipient_device=request_device,
+                    content=request_content,
+                )
+
+                resp = await client.to_device(msg)
+                if isinstance(resp, ToDeviceError):
+                    print(f"Error sending request: {resp}", file=sys.stderr)
+                    return False
+
+                print(f"Verification request sent!")
+                print(f"Transaction ID: {txn_id}")
+
             print(f"\nCheck Element for verification popup on device {request_device}")
             print(f"Accept the verification request there.")
         else:
