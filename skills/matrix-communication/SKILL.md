@@ -51,6 +51,7 @@ All scripts are in the `scripts/` directory. Run with `uv run`.
 | `matrix-e2ee-setup.py` | One-time E2EE device setup |
 | `matrix-e2ee-verify.py` | Device verification (experimental) |
 | `matrix-react.py` | React to a message with emoji |
+| `matrix-redact.py` | Delete/redact a message |
 | `matrix-rooms.py` | List joined rooms |
 | `matrix-read.py` | Read recent messages (unencrypted only) |
 | `matrix-read-e2ee.py` | Read recent messages (E2EE decryption) |
@@ -222,40 +223,28 @@ URLs are automatically shortened to readable links:
 | E2EE room with "allow unverified" | `matrix-send.py` | Works but not encrypted |
 | E2EE room, proper encryption | `matrix-send-e2ee.py` | Requires libolm + setup |
 
-### E2EE Setup Options
+### E2EE Setup (Recommended)
 
-Two approaches are supported:
-
-**Option 1: Access Token (Simple)**
-- Uses existing `access_token` from config
-- Works immediately, no setup needed
-- Reuses your existing device (e.g., Element's device)
-- May cause temporary key sync issues (client restart fixes them)
-
-**Option 2: Dedicated Device (Clean)**
-- Creates a separate "Matrix Skill E2EE" device
-- Requires password once (not stored)
-- No conflicts with other clients
-- Recommended for production use
+**Use a dedicated device** - this avoids key sync conflicts with Element:
 
 ```bash
-# Option 1: Just use access_token from config - works immediately
-uv run scripts/matrix-send-e2ee.py '#room:server' 'Encrypted message'
+# One-time setup: create dedicated E2EE device
+uv run scripts/matrix-e2ee-setup.py "YOUR_MATRIX_PASSWORD"
 
-# Option 2: Create dedicated device first (optional)
-uv run scripts/matrix-e2ee-setup.py "YOUR_PASSWORD"
+# Now send encrypted messages
 uv run scripts/matrix-send-e2ee.py '#room:server' 'Encrypted message'
 
 # Check setup status
 uv run scripts/matrix-e2ee-setup.py --status
-
-# Remove dedicated device (reverts to access token mode)
-uv run scripts/matrix-e2ee-setup.py --logout
 ```
 
-**Agent workflow:**
-1. Try `matrix-send-e2ee.py` directly (uses access_token from config)
-2. If user reports issues, suggest dedicated device setup with password
+**Why dedicated device?**
+- Clean key state, no conflicts with Element
+- Proper cross-signing setup
+- Avoids "signature verification failed" errors
+
+**⚠️ Access token fallback (not recommended):**
+Using `access_token` from config reuses Element's device, which causes key sync issues and verification problems. Only use if password-based setup isn't possible.
 
 ### E2EE Script Usage
 

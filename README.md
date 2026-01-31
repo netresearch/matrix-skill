@@ -127,9 +127,13 @@ sudo dnf install libolm-devel  # Fedora
 brew install libolm            # macOS
 ```
 
-**Setup options:**
-- Just use `access_token` from config (works immediately)
-- Or create dedicated device: `uv run scripts/matrix-e2ee-setup.py "PASSWORD"`
+**Setup (recommended):**
+```bash
+# Create dedicated E2EE device (avoids key sync issues with Element)
+uv run scripts/matrix-e2ee-setup.py "YOUR_MATRIX_PASSWORD"
+```
+
+⚠️ Using `access_token` fallback causes key sync conflicts - use dedicated device.
 
 **Device verification** (optional):
 ```bash
@@ -151,6 +155,7 @@ matrix-skill/
 │   ├── matrix-rooms.py          # List joined rooms
 │   ├── matrix-resolve.py        # Resolve room aliases
 │   ├── matrix-react.py          # React to messages
+│   ├── matrix-redact.py         # Delete/redact messages
 │   ├── matrix-e2ee-setup.py     # E2EE device setup
 │   └── matrix-e2ee-verify.py    # Device verification
 ├── skills/
