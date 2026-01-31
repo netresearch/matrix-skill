@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build full plugin package
+        run: |
+          mkdir -p dist
+          zip -r "dist/matrix-communication-plugin-${{ steps.version.outputs.VERSION }}.zip" . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "dist/*" \
+            -x "*.pyc" \
+            -x "__pycache__/*" \
+            -x ".DS_Store"
+
+      - name: Build matrix-communication skill package
+        run: |
+          SKILL_DIR="skills/matrix-communication"
+          TEMP_DIR=$(mktemp -d)
+
+          # Copy skill contents to temp dir (flat structure for Claude Desktop)
+          cp "$SKILL_DIR/SKILL.md" "$TEMP_DIR/"
+          cp -r "$SKILL_DIR/references" "$TEMP_DIR/"
+          cp LICENSE "$TEMP_DIR/"
+
+          # Create ZIP from temp dir
+          cd "$TEMP_DIR"
+          zip -r "$GITHUB_WORKSPACE/dist/matrix-communication-skill-${{ steps.version.outputs.VERSION }}.zip" .
+          cd -
+          rm -rf "$TEMP_DIR"
+
+      - name: List packages
+        run: ls -la dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/matrix-communication-plugin-${{ steps.version.outputs.VERSION }}.zip
+            dist/matrix-communication-skill-${{ steps.version.outputs.VERSION }}.zip
+          generate_release_notes: true
+          body: |
+            ## Downloads
+
+            | Package | Description |
+            |---------|-------------|
+            | `matrix-communication-plugin-${{ steps.version.outputs.VERSION }}.zip` | Full plugin (for multi-skill compatible tools) |
+            | `matrix-communication-skill-${{ steps.version.outputs.VERSION }}.zip` | Matrix communication skill (Claude Desktop compatible) |
+
+            **Claude Desktop users**: Download `matrix-communication-skill` package.

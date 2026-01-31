@@ -42,22 +42,22 @@ All scripts are in the `scripts/` directory. Run with `uv run`.
 
 ```bash
 # Send message to room (by alias)
-uv run scripts/matrix-send.py "#test:netresearch.de" "Hello from Claude!"
+uv run scripts/matrix-send.py "#myroom:matrix.org" "Hello from Claude!"
 
 # Send message to room (by ID)
-uv run scripts/matrix-send.py "!roomid:netresearch.de" "Hello!"
+uv run scripts/matrix-send.py "!roomid:matrix.org" "Hello!"
 
 # Send formatted message (markdown)
-uv run scripts/matrix-send.py "#ops:netresearch.de" "**Deployment complete** for project X"
+uv run scripts/matrix-send.py "#ops:matrix.org" "**Deployment complete** for project X"
 
 # List joined rooms
 uv run scripts/matrix-rooms.py
 
 # Read recent messages (unencrypted only)
-uv run scripts/matrix-read.py "#test:netresearch.de" --limit 10
+uv run scripts/matrix-read.py "#myroom:matrix.org" --limit 10
 
 # Resolve room alias to ID
-uv run scripts/matrix-resolve.py "#test:netresearch.de"
+uv run scripts/matrix-resolve.py "#myroom:matrix.org"
 ```
 
 ## Message Formatting
@@ -84,14 +84,14 @@ Matrix supports HTML formatting. The `matrix-send.py` script automatically conve
 
 ### Notify team about deployment
 ```bash
-uv run scripts/matrix-send.py "#ops:netresearch.de" \
+uv run scripts/matrix-send.py "#ops:matrix.org" \
   "**Deployment Complete**\n\n- Project: MyApp\n- Version: 1.2.3\n- Environment: Production"
 ```
 
 ### Send status update
 ```bash
-uv run scripts/matrix-send.py "#dev:netresearch.de" \
-  "Task NRS-1234 completed. Changes deployed to staging."
+uv run scripts/matrix-send.py "#dev:matrix.org" \
+  "Task #1234 completed. Changes deployed to staging."
 ```
 
 ### Check room before sending
@@ -100,7 +100,7 @@ uv run scripts/matrix-send.py "#dev:netresearch.de" \
 uv run scripts/matrix-rooms.py | grep -i ops
 
 # Then send
-uv run scripts/matrix-send.py "#ops-team:netresearch.de" "Message here"
+uv run scripts/matrix-send.py "#ops-team:matrix.org" "Message here"
 ```
 
 ## Error Handling

@@ -13,7 +13,7 @@ curl -H "Authorization: Bearer $MATRIX_TOKEN" ...
 ## Base URL
 
 ```
-https://matrix.netresearch.de/_matrix/client/v3
+https://matrix.org/_matrix/client/v3
 ```
 
 ## Endpoints
@@ -26,7 +26,7 @@ GET /account/whoami
 
 # Response:
 {
-  "user_id": "@user:netresearch.de",
+  "user_id": "@user:matrix.org",
   "device_id": "ABCDEF",
   "is_guest": false
 }

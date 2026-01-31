@@ -35,7 +35,7 @@ def load_config() -> dict:
         print(f"Error: Config file not found: {config_path}", file=sys.stderr)
         print("Create it with:", file=sys.stderr)
         print(json.dumps({
-            "homeserver": "https://matrix.netresearch.de",
+            "homeserver": "https://matrix.org",
             "access_token": "syt_..."
         }, indent=2), file=sys.stderr)
         sys.exit(1)

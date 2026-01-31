@@ -1,10 +1,12 @@
 # Matrix Skill
 
-A Claude Code skill for Matrix chat communication.
+An Agentic Skill for Matrix chat communication, distributed as a Claude Code plugin.
 
 ## Overview
 
-This skill enables Claude Code to send messages to Matrix chat rooms on behalf of users. Messages are sent using the user's own access token, so they appear as coming from the user. Works with any Matrix homeserver.
+This skill enables AI coding agents to send messages to Matrix chat rooms on behalf of users. Messages are sent using the user's own access token, so they appear as coming from the user. Works with any Matrix homeserver.
+
+**What is an Agentic Skill?** Platform-agnostic instructions and tools that AI coding agents can use. This skill is packaged as a Claude Code plugin but follows the open [Agentic Skills specification](https://github.com/anthropics/agentic-skills).
 
 ## Features
 
@@ -54,13 +56,13 @@ Clone this repository and reference the skill in your Claude configuration.
 
 ```bash
 # By room alias
-uv run scripts/matrix-send.py "#ops:netresearch.de" "Deployment complete!"
+uv run scripts/matrix-send.py "#myroom:matrix.org" "Deployment complete!"
 
 # By room ID
-uv run scripts/matrix-send.py "!abc123:netresearch.de" "Hello!"
+uv run scripts/matrix-send.py "!abc123:matrix.org" "Hello!"
 
 # With markdown formatting
-uv run scripts/matrix-send.py "#dev:netresearch.de" "**Build passed** for commit abc123"
+uv run scripts/matrix-send.py "#dev:matrix.org" "**Build passed** for commit abc123"
 ```
 
 ### List Joined Rooms
@@ -77,16 +79,16 @@ uv run scripts/matrix-rooms.py --search ops
 
 ```bash
 # Read last 10 messages
-uv run scripts/matrix-read.py "#test:netresearch.de"
+uv run scripts/matrix-read.py "#myroom:matrix.org"
 
 # Read more messages
-uv run scripts/matrix-read.py "#test:netresearch.de" --limit 50
+uv run scripts/matrix-read.py "#myroom:matrix.org" --limit 50
 ```
 
 ### Resolve Room Alias
 
 ```bash
-uv run scripts/matrix-resolve.py "#test:netresearch.de"
+uv run scripts/matrix-resolve.py "#myroom:matrix.org"
 ```
 
 ## E2EE Support

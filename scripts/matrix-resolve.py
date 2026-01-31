@@ -6,7 +6,7 @@ Usage:
     matrix-resolve.py --help
 
 Arguments:
-    ALIAS       Room alias (e.g., #test:netresearch.de)
+    ALIAS       Room alias (e.g., #myroom:matrix.org)
 
 Options:
     --json      Output as JSON
@@ -65,7 +65,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Resolve a Matrix room alias to room ID")
-    parser.add_argument("alias", help="Room alias (e.g., #test:netresearch.de)")
+    parser.add_argument("alias", help="Room alias (e.g., #myroom:matrix.org)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     args = parser.parse_args()
