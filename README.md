@@ -101,13 +101,21 @@ uv run scripts/matrix-resolve.py "#myroom:matrix.org"
 
 ## E2EE Support
 
-**Current status:**
-- **Sending**: Works to E2EE rooms (if room allows unverified devices)
-- **Reading**: Unencrypted messages only (API-sent, webhooks, bots)
+| Script | E2EE Rooms | Speed | Dependencies |
+|--------|------------|-------|--------------|
+| `matrix-send.py` | Works if "allow unverified" | Fast | None |
+| `matrix-send-e2ee.py` | Full encryption | Slower* | libolm |
 
-**Roadmap:**
-- Improved read support for unencrypted rooms
-- Full E2EE with Megolm key management (requires matrix-nio or similar SDK)
+*First run ~5-10s (key sync), subsequent runs faster.
+
+**Install libolm for E2EE:**
+```bash
+sudo apt install libolm-dev    # Debian/Ubuntu
+sudo dnf install libolm-devel  # Fedora
+brew install libolm            # macOS
+```
+
+**Reading**: Currently unencrypted messages only.
 
 ## Structure
 

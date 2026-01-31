@@ -21,11 +21,20 @@ Send messages to Matrix chat rooms on behalf of users.
 ```json
 {
   "homeserver": "https://matrix.org",
-  "access_token": "syt_..."
+  "access_token": "syt_...",
+  "user_id": "@you:matrix.org"
 }
 ```
 
 Get your access token from Element: Settings → Help & About → Access Token
+
+**For E2EE support** (optional):
+```bash
+# Install libolm
+sudo apt install libolm-dev    # Debian/Ubuntu
+sudo dnf install libolm-devel  # Fedora
+brew install libolm            # macOS
+```
 
 ## Scripts
 
@@ -33,7 +42,8 @@ All scripts are in the `scripts/` directory. Run with `uv run`.
 
 | Script | Purpose |
 |--------|---------|
-| `matrix-send.py` | Send message to a room (supports emotes, threads, replies) |
+| `matrix-send.py` | Send message (fast, non-E2EE) |
+| `matrix-send-e2ee.py` | Send message (E2EE capable, requires libolm) |
 | `matrix-react.py` | React to a message with emoji |
 | `matrix-rooms.py` | List joined rooms |
 | `matrix-read.py` | Read recent messages (unencrypted only) |
@@ -195,13 +205,33 @@ URLs are automatically shortened to readable links:
 **Sensitive information:**
 - Use `||spoiler||` for credentials, secrets in examples
 
-## E2EE Limitations
+## E2EE Support
 
-**Current:**
-- **Sending**: Works to E2EE rooms (if "allow unverified devices" is enabled)
-- **Reading**: Only unencrypted messages (webhooks, API-sent, bot messages)
+### Which script to use?
 
-**Future:** Full E2EE requires Megolm key management (matrix-nio SDK)
+| Scenario | Script | Notes |
+|----------|--------|-------|
+| Unencrypted room | `matrix-send.py` | Fast, no deps |
+| E2EE room with "allow unverified" | `matrix-send.py` | Works but not encrypted |
+| E2EE room, proper encryption | `matrix-send-e2ee.py` | Requires libolm |
+
+### E2EE Script Usage
+
+```bash
+# First run is slow (~5-10s) - syncs keys
+uv run scripts/matrix-send-e2ee.py '#encrypted-room:server' 'Secret message'
+
+# Subsequent runs faster (uses cached keys)
+uv run scripts/matrix-send-e2ee.py '#encrypted-room:server' 'Another message'
+```
+
+Key storage: `~/.local/share/matrix-skill/store/`
+
+### Limitations
+
+- **Reading E2EE**: Not yet implemented (use `matrix-read.py` for unencrypted only)
+- **First sync**: Initial run is slow due to key exchange
+- **Device trust**: Auto-trusts devices (TOFU model)
 
 ## Common Patterns
 
