@@ -76,9 +76,69 @@ def resolve_room_alias(config: dict, alias: str) -> str:
     raise ValueError(f"Could not resolve room alias: {result.get('error', 'Unknown error')}")
 
 
+def shorten_service_urls(text: str) -> str:
+    """Convert service URLs to shorter linked text.
+
+    Supported services:
+    - Jira: https://jira.example.com/browse/PROJ-123 -> [PROJ-123](url)
+    - GitHub Issues/PRs: https://github.com/owner/repo/issues/123 -> [owner/repo#123](url)
+    - GitHub commits: https://github.com/owner/repo/commit/abc123 -> [owner/repo@abc123](url)
+    - GitLab Issues/MRs: https://gitlab.example.com/group/project/-/issues/123 -> [group/project#123](url)
+    """
+    # Jira URLs: https://jira.*/browse/PROJ-123 or https://*.atlassian.net/browse/PROJ-123
+    text = re.sub(
+        r'https?://[^/]+/browse/([A-Z][A-Z0-9]+-\d+)',
+        r'[\1](https://\g<0>)',
+        text
+    )
+    # Fix double https
+    text = re.sub(r'\(https://https?://', r'(https://', text)
+
+    # GitHub Issues/PRs: https://github.com/owner/repo/issues/123 or /pull/123
+    text = re.sub(
+        r'https?://github\.com/([^/]+)/([^/]+)/(issues|pull)/(\d+)',
+        r'[\1/\2#\4](\g<0>)',
+        text
+    )
+
+    # GitHub commits: https://github.com/owner/repo/commit/abc123...
+    text = re.sub(
+        r'https?://github\.com/([^/]+)/([^/]+)/commit/([a-f0-9]{7,40})',
+        r'[\1/\2@\3](\g<0>)',
+        text
+    )
+
+    # GitLab Issues/MRs: https://gitlab.*/group/project/-/issues/123 or /-/merge_requests/123
+    text = re.sub(
+        r'https?://[^/]+/([^/]+/[^/]+)/-/(issues|merge_requests)/(\d+)',
+        r'[\1#\3](\g<0>)',
+        text
+    )
+
+    return text
+
+
 def markdown_to_html(text: str) -> str:
-    """Convert simple markdown to Matrix HTML."""
-    html = text
+    """Convert markdown to Matrix HTML with smart link shortening.
+
+    Supports:
+    - **bold**, *italic*, `code`, ~~strikethrough~~
+    - [text](url) links
+    - ||spoiler|| text (Discord-style)
+    - - list items
+    - Auto-shortens Jira, GitHub, GitLab URLs
+    """
+    # First, shorten service URLs (before other processing)
+    html = shorten_service_urls(text)
+
+    # Spoilers: ||text|| -> <span data-mx-spoiler>text</span>
+    html = re.sub(r'\|\|(.+?)\|\|', r'<span data-mx-spoiler>\1</span>', html)
+
+    # Markdown links: [text](url) -> <a href="url">text</a>
+    html = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', html)
+
+    # Strikethrough: ~~text~~ -> <del>text</del>
+    html = re.sub(r'~~(.+?)~~', r'<del>\1</del>', html)
 
     # Bold: **text** -> <strong>text</strong>
     html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
@@ -89,16 +149,24 @@ def markdown_to_html(text: str) -> str:
     # Code: `text` -> <code>text</code>
     html = re.sub(r'`(.+?)`', r'<code>\1</code>', html)
 
+    # Normalize multiple newlines
+    html = re.sub(r'\n{2,}', '\n', html)
+
     # Lists: - item -> <ul><li>item</li></ul>
+    # Process lists and convert non-list newlines to <br>
     lines = html.split('\n')
     in_list = False
     result = []
     for line in lines:
-        if line.strip().startswith('- '):
+        stripped = line.strip()
+        if stripped.startswith('- '):
             if not in_list:
                 result.append('<ul>')
                 in_list = True
-            result.append(f'<li>{line.strip()[2:]}</li>')
+            result.append(f'<li>{stripped[2:]}</li>')
+        elif stripped == '':
+            # Skip empty lines
+            continue
         else:
             if in_list:
                 result.append('</ul>')
@@ -106,11 +174,13 @@ def markdown_to_html(text: str) -> str:
             result.append(line)
     if in_list:
         result.append('</ul>')
-    html = '\n'.join(result)
 
-    # Normalize multiple newlines to single, then convert to <br>
-    html = re.sub(r'\n{2,}', '\n', html)
-    html = html.replace('\n', '<br>')
+    # Join with special marker, then convert to <br> only outside HTML tags
+    html = '{{BR}}'.join(result)
+    # Don't add <br> after block elements
+    html = re.sub(r'\{\{BR\}\}(?=<ul>|<li>|</ul>|</li>)', '', html)
+    html = re.sub(r'(?<=</ul>|</li>)\{\{BR\}\}', '', html)
+    html = html.replace('{{BR}}', '<br>')
 
     return html
 
