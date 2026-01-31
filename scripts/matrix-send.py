@@ -304,6 +304,16 @@ def send_message(config: dict, room_id: str, message: str, format: str = "markdo
     return matrix_request(config, "PUT", f"/rooms/{room_id}/send/m.room.message/{txn_id}", content)
 
 
+def clean_message(message: str) -> str:
+    """Clean message from bash escaping artifacts.
+
+    Bash history expansion in interactive shells can escape ! to \!
+    when using double quotes. This removes those artifacts.
+    """
+    # Remove backslash before ! (bash history expansion artifact)
+    return message.replace('\\!', '!')
+
+
 def main():
     import argparse
 
@@ -318,6 +328,8 @@ def main():
                         help="Reply in thread (event ID of thread root)")
     parser.add_argument("--reply", metavar="EVENT_ID",
                         help="Reply to message (event ID)")
+    parser.add_argument("--no-prefix", action="store_true",
+                        help="Don't add bot_prefix from config")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
@@ -325,6 +337,13 @@ def main():
     args = parser.parse_args()
 
     config = load_config()
+
+    # Clean message from bash escaping artifacts
+    message = clean_message(args.message)
+
+    # Add bot prefix if configured (unless --no-prefix or emote)
+    if not args.no_prefix and not args.emote and config.get("bot_prefix"):
+        message = f"{config['bot_prefix']} {message}"
 
     # Resolve room alias if needed
     room_id = args.room
@@ -341,7 +360,7 @@ def main():
             sys.exit(1)
 
     # Send message
-    result = send_message(config, room_id, args.message, args.format,
+    result = send_message(config, room_id, message, args.format,
                          emote=args.emote, thread_id=args.thread, reply_id=args.reply)
 
     if "error" in result:

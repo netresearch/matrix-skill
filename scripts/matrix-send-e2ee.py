@@ -309,6 +309,16 @@ async def send_message_e2ee(
         await client.close()
 
 
+def clean_message(message: str) -> str:
+    """Clean message from bash escaping artifacts.
+
+    Bash history expansion in interactive shells can escape ! to \!
+    when using double quotes. This removes those artifacts.
+    """
+    # Remove backslash before ! (bash history expansion artifact)
+    return message.replace('\\!', '!')
+
+
 def main():
     import argparse
 
@@ -323,6 +333,8 @@ def main():
                         help="Reply in thread (event ID of thread root)")
     parser.add_argument("--reply", metavar="EVENT_ID",
                         help="Reply to message (event ID)")
+    parser.add_argument("--no-prefix", action="store_true",
+                        help="Don't add bot_prefix from config")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
@@ -331,11 +343,18 @@ def main():
 
     config = load_config()
 
+    # Clean message from bash escaping artifacts
+    message = clean_message(args.message)
+
+    # Add bot prefix if configured (unless --no-prefix or emote)
+    if not args.no_prefix and not args.emote and config.get("bot_prefix"):
+        message = f"{config['bot_prefix']} {message}"
+
     # Run async send
     result = asyncio.run(send_message_e2ee(
         config=config,
         room=args.room,
-        message=args.message,
+        message=message,
         emote=args.emote,
         thread_id=args.thread,
         reply_id=args.reply,

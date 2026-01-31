@@ -22,11 +22,15 @@ Send messages to Matrix chat rooms on behalf of users.
 {
   "homeserver": "https://matrix.org",
   "access_token": "syt_...",
-  "user_id": "@you:matrix.org"
+  "user_id": "@you:matrix.org",
+  "bot_prefix": "🤖"
 }
 ```
 
 Get your access token from Element: Settings → Help & About → Access Token
+
+**Optional fields:**
+- `bot_prefix`: Emoji/text prefix for automated messages (e.g., `"🤖"`). Use `--no-prefix` to skip.
 
 **For E2EE support** (optional):
 ```bash
