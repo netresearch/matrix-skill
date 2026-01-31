@@ -90,19 +90,29 @@ brew install libolm
 
 All scripts are in the `scripts/` directory. Run with `uv run`.
 
+### ⚠️ ALWAYS USE E2EE SCRIPTS
+
+**Default to E2EE scripts (`*-e2ee.py`) for all operations.** Most Matrix rooms are encrypted. Only fall back to non-E2EE scripts if E2EE fails or user explicitly requests it.
+
+| Operation | E2EE Script (preferred) | Non-E2EE Fallback |
+|-----------|------------------------|-------------------|
+| Send message | `matrix-send-e2ee.py` | `matrix-send.py` |
+| Read messages | `matrix-read-e2ee.py` | `matrix-read.py` |
+| Edit message | `matrix-edit-e2ee.py` | `matrix-edit.py` |
+| React | `matrix-react.py` | (same) |
+| Redact | `matrix-redact.py` | (same) |
+
 | Script | Purpose |
 |--------|---------|
-| `matrix-send.py` | Send message (fast, non-E2EE) |
-| `matrix-send-e2ee.py` | Send message (E2EE encrypted) |
-| `matrix-e2ee-setup.py` | One-time E2EE device setup |
-| `matrix-e2ee-verify.py` | Device verification (experimental) |
+| `matrix-send-e2ee.py` | **Send message (E2EE) - USE THIS** |
+| `matrix-read-e2ee.py` | **Read messages (E2EE) - USE THIS** |
+| `matrix-edit-e2ee.py` | **Edit message (E2EE) - USE THIS** |
 | `matrix-react.py` | React to a message with emoji |
-| `matrix-edit.py` | Edit an existing message |
 | `matrix-redact.py` | Delete/redact a message |
 | `matrix-rooms.py` | List joined rooms |
-| `matrix-read.py` | Read recent messages (unencrypted only) |
-| `matrix-read-e2ee.py` | Read recent messages (E2EE decryption) |
 | `matrix-resolve.py` | Resolve room alias to room ID |
+| `matrix-e2ee-setup.py` | One-time E2EE device setup |
+| `matrix-e2ee-verify.py` | Device verification (experimental) |
 
 ## Quick Reference
 

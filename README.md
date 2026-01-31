@@ -117,6 +117,7 @@ E2EE is set up automatically when you configure the skill via the agent. The age
 |--------|---------|
 | `matrix-send-e2ee.py` | Send encrypted messages |
 | `matrix-read-e2ee.py` | Read/decrypt messages |
+| `matrix-edit-e2ee.py` | Edit messages (encrypted) |
 | `matrix-e2ee-verify.py` | Device verification |
 
 *First run ~5-10s (key sync), subsequent runs faster.*
@@ -143,7 +144,8 @@ matrix-skill/
 │   ├── matrix-rooms.py          # List joined rooms
 │   ├── matrix-resolve.py        # Resolve room aliases
 │   ├── matrix-react.py          # React to messages
-│   ├── matrix-edit.py           # Edit existing messages
+│   ├── matrix-edit-e2ee.py      # Edit messages (E2EE)
+│   ├── matrix-edit.py           # Edit messages (non-E2EE fallback)
 │   ├── matrix-redact.py         # Delete/redact messages
 │   ├── matrix-e2ee-setup.py     # E2EE device setup
 │   └── matrix-e2ee-verify.py    # Device verification
