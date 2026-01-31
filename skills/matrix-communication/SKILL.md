@@ -51,6 +51,7 @@ All scripts are in the `scripts/` directory. Run with `uv run`.
 | `matrix-e2ee-setup.py` | One-time E2EE device setup |
 | `matrix-e2ee-verify.py` | Device verification (experimental) |
 | `matrix-react.py` | React to a message with emoji |
+| `matrix-edit.py` | Edit an existing message |
 | `matrix-redact.py` | Delete/redact a message |
 | `matrix-rooms.py` | List joined rooms |
 | `matrix-read.py` | Read recent messages (unencrypted only) |

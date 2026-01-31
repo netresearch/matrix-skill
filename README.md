@@ -19,6 +19,8 @@ This skill enables AI coding agents to send messages to Matrix chat rooms on beh
 - **Emotes** - `/me` style action messages (`--emote`)
 - **Thread replies** - Keep discussions organized (`--thread`)
 - **Reactions** - Add emoji reactions to messages (✅ 👍 🚀)
+- **Edit messages** - Modify sent messages
+- **Redact messages** - Delete messages from rooms
 - **Visual effects** - Confetti 🎉, fireworks 🎆, snowfall ❄️ (Element clients)
 - **List rooms** to find the right destination
 - **Read messages** - both unencrypted and E2EE decryption
@@ -155,6 +157,7 @@ matrix-skill/
 │   ├── matrix-rooms.py          # List joined rooms
 │   ├── matrix-resolve.py        # Resolve room aliases
 │   ├── matrix-react.py          # React to messages
+│   ├── matrix-edit.py           # Edit existing messages
 │   ├── matrix-redact.py         # Delete/redact messages
 │   ├── matrix-e2ee-setup.py     # E2EE device setup
 │   └── matrix-e2ee-verify.py    # Device verification
