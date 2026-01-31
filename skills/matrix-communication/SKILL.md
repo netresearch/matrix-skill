@@ -45,9 +45,11 @@ All scripts are in the `scripts/` directory. Run with `uv run`.
 | `matrix-send.py` | Send message (fast, non-E2EE) |
 | `matrix-send-e2ee.py` | Send message (E2EE encrypted) |
 | `matrix-e2ee-setup.py` | One-time E2EE device setup |
+| `matrix-e2ee-verify.py` | Device verification (experimental) |
 | `matrix-react.py` | React to a message with emoji |
 | `matrix-rooms.py` | List joined rooms |
 | `matrix-read.py` | Read recent messages (unencrypted only) |
+| `matrix-read-e2ee.py` | Read recent messages (E2EE decryption) |
 | `matrix-resolve.py` | Resolve room alias to room ID |
 
 ## Quick Reference
@@ -265,12 +267,39 @@ Storage locations:
 - Device credentials: `~/.local/share/matrix-skill/store/credentials.json`
 - Encryption keys: `~/.local/share/matrix-skill/store/*.db`
 
+### Device Verification (Optional)
+
+Device verification marks a device as trusted. It's not required for E2EE to work - messages can still be encrypted/decrypted without verification.
+
+```bash
+# Wait for verification request from Element
+uv run scripts/matrix-e2ee-verify.py --timeout 120
+
+# With debug output
+uv run scripts/matrix-e2ee-verify.py --debug --timeout 120
+```
+
+**Note:** Modern Matrix clients (Element) often use cross-signing and room-based verification, which may not work with this script. The device will show as "unverified" in Element but E2EE still functions.
+
+### Reading E2EE Messages
+
+```bash
+# Read recent encrypted messages
+uv run scripts/matrix-read-e2ee.py '#room:server' --limit 10
+
+# JSON output
+uv run scripts/matrix-read-e2ee.py '#room:server' --json
+```
+
+**Note:** Messages sent before your device was created show as `[Unable to decrypt]` - this is normal E2EE behavior (new devices can't read old messages without key sharing).
+
 ### Limitations
 
-- **Reading E2EE**: Not yet implemented (use `matrix-read.py` for unencrypted only)
+- **Old messages**: Can't decrypt messages from before device creation (no session keys)
 - **First sync**: Initial run is slow due to key exchange
 - **Device trust**: Auto-trusts devices (TOFU model)
 - **Setup required**: First use requires user's Matrix password (one-time only)
+- **Verification**: Experimental - cross-signing/room-based verification not fully supported
 
 ## Common Patterns
 
