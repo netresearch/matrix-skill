@@ -118,20 +118,38 @@ async def send_message_e2ee(
 
     store_path = get_store_path()
 
-    # Check for existing E2EE device credentials
+    # Check for E2EE device credentials
+    # Priority: 1) Dedicated device from setup, 2) Access token from config
     stored_creds = load_credentials()
 
-    if not stored_creds or stored_creds.get("user_id") != config["user_id"]:
+    if stored_creds and stored_creds.get("user_id") == config["user_id"]:
+        # Use dedicated E2EE device (created via matrix-e2ee-setup.py)
+        device_id = stored_creds["device_id"]
+        access_token = stored_creds["access_token"]
+        if debug:
+            print(f"Using dedicated device: {device_id}", file=sys.stderr)
+    elif "access_token" in config:
+        # Use access token from config (reuses existing device)
+        access_token = config["access_token"]
+        # Get device_id from server
+        from nio import WhoamiResponse
+        temp_client = AsyncClient(config["homeserver"], config["user_id"])
+        temp_client.access_token = access_token
+        whoami = await temp_client.whoami()
+        await temp_client.close()
+        if isinstance(whoami, WhoamiResponse):
+            device_id = whoami.device_id
+            if debug:
+                print(f"Using existing device from token: {device_id}", file=sys.stderr)
+        else:
+            return {"error": f"Failed to get device info: {whoami}"}
+    else:
         return {
-            "error": "E2EE device not set up. Run: uv run scripts/matrix-e2ee-setup.py YOUR_PASSWORD"
+            "error": "No credentials found. Add 'access_token' to config, or run matrix-e2ee-setup.py"
         }
-
-    device_id = stored_creds["device_id"]
-    access_token = stored_creds["access_token"]
 
     if debug:
         print(f"Store path: {store_path}", file=sys.stderr)
-        print(f"Using device: {device_id}", file=sys.stderr)
 
     # Configure client for E2EE
     client_config = AsyncClientConfig(

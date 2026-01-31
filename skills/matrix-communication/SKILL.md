@@ -216,35 +216,40 @@ URLs are automatically shortened to readable links:
 | E2EE room with "allow unverified" | `matrix-send.py` | Works but not encrypted |
 | E2EE room, proper encryption | `matrix-send-e2ee.py` | Requires libolm + setup |
 
-### E2EE First-Time Setup
+### E2EE Setup Options
 
-E2EE requires a dedicated Matrix device with its own encryption keys. This is a **one-time setup** using `matrix-e2ee-setup.py`.
+Two approaches are supported:
 
-**Agent workflow for E2EE:**
-1. Try `matrix-send-e2ee.py` - if it fails with "E2EE device not set up":
-2. Ask user for their Matrix password (explain: used once, not stored)
-3. Run: `uv run scripts/matrix-e2ee-setup.py 'USER_PASSWORD'`
-4. On success, `matrix-send-e2ee.py` works without password
+**Option 1: Access Token (Simple)**
+- Uses existing `access_token` from config
+- Works immediately, no setup needed
+- Reuses your existing device (e.g., Element's device)
+- May cause temporary key sync issues (client restart fixes them)
+
+**Option 2: Dedicated Device (Clean)**
+- Creates a separate "Matrix Skill E2EE" device
+- Requires password once (not stored)
+- No conflicts with other clients
+- Recommended for production use
 
 ```bash
-# One-time setup (password used once, not stored)
-uv run scripts/matrix-e2ee-setup.py 'USER_PASSWORD'
+# Option 1: Just use access_token from config - works immediately
+uv run scripts/matrix-send-e2ee.py '#room:server' 'Encrypted message'
+
+# Option 2: Create dedicated device first (optional)
+uv run scripts/matrix-e2ee-setup.py "YOUR_PASSWORD"
+uv run scripts/matrix-send-e2ee.py '#room:server' 'Encrypted message'
 
 # Check setup status
 uv run scripts/matrix-e2ee-setup.py --status
 
-# After setup, send messages without password
-uv run scripts/matrix-send-e2ee.py '#room:server' 'Encrypted message'
-
-# To remove device (if needed)
+# Remove dedicated device (reverts to access token mode)
 uv run scripts/matrix-e2ee-setup.py --logout
 ```
 
-**Why password is needed once:**
-- Matrix access tokens are bound to specific devices
-- Creating a new device with E2EE keys requires a login
-- The login creates device "Matrix Skill E2EE" visible in user's session list
-- After login, only the device's access token is stored (not the password)
+**Agent workflow:**
+1. Try `matrix-send-e2ee.py` directly (uses access_token from config)
+2. If user reports issues, suggest dedicated device setup with password
 
 ### E2EE Script Usage
 
