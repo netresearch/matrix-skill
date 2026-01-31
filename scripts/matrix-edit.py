@@ -233,6 +233,8 @@ def main():
     parser.add_argument("room", help="Room alias (#room:server) or room ID (!id:server)")
     parser.add_argument("event_id", help="Event ID of the message to edit")
     parser.add_argument("message", help="New message content")
+    parser.add_argument("--no-prefix", action="store_true",
+                        help="Don't add bot_prefix from config")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
@@ -243,6 +245,10 @@ def main():
 
     # Clean message
     message = clean_message(args.message)
+
+    # Add bot prefix if configured (unless --no-prefix)
+    if not args.no_prefix and config.get("bot_prefix"):
+        message = f"{config['bot_prefix']} {message}"
 
     # Resolve room alias if needed
     room_id = args.room
