@@ -108,7 +108,8 @@ def markdown_to_html(text: str) -> str:
         result.append('</ul>')
     html = '\n'.join(result)
 
-    # Newlines to <br>
+    # Normalize multiple newlines to single, then convert to <br>
+    html = re.sub(r'\n{2,}', '\n', html)
     html = html.replace('\n', '<br>')
 
     return html
