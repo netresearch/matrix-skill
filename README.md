@@ -11,8 +11,11 @@ This skill enables AI coding agents to send messages to Matrix chat rooms on beh
 ## Features
 
 - **Send messages** to any joined Matrix room
-- **Rich formatting** - bold, italic, code, strikethrough, spoilers, lists
+- **Rich formatting** - bold, italic, code, strikethrough, spoilers, lists, blockquotes
 - **Smart link shortening** - Jira, GitHub, GitLab URLs become readable links
+- **Matrix mentions** - `@user:server` becomes clickable user pill
+- **Room links** - `#room:server` becomes clickable room link
+- **Code blocks** - Syntax-highlighted multi-line code
 - **List rooms** to find the right destination
 - **Read messages** (unencrypted messages only in v1)
 
