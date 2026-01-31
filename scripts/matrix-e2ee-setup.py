@@ -146,10 +146,14 @@ async def setup_device(config: dict, password: str) -> dict:
     )
 
     try:
-        # Login to create new device
+        # Login to create new device with hostname suffix
+        import socket
+        hostname = socket.gethostname()
+        device_name = f"Matrix Skill E2EE @ {hostname}"
+
         login_response = await client.login(
             password=password,
-            device_name="Matrix Skill E2EE",
+            device_name=device_name,
         )
 
         if isinstance(login_response, LoginResponse):
