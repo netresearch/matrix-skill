@@ -71,42 +71,42 @@ brew install libolm            # macOS
 
 ```bash
 # By room alias
-uv run scripts/matrix-send.py "#myroom:matrix.org" "Deployment complete!"
+uv run skills/matrix-communication/scripts/matrix-send.py "#myroom:matrix.org" "Deployment complete!"
 
 # By room ID
-uv run scripts/matrix-send.py "!abc123:matrix.org" "Hello!"
+uv run skills/matrix-communication/scripts/matrix-send.py "!abc123:matrix.org" "Hello!"
 
 # With markdown formatting
-uv run scripts/matrix-send.py "#dev:matrix.org" "**Build passed** for commit abc123"
+uv run skills/matrix-communication/scripts/matrix-send.py "#dev:matrix.org" "**Build passed** for commit abc123"
 ```
 
 ### List Joined Rooms
 
 ```bash
 # List all rooms
-uv run scripts/matrix-rooms.py
+uv run skills/matrix-communication/scripts/matrix-rooms.py
 
 # Search for specific room
-uv run scripts/matrix-rooms.py --search ops
+uv run skills/matrix-communication/scripts/matrix-rooms.py --search ops
 ```
 
 ### Read Messages
 
 ```bash
 # Read last 10 messages (unencrypted rooms)
-uv run scripts/matrix-read.py "#myroom:matrix.org"
+uv run skills/matrix-communication/scripts/matrix-read.py "#myroom:matrix.org"
 
 # Read E2EE encrypted messages
-uv run scripts/matrix-read-e2ee.py "#myroom:matrix.org" --limit 10
+uv run skills/matrix-communication/scripts/matrix-read-e2ee.py "#myroom:matrix.org" --limit 10
 
 # Read more messages
-uv run scripts/matrix-read.py "#myroom:matrix.org" --limit 50
+uv run skills/matrix-communication/scripts/matrix-read.py "#myroom:matrix.org" --limit 50
 ```
 
 ### Resolve Room Alias
 
 ```bash
-uv run scripts/matrix-resolve.py "#myroom:matrix.org"
+uv run skills/matrix-communication/scripts/matrix-resolve.py "#myroom:matrix.org"
 ```
 
 ## E2EE Support
@@ -126,7 +126,7 @@ E2EE is set up automatically when you configure the skill via the agent. The age
 
 **Device verification** (optional):
 ```bash
-uv run scripts/matrix-e2ee-verify.py --timeout 120
+uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 120
 # Then start verification from Element: Settings → Security → Sessions
 ```
 
@@ -136,24 +136,24 @@ uv run scripts/matrix-e2ee-verify.py --timeout 120
 matrix-skill/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest
-├── scripts/
-│   ├── matrix-send.py           # Send messages (fast, non-E2EE)
-│   ├── matrix-send-e2ee.py      # Send messages (E2EE encrypted)
-│   ├── matrix-read.py           # Read messages (unencrypted)
-│   ├── matrix-read-e2ee.py      # Read messages (E2EE decryption)
-│   ├── matrix-rooms.py          # List joined rooms
-│   ├── matrix-resolve.py        # Resolve room aliases
-│   ├── matrix-react.py          # React to messages
-│   ├── matrix-edit-e2ee.py      # Edit messages (E2EE)
-│   ├── matrix-edit.py           # Edit messages (non-E2EE fallback)
-│   ├── matrix-redact.py         # Delete/redact messages
-│   ├── matrix-e2ee-setup.py     # E2EE device setup
-│   └── matrix-e2ee-verify.py    # Device verification
 ├── skills/
 │   └── matrix-communication/
 │       ├── SKILL.md             # Skill instructions
+│       ├── scripts/
+│       │   ├── matrix-send-e2ee.py      # Send (E2EE) - USE THIS
+│       │   ├── matrix-read-e2ee.py      # Read (E2EE) - USE THIS
+│       │   ├── matrix-edit-e2ee.py      # Edit (E2EE) - USE THIS
+│       │   ├── matrix-send.py           # Send (non-E2EE fallback)
+│       │   ├── matrix-read.py           # Read (non-E2EE fallback)
+│       │   ├── matrix-edit.py           # Edit (non-E2EE fallback)
+│       │   ├── matrix-react.py          # React to messages
+│       │   ├── matrix-redact.py         # Delete messages
+│       │   ├── matrix-rooms.py          # List rooms
+│       │   ├── matrix-resolve.py        # Resolve aliases
+│       │   ├── matrix-e2ee-setup.py     # E2EE setup
+│       │   └── matrix-e2ee-verify.py    # Device verification
 │       └── references/
-│           └── api-reference.md # Matrix API reference
+│           └── api-reference.md
 ├── LICENSE
 └── README.md
 ```
