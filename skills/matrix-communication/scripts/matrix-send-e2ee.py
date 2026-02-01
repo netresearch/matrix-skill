@@ -158,8 +158,8 @@ def markdown_to_html(text: str) -> str:
 
     html = re.sub(r'```(\w*)\n(.*?)```', save_code_block, html, flags=re.DOTALL)
 
-    # Spoilers
-    html = re.sub(r'\|\|(.+?)\|\|', r'<span data-mx-spoiler>\1</span>', html)
+    # Spoilers (but not table separators - check for pipe at start/end of line)
+    html = re.sub(r'(?<!\|)\|\|(.+?)\|\|(?!\|)', r'<span data-mx-spoiler>\1</span>', html)
 
     # Markdown links
     html = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', html)
@@ -187,14 +187,63 @@ def markdown_to_html(text: str) -> str:
     # Normalize newlines
     html = re.sub(r'\n{2,}', '\n', html)
 
-    # Process lists and blockquotes
+    # Process lines for headings, lists, blockquotes, and tables
     lines = html.split('\n')
     in_list = False
     in_quote = False
+    in_table = False
     result = []
 
-    for line in lines:
+    for i, line in enumerate(lines):
         stripped = line.strip()
+
+        # Headings (## Heading → <h2>)
+        heading_match = re.match(r'^(#{1,6})\s+(.+)$', stripped)
+        if heading_match:
+            if in_quote:
+                result.append('</blockquote>')
+                in_quote = False
+            if in_list:
+                result.append('</ul>')
+                in_list = False
+            if in_table:
+                result.append('</table>')
+                in_table = False
+            level = len(heading_match.group(1))
+            heading_text = heading_match.group(2)
+            result.append(f'<h{level}>{heading_text}</h{level}>')
+            continue
+
+        # Tables (| col | col |)
+        if stripped.startswith('|') and stripped.endswith('|'):
+            # Parse table cells
+            cells = [c.strip() for c in stripped.split('|')[1:-1]]
+
+            # Check if this is a separator line (|---|---|)
+            if all(re.match(r'^[-:]+$', c) for c in cells if c):
+                # Skip separator line, it's just formatting
+                continue
+
+            if in_quote:
+                result.append('</blockquote>')
+                in_quote = False
+            if in_list:
+                result.append('</ul>')
+                in_list = False
+
+            if not in_table:
+                result.append('<table>')
+                in_table = True
+                # First row is header
+                result.append('<tr>' + ''.join(f'<th>{c}</th>' for c in cells) + '</tr>')
+            else:
+                result.append('<tr>' + ''.join(f'<td>{c}</td>' for c in cells) + '</tr>')
+            continue
+
+        # Close table if we're leaving table context
+        if in_table and not (stripped.startswith('|') and stripped.endswith('|')):
+            result.append('</table>')
+            in_table = False
 
         if stripped.startswith('> '):
             if not in_quote:
@@ -230,17 +279,47 @@ def markdown_to_html(text: str) -> str:
         result.append('</blockquote>')
     if in_list:
         result.append('</ul>')
+    if in_table:
+        result.append('</table>')
 
     html = '{{BR}}'.join(result)
-    html = re.sub(r'\{\{BR\}\}(?=<ul>|<li>|</ul>|</li>|<blockquote>|</blockquote>|<pre>)', '', html)
-    html = re.sub(r'(</ul>|</li>|</blockquote>|</pre>)\{\{BR\}\}', r'\1', html)
-    html = re.sub(r'(<blockquote>)\{\{BR\}\}', r'\1', html)
+    html = re.sub(r'\{\{BR\}\}(?=<ul>|<li>|</ul>|</li>|<blockquote>|</blockquote>|<pre>|<table>|<tr>|</table>|<h[1-6]>)', '', html)
+    html = re.sub(r'(</ul>|</li>|</blockquote>|</pre>|</table>|</tr>|</h[1-6]>)\{\{BR\}\}', r'\1', html)
+    html = re.sub(r'(<blockquote>|<table>)\{\{BR\}\}', r'\1', html)
     html = html.replace('{{BR}}', '<br>')
 
     for idx, block in enumerate(code_blocks):
         html = html.replace(f'{{{{CODEBLOCK_{idx}}}}}', block)
 
     return html
+
+
+def add_bot_prefix(message: str, prefix: str) -> str:
+    """Add bot prefix intelligently.
+
+    If message starts with a heading, insert prefix after the heading.
+    Otherwise, prepend prefix to the message.
+    """
+    lines = message.split('\n')
+    if not lines:
+        return f"{prefix} {message}"
+
+    first_line = lines[0].strip()
+
+    # Check if first line is a heading
+    if re.match(r'^#{1,6}\s+', first_line):
+        # Insert prefix after heading on same line or next line
+        lines[0] = first_line
+        if len(lines) > 1:
+            # Insert prefix at start of content after heading
+            lines.insert(1, f"\n{prefix}")
+        else:
+            # Add prefix after heading
+            lines.append(f"\n{prefix}")
+        return '\n'.join(lines)
+    else:
+        # Prepend prefix to message
+        return f"{prefix} {message}"
 
 
 async def send_message_e2ee(
@@ -492,7 +571,7 @@ def main():
 
     # Add bot prefix if configured (unless --no-prefix or emote)
     if not args.no_prefix and not args.emote and config.get("bot_prefix"):
-        message = f"{config['bot_prefix']} {message}"
+        message = add_bot_prefix(message, config["bot_prefix"])
 
     # Run async send
     result = asyncio.run(send_message_e2ee(

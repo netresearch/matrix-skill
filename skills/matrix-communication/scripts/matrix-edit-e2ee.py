@@ -78,7 +78,7 @@ def markdown_to_html(text: str) -> str:
         code_blocks.append(f'<pre><code class="language-{lang}">{code}</code></pre>' if lang else f'<pre><code>{code}</code></pre>')
         return f'{{{{CODEBLOCK_{idx}}}}}'
     html = re.sub(r'```(\w*)\n(.*?)```', save_code_block, html, flags=re.DOTALL)
-    html = re.sub(r'\|\|(.+?)\|\|', r'<span data-mx-spoiler>\1</span>', html)
+    html = re.sub(r'(?<!\|)\|\|(.+?)\|\|(?!\|)', r'<span data-mx-spoiler>\1</span>', html)
     html = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', html)
     html = re.sub(r'(?<!["\'/])(@[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', r'<a href="https://matrix.to/#/\1">\1</a>', html)
     html = re.sub(r'(?<!["\'/])(#[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', r'<a href="https://matrix.to/#/\1">\1</a>', html)
@@ -87,12 +87,38 @@ def markdown_to_html(text: str) -> str:
     html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
     html = re.sub(r'`(.+?)`', r'<code>\1</code>', html)
     html = re.sub(r'\n{2,}', '\n', html)
-    
+
     lines = html.split('\n')
-    in_list = in_quote = False
+    in_list = in_quote = in_table = False
     result = []
     for line in lines:
         stripped = line.strip()
+
+        # Headings
+        heading_match = re.match(r'^(#{1,6})\s+(.+)$', stripped)
+        if heading_match:
+            if in_quote: result.append('</blockquote>'); in_quote = False
+            if in_list: result.append('</ul>'); in_list = False
+            if in_table: result.append('</table>'); in_table = False
+            level = len(heading_match.group(1))
+            result.append(f'<h{level}>{heading_match.group(2)}</h{level}>')
+            continue
+
+        # Tables
+        if stripped.startswith('|') and stripped.endswith('|'):
+            cells = [c.strip() for c in stripped.split('|')[1:-1]]
+            if all(re.match(r'^[-:]+$', c) for c in cells if c): continue
+            if in_quote: result.append('</blockquote>'); in_quote = False
+            if in_list: result.append('</ul>'); in_list = False
+            if not in_table:
+                result.append('<table>'); in_table = True
+                result.append('<tr>' + ''.join(f'<th>{c}</th>' for c in cells) + '</tr>')
+            else:
+                result.append('<tr>' + ''.join(f'<td>{c}</td>' for c in cells) + '</tr>')
+            continue
+
+        if in_table: result.append('</table>'); in_table = False
+
         if stripped.startswith('> '):
             if not in_quote:
                 if in_list: result.append('</ul>'); in_list = False
@@ -110,15 +136,31 @@ def markdown_to_html(text: str) -> str:
             result.append(line)
     if in_quote: result.append('</blockquote>')
     if in_list: result.append('</ul>')
-    
+    if in_table: result.append('</table>')
+
     html = '{{BR}}'.join(result)
-    html = re.sub(r'\{\{BR\}\}(?=<ul>|<li>|</ul>|</li>|<blockquote>|</blockquote>|<pre>)', '', html)
-    html = re.sub(r'(</ul>|</li>|</blockquote>|</pre>)\{\{BR\}\}', r'\1', html)
-    html = re.sub(r'(<blockquote>)\{\{BR\}\}', r'\1', html)
+    html = re.sub(r'\{\{BR\}\}(?=<ul>|<li>|</ul>|</li>|<blockquote>|</blockquote>|<pre>|<table>|<tr>|</table>|<h[1-6]>)', '', html)
+    html = re.sub(r'(</ul>|</li>|</blockquote>|</pre>|</table>|</tr>|</h[1-6]>)\{\{BR\}\}', r'\1', html)
+    html = re.sub(r'(<blockquote>|<table>)\{\{BR\}\}', r'\1', html)
     html = html.replace('{{BR}}', '<br>')
     for idx, block in enumerate(code_blocks):
         html = html.replace(f'{{{{CODEBLOCK_{idx}}}}}', block)
     return html
+
+
+def add_bot_prefix(message: str, prefix: str) -> str:
+    """Add bot prefix intelligently - after heading if present, else at start."""
+    lines = message.split('\n')
+    if not lines: return f"{prefix} {message}"
+    first_line = lines[0].strip()
+    if re.match(r'^#{1,6}\s+', first_line):
+        lines[0] = first_line
+        if len(lines) > 1:
+            lines.insert(1, f"\n{prefix}")
+        else:
+            lines.append(f"\n{prefix}")
+        return '\n'.join(lines)
+    return f"{prefix} {message}"
 
 
 async def edit_message_e2ee(config: dict, room: str, event_id: str, message: str, debug: bool = False) -> dict:
@@ -219,7 +261,7 @@ def main():
     config = load_config()
     message = clean_message(args.message)
     if not args.no_prefix and config.get("bot_prefix"):
-        message = f"{config['bot_prefix']} {message}"
+        message = add_bot_prefix(message, config["bot_prefix"])
 
     result = asyncio.run(edit_message_e2ee(config, args.room, args.event_id, message, args.debug))
 
