@@ -389,7 +389,7 @@ def send_message(config: dict, room_id: str, message: str, format: str = "markdo
 def clean_message(message: str) -> str:
     """Clean message from bash escaping artifacts.
 
-    Bash history expansion in interactive shells can escape ! to \!
+    Bash history expansion in interactive shells can escape ! to \\!
     when using double quotes. This removes those artifacts.
     """
     # Remove backslash before ! (bash history expansion artifact)

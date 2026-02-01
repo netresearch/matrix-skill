@@ -535,7 +535,7 @@ async def send_message_e2ee(
 def clean_message(message: str) -> str:
     """Clean message from bash escaping artifacts.
 
-    Bash history expansion in interactive shells can escape ! to \!
+    Bash history expansion in interactive shells can escape ! to \\!
     when using double quotes. This removes those artifacts.
     """
     # Remove backslash before ! (bash history expansion artifact)
