@@ -260,10 +260,11 @@ def main():
 
     config = load_config()
     message = clean_message(args.message)
+    room = clean_message(args.room)  # Room IDs also start with ! and need cleaning
     if not args.no_prefix and config.get("bot_prefix"):
         message = add_bot_prefix(message, config["bot_prefix"])
 
-    result = asyncio.run(edit_message_e2ee(config, args.room, args.event_id, message, args.debug))
+    result = asyncio.run(edit_message_e2ee(config, room, args.event_id, message, args.debug))
 
     if "error" in result:
         if args.json: print(json.dumps(result))

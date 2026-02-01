@@ -407,10 +407,11 @@ def main():
     args = parser.parse_args()
 
     config = load_config()
+    room = args.room.replace('\\!', '!')  # Clean bash history expansion artifact
 
     messages = asyncio.run(read_messages_e2ee(
         config=config,
-        room=args.room,
+        room=room,
         limit=args.limit,
         request_keys=args.request_keys,
         backup_passphrase=args.backup,

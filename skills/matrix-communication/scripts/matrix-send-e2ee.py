@@ -566,8 +566,9 @@ def main():
 
     config = load_config()
 
-    # Clean message from bash escaping artifacts
+    # Clean message and room from bash escaping artifacts
     message = clean_message(args.message)
+    room = clean_message(args.room)  # Room IDs also start with ! and need cleaning
 
     # Add bot prefix if configured (unless --no-prefix or emote)
     if not args.no_prefix and not args.emote and config.get("bot_prefix"):
@@ -576,7 +577,7 @@ def main():
     # Run async send
     result = asyncio.run(send_message_e2ee(
         config=config,
-        room=args.room,
+        room=room,
         message=message,
         emote=args.emote,
         thread_id=args.thread,
