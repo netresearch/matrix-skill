@@ -15,7 +15,10 @@ Usage:
     matrix-send-e2ee.py --help
 
 Arguments:
-    ROOM        Room alias (#room:server) or room ID (!id:server)
+    ROOM        Room identifier. Supports multiple formats:
+                - Room ID: !abc123xyz (direct, fastest)
+                - Room alias: #room:server (resolved via directory)
+                - Room name: "agent-work" (looked up from joined rooms)
     MESSAGE     Message content (markdown supported)
 
 Options:
@@ -29,6 +32,16 @@ Options:
 
 Note: First run may be slow (~5-10s) for initial sync and key setup.
       Subsequent runs use cached keys and are faster.
+
+Examples:
+    # Send by room name (easiest)
+    matrix-send-e2ee.py agent-work "Hello team!"
+
+    # Send by room ID
+    matrix-send-e2ee.py '!sZBoTOreI1z0BgHY-s2ZC9MV63B1orGFigPXvYMQ22E' "Hello!"
+
+    # Send by alias
+    matrix-send-e2ee.py '#general:matrix.org' "Hello everyone!"
 """
 
 import asyncio
@@ -104,6 +117,115 @@ def load_credentials() -> dict | None:
         with open(creds_path) as f:
             return json.load(f)
     return None
+
+
+# HTTP-based room lookup functions (for name-based resolution before nio client)
+import urllib.request
+import urllib.error
+import urllib.parse
+
+
+def _http_request(config: dict, method: str, endpoint: str) -> dict:
+    """Make a Matrix HTTP API request."""
+    url = f"{config['homeserver']}/_matrix/client/v3{endpoint}"
+
+    # Get access token from stored credentials or config
+    creds = load_credentials()
+    if creds and creds.get("user_id") == config.get("user_id"):
+        access_token = creds["access_token"]
+    elif "access_token" in config:
+        access_token = config["access_token"]
+    else:
+        return {"error": "No access token available"}
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    req = urllib.request.Request(url, headers=headers, method=method)
+
+    try:
+        with urllib.request.urlopen(req) as response:
+            return json.loads(response.read().decode())
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()
+        try:
+            error_json = json.loads(error_body)
+            return {"error": error_json.get("error", error_body)}
+        except:
+            return {"error": error_body}
+
+
+def _get_room_info(config: dict, room_id: str) -> dict:
+    """Get the display name and canonical alias of a room."""
+    info = {"name": None, "alias": None}
+
+    result = _http_request(config, "GET", f"/rooms/{room_id}/state/m.room.name")
+    if "name" in result:
+        info["name"] = result["name"]
+
+    result = _http_request(config, "GET", f"/rooms/{room_id}/state/m.room.canonical_alias")
+    if "alias" in result:
+        info["alias"] = result["alias"]
+
+    return info
+
+
+def _list_joined_rooms(config: dict) -> list:
+    """List all joined rooms with names and aliases."""
+    result = _http_request(config, "GET", "/joined_rooms")
+    if "error" in result:
+        return []
+
+    rooms = []
+    for room_id in result.get("joined_rooms", []):
+        info = _get_room_info(config, room_id)
+        display_name = info["name"] or info["alias"] or room_id
+        rooms.append({
+            "room_id": room_id,
+            "name": display_name,
+            "alias": info["alias"]
+        })
+
+    return rooms
+
+
+def find_room_by_name(config: dict, search_term: str) -> tuple[str | None, list]:
+    """Find a room by name or alias (case-insensitive).
+
+    Returns (room_id, matches) where:
+    - room_id is the matched room ID (or None if no/ambiguous match)
+    - matches is list of matching rooms (for error reporting)
+    """
+    rooms = _list_joined_rooms(config)
+    search_lower = search_term.lower()
+
+    # Try exact match first
+    for room in rooms:
+        if room["name"].lower() == search_lower:
+            return room["room_id"], [room]
+        if room.get("alias") and room["alias"].lower() == search_lower:
+            return room["room_id"], [room]
+        # Match alias without server part
+        if room.get("alias"):
+            alias_name = room["alias"].split(":")[0].lstrip("#")
+            if alias_name.lower() == search_lower:
+                return room["room_id"], [room]
+
+    # Try partial match
+    matches = []
+    for room in rooms:
+        if search_lower in room["name"].lower():
+            matches.append(room)
+        elif room.get("alias") and search_lower in room["alias"].lower():
+            if room not in matches:
+                matches.append(room)
+
+    if len(matches) == 1:
+        return matches[0]["room_id"], matches
+
+    return None, matches
 
 
 def shorten_service_urls(text: str) -> str:
@@ -548,7 +670,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Send an E2EE-capable message to a Matrix room"
     )
-    parser.add_argument("room", help="Room alias (#room:server) or room ID (!id:server)")
+    parser.add_argument("room", help="Room ID (!id), alias (#room:server), or name")
     parser.add_argument("message", help="Message content")
     parser.add_argument("--emote", action="store_true",
                         help="Send as /me action (m.emote msgtype)")
@@ -566,9 +688,54 @@ def main():
 
     config = load_config()
 
-    # Clean message and room from bash escaping artifacts
+    # Clean message from bash escaping artifacts
     message = clean_message(args.message)
-    room = clean_message(args.room)  # Room IDs also start with ! and need cleaning
+    room_input = clean_message(args.room)
+
+    # Resolve room to room ID before async operations
+    room = room_input
+    if room_input.startswith("!"):
+        # Direct room ID - use as-is
+        if args.debug:
+            print(f"Using room ID directly: {room_input}", file=sys.stderr)
+    elif room_input.startswith("#"):
+        # Room alias - will be resolved in async function
+        # But try name lookup as backup if alias doesn't contain server
+        if ":" not in room_input:
+            # Missing server part, treat as name
+            alias_name = room_input.lstrip("#")
+            if args.debug:
+                print(f"Alias missing server, trying name lookup for '{alias_name}'", file=sys.stderr)
+            found_id, matches = find_room_by_name(config, alias_name)
+            if found_id:
+                room = found_id
+                if args.debug:
+                    print(f"Found room by name: {room}", file=sys.stderr)
+            # If not found, keep original - let async function try alias resolution
+    else:
+        # Plain name - look up by name
+        if args.debug:
+            print(f"Looking up room by name: '{room_input}'", file=sys.stderr)
+
+        found_id, matches = find_room_by_name(config, room_input)
+        if found_id:
+            room = found_id
+            if args.debug:
+                print(f"Found room: {room}", file=sys.stderr)
+        else:
+            error_msg = f"Could not find room '{room_input}'"
+            if matches:
+                error_msg += f". Multiple matches found:\n"
+                for m in matches:
+                    alias_str = f" ({m['alias']})" if m.get("alias") else ""
+                    error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
+            else:
+                error_msg += ". Use 'matrix-rooms.py' to list available rooms."
+            if args.json:
+                print(json.dumps({"error": error_msg}))
+            else:
+                print(f"Error: {error_msg}", file=sys.stderr)
+            sys.exit(1)
 
     # Add bot prefix if configured (unless --no-prefix or emote)
     if not args.no_prefix and not args.emote and config.get("bot_prefix"):

@@ -114,23 +114,51 @@ All scripts are in the `scripts/` directory. Run with `uv run`.
 | `matrix-e2ee-setup.py` | One-time E2EE device setup |
 | `matrix-e2ee-verify.py` | Device verification (experimental) |
 
+## Room Identification
+
+Scripts support multiple ways to identify rooms:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| **Room name** | `agent-work` | Easiest - looked up from joined rooms |
+| **Room ID** | `!sZBo...Q22E` | Direct - from `matrix-rooms.py` output |
+| **Room alias** | `#room:server` | Resolved via Matrix directory |
+
+**Best practice:** Use room names for simplicity. The script will find the matching room from your joined rooms list.
+
+```bash
+# These all work - room name is easiest
+uv run skills/matrix-communication/scripts/matrix-send.py agent-work "Hello!"
+uv run skills/matrix-communication/scripts/matrix-send.py '!sZBoTOreI1z0BgHY' "Hello!"
+uv run skills/matrix-communication/scripts/matrix-send.py '#agent-work:server' "Hello!"
+```
+
 ## Quick Reference
 
 ```bash
-# Send message to room (by alias)
-uv run skills/matrix-communication/scripts/matrix-send.py "#myroom:matrix.org" "Hello from Claude!"
+# Send message by room name (easiest - PREFERRED)
+uv run skills/matrix-communication/scripts/matrix-send.py agent-work "Hello from Claude!"
 
-# Send message to room (by ID)
-uv run skills/matrix-communication/scripts/matrix-send.py "!roomid:matrix.org" "Hello!"
+# Send message by room ID (from matrix-rooms.py output)
+uv run skills/matrix-communication/scripts/matrix-send.py '!sZBoTOreI1z0BgHY-s2ZC9MV63B1orGFigPXvYMQ22E' "Hello!"
+
+# Send message by room alias
+uv run skills/matrix-communication/scripts/matrix-send.py "#myroom:matrix.org" "Hello!"
 
 # Send formatted message (markdown)
-uv run skills/matrix-communication/scripts/matrix-send.py "#ops:matrix.org" "**Deployment complete** for project X"
+uv run skills/matrix-communication/scripts/matrix-send.py ops "**Deployment complete** for project X"
 
-# List joined rooms
+# List joined rooms (shows name, alias, and ID)
 uv run skills/matrix-communication/scripts/matrix-rooms.py
 
+# Find room ID by name
+uv run skills/matrix-communication/scripts/matrix-rooms.py --lookup agent-work
+
+# Search rooms
+uv run skills/matrix-communication/scripts/matrix-rooms.py --search ops
+
 # Read recent messages (unencrypted only)
-uv run skills/matrix-communication/scripts/matrix-read.py "#myroom:matrix.org" --limit 10
+uv run skills/matrix-communication/scripts/matrix-read.py myroom --limit 10
 
 # Resolve room alias to ID
 uv run skills/matrix-communication/scripts/matrix-resolve.py "#myroom:matrix.org"
@@ -431,6 +459,9 @@ Thanks to everyone who contributed."
 | `M_FORBIDDEN` | Not in room or no permission | Join room first in Element |
 | `M_UNKNOWN_TOKEN` | Invalid/expired token | Get new token from Element |
 | `M_NOT_FOUND` | Room doesn't exist | Check room alias spelling |
+| `Could not find room` | Name lookup failed | Use `matrix-rooms.py` to list available rooms |
+| `Multiple matches found` | Ambiguous room name | Use more specific name or room ID from list |
+| `Could not resolve room alias` | Alias doesn't exist | Try room name instead of alias |
 
 ## Bash Quoting
 
