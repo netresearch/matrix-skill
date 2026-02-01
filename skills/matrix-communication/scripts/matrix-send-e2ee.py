@@ -25,6 +25,7 @@ Options:
     --emote           Send as /me action (m.emote)
     --thread EVENT    Reply in thread (event ID of thread root)
     --reply EVENT     Reply to message (event ID to reply to)
+    --no-prefix       Don't add bot_prefix from config
     --json            Output as JSON
     --quiet           Minimal output
     --debug           Show debug information
@@ -46,10 +47,21 @@ Examples:
 
 import asyncio
 import json
-import os
-import re
 import sys
-from pathlib import Path
+import os
+
+# Add script directory to path for _lib imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _lib import (
+    load_config,
+    get_store_path,
+    load_credentials,
+    find_room_by_name,
+    markdown_to_html,
+    add_bot_prefix,
+    clean_message,
+)
 
 # Check for libolm before importing nio
 try:
@@ -71,377 +83,6 @@ except ImportError as e:
         print("Then run this script again.", file=sys.stderr)
         sys.exit(1)
     raise
-
-
-def load_config() -> dict:
-    """Load Matrix config from ~/.config/matrix/config.json"""
-    config_path = Path.home() / ".config" / "matrix" / "config.json"
-    if not config_path.exists():
-        print(f"Error: Config file not found: {config_path}", file=sys.stderr)
-        print("Create it with:", file=sys.stderr)
-        print(json.dumps({
-            "homeserver": "https://matrix.org",
-            "user_id": "@user:matrix.org"
-        }, indent=2), file=sys.stderr)
-        sys.exit(1)
-
-    with open(config_path) as f:
-        config = json.load(f)
-
-    required = ["homeserver", "user_id"]
-    missing = [f for f in required if f not in config]
-    if missing:
-        print(f"Error: Config missing required fields: {', '.join(missing)}", file=sys.stderr)
-        sys.exit(1)
-
-    return config
-
-
-def get_store_path() -> Path:
-    """Get or create the E2EE key store directory."""
-    xdg_data = os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")
-    store_path = Path(xdg_data) / "matrix-skill" / "store"
-    store_path.mkdir(parents=True, exist_ok=True)
-    return store_path
-
-
-def get_credentials_path() -> Path:
-    """Get path for stored E2EE device credentials."""
-    return get_store_path() / "credentials.json"
-
-
-def load_credentials() -> dict | None:
-    """Load stored device credentials if they exist."""
-    creds_path = get_credentials_path()
-    if creds_path.exists():
-        with open(creds_path) as f:
-            return json.load(f)
-    return None
-
-
-# HTTP-based room lookup functions (for name-based resolution before nio client)
-import urllib.request
-import urllib.error
-import urllib.parse
-
-
-def _http_request(config: dict, method: str, endpoint: str) -> dict:
-    """Make a Matrix HTTP API request."""
-    url = f"{config['homeserver']}/_matrix/client/v3{endpoint}"
-
-    # Get access token from stored credentials or config
-    creds = load_credentials()
-    if creds and creds.get("user_id") == config.get("user_id"):
-        access_token = creds["access_token"]
-    elif "access_token" in config:
-        access_token = config["access_token"]
-    else:
-        return {"error": "No access token available"}
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
-
-    req = urllib.request.Request(url, headers=headers, method=method)
-
-    try:
-        with urllib.request.urlopen(req) as response:
-            return json.loads(response.read().decode())
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode()
-        try:
-            error_json = json.loads(error_body)
-            return {"error": error_json.get("error", error_body)}
-        except:
-            return {"error": error_body}
-
-
-def _get_room_info(config: dict, room_id: str) -> dict:
-    """Get the display name and canonical alias of a room."""
-    info = {"name": None, "alias": None}
-
-    result = _http_request(config, "GET", f"/rooms/{room_id}/state/m.room.name")
-    if "name" in result:
-        info["name"] = result["name"]
-
-    result = _http_request(config, "GET", f"/rooms/{room_id}/state/m.room.canonical_alias")
-    if "alias" in result:
-        info["alias"] = result["alias"]
-
-    return info
-
-
-def _list_joined_rooms(config: dict) -> list:
-    """List all joined rooms with names and aliases."""
-    result = _http_request(config, "GET", "/joined_rooms")
-    if "error" in result:
-        return []
-
-    rooms = []
-    for room_id in result.get("joined_rooms", []):
-        info = _get_room_info(config, room_id)
-        display_name = info["name"] or info["alias"] or room_id
-        rooms.append({
-            "room_id": room_id,
-            "name": display_name,
-            "alias": info["alias"]
-        })
-
-    return rooms
-
-
-def find_room_by_name(config: dict, search_term: str) -> tuple[str | None, list]:
-    """Find a room by name or alias (case-insensitive).
-
-    Returns (room_id, matches) where:
-    - room_id is the matched room ID (or None if no/ambiguous match)
-    - matches is list of matching rooms (for error reporting)
-    """
-    rooms = _list_joined_rooms(config)
-    search_lower = search_term.lower()
-
-    # Try exact match first
-    for room in rooms:
-        if room["name"].lower() == search_lower:
-            return room["room_id"], [room]
-        if room.get("alias") and room["alias"].lower() == search_lower:
-            return room["room_id"], [room]
-        # Match alias without server part
-        if room.get("alias"):
-            alias_name = room["alias"].split(":")[0].lstrip("#")
-            if alias_name.lower() == search_lower:
-                return room["room_id"], [room]
-
-    # Try partial match
-    matches = []
-    for room in rooms:
-        if search_lower in room["name"].lower():
-            matches.append(room)
-        elif room.get("alias") and search_lower in room["alias"].lower():
-            if room not in matches:
-                matches.append(room)
-
-    if len(matches) == 1:
-        return matches[0]["room_id"], matches
-
-    return None, matches
-
-
-def shorten_service_urls(text: str) -> str:
-    """Convert service URLs to shorter linked text."""
-    # Jira URLs
-    text = re.sub(
-        r'https?://[^/]+/browse/([A-Z][A-Z0-9]+-\d+)',
-        r'[\1](https://\g<0>)',
-        text
-    )
-    text = re.sub(r'\(https://https?://', r'(https://', text)
-
-    # GitHub Issues/PRs
-    text = re.sub(
-        r'https?://github\.com/([^/]+)/([^/]+)/(issues|pull)/(\d+)',
-        r'[\1/\2#\4](\g<0>)',
-        text
-    )
-
-    # GitHub commits
-    text = re.sub(
-        r'https?://github\.com/([^/]+)/([^/]+)/commit/([a-f0-9]{7,40})',
-        r'[\1/\2@\3](\g<0>)',
-        text
-    )
-
-    # GitLab Issues/MRs
-    text = re.sub(
-        r'https?://[^/]+/([^/]+/[^/]+)/-/(issues|merge_requests)/(\d+)',
-        r'[\1#\3](\g<0>)',
-        text
-    )
-
-    return text
-
-
-def markdown_to_html(text: str) -> str:
-    """Convert markdown to Matrix HTML."""
-    html = shorten_service_urls(text)
-
-    # Extract and protect code blocks
-    code_blocks = []
-    def save_code_block(match):
-        lang = match.group(1) or ''
-        code = match.group(2)
-        idx = len(code_blocks)
-        if lang:
-            code_blocks.append(f'<pre><code class="language-{lang}">{code}</code></pre>')
-        else:
-            code_blocks.append(f'<pre><code>{code}</code></pre>')
-        return f'{{{{CODEBLOCK_{idx}}}}}'
-
-    html = re.sub(r'```(\w*)\n(.*?)```', save_code_block, html, flags=re.DOTALL)
-
-    # Spoilers (but not table separators - check for pipe at start/end of line)
-    html = re.sub(r'(?<!\|)\|\|(.+?)\|\|(?!\|)', r'<span data-mx-spoiler>\1</span>', html)
-
-    # Markdown links
-    html = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', html)
-
-    # Matrix mentions
-    html = re.sub(
-        r'(?<!["\'/])(@[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
-        r'<a href="https://matrix.to/#/\1">\1</a>',
-        html
-    )
-
-    # Room links
-    html = re.sub(
-        r'(?<!["\'/])(#[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
-        r'<a href="https://matrix.to/#/\1">\1</a>',
-        html
-    )
-
-    # Strikethrough, bold, italic, code
-    html = re.sub(r'~~(.+?)~~', r'<del>\1</del>', html)
-    html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
-    html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
-    html = re.sub(r'`(.+?)`', r'<code>\1</code>', html)
-
-    # Normalize newlines
-    html = re.sub(r'\n{2,}', '\n', html)
-
-    # Process lines for headings, lists, blockquotes, and tables
-    lines = html.split('\n')
-    in_list = False
-    in_quote = False
-    in_table = False
-    result = []
-
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-
-        # Headings (## Heading → <h2>)
-        heading_match = re.match(r'^(#{1,6})\s+(.+)$', stripped)
-        if heading_match:
-            if in_quote:
-                result.append('</blockquote>')
-                in_quote = False
-            if in_list:
-                result.append('</ul>')
-                in_list = False
-            if in_table:
-                result.append('</table>')
-                in_table = False
-            level = len(heading_match.group(1))
-            heading_text = heading_match.group(2)
-            result.append(f'<h{level}>{heading_text}</h{level}>')
-            continue
-
-        # Tables (| col | col |)
-        if stripped.startswith('|') and stripped.endswith('|'):
-            # Parse table cells
-            cells = [c.strip() for c in stripped.split('|')[1:-1]]
-
-            # Check if this is a separator line (|---|---|)
-            if all(re.match(r'^[-:]+$', c) for c in cells if c):
-                # Skip separator line, it's just formatting
-                continue
-
-            if in_quote:
-                result.append('</blockquote>')
-                in_quote = False
-            if in_list:
-                result.append('</ul>')
-                in_list = False
-
-            if not in_table:
-                result.append('<table>')
-                in_table = True
-                # First row is header
-                result.append('<tr>' + ''.join(f'<th>{c}</th>' for c in cells) + '</tr>')
-            else:
-                result.append('<tr>' + ''.join(f'<td>{c}</td>' for c in cells) + '</tr>')
-            continue
-
-        # Close table if we're leaving table context
-        if in_table and not (stripped.startswith('|') and stripped.endswith('|')):
-            result.append('</table>')
-            in_table = False
-
-        if stripped.startswith('> '):
-            if not in_quote:
-                if in_list:
-                    result.append('</ul>')
-                    in_list = False
-                result.append('<blockquote>')
-                in_quote = True
-            result.append(stripped[2:])
-        elif stripped.startswith('- '):
-            if in_quote:
-                result.append('</blockquote>')
-                in_quote = False
-            if not in_list:
-                result.append('<ul>')
-                in_list = True
-            result.append(f'<li>{stripped[2:]}</li>')
-        elif stripped == '':
-            if in_quote:
-                result.append('</blockquote>')
-                in_quote = False
-            continue
-        else:
-            if in_quote:
-                result.append('</blockquote>')
-                in_quote = False
-            if in_list:
-                result.append('</ul>')
-                in_list = False
-            result.append(line)
-
-    if in_quote:
-        result.append('</blockquote>')
-    if in_list:
-        result.append('</ul>')
-    if in_table:
-        result.append('</table>')
-
-    html = '{{BR}}'.join(result)
-    html = re.sub(r'\{\{BR\}\}(?=<ul>|<li>|</ul>|</li>|<blockquote>|</blockquote>|<pre>|<table>|<tr>|</table>|<h[1-6]>)', '', html)
-    html = re.sub(r'(</ul>|</li>|</blockquote>|</pre>|</table>|</tr>|</h[1-6]>)\{\{BR\}\}', r'\1', html)
-    html = re.sub(r'(<blockquote>|<table>)\{\{BR\}\}', r'\1', html)
-    html = html.replace('{{BR}}', '<br>')
-
-    for idx, block in enumerate(code_blocks):
-        html = html.replace(f'{{{{CODEBLOCK_{idx}}}}}', block)
-
-    return html
-
-
-def add_bot_prefix(message: str, prefix: str) -> str:
-    """Add bot prefix intelligently.
-
-    If message starts with a heading, insert prefix after the heading.
-    Otherwise, prepend prefix to the message.
-    """
-    lines = message.split('\n')
-    if not lines:
-        return f"{prefix} {message}"
-
-    first_line = lines[0].strip()
-
-    # Check if first line is a heading
-    if re.match(r'^#{1,6}\s+', first_line):
-        # Insert prefix after heading on same line or next line
-        lines[0] = first_line
-        if len(lines) > 1:
-            # Insert prefix at start of content after heading
-            lines.insert(1, f"\n{prefix}")
-        else:
-            # Add prefix after heading
-            lines.append(f"\n{prefix}")
-        return '\n'.join(lines)
-    else:
-        # Prepend prefix to message
-        return f"{prefix} {message}"
 
 
 async def send_message_e2ee(
@@ -654,16 +295,6 @@ async def send_message_e2ee(
         await client.close()
 
 
-def clean_message(message: str) -> str:
-    """Clean message from bash escaping artifacts.
-
-    Bash history expansion in interactive shells can escape ! to \\!
-    when using double quotes. This removes those artifacts.
-    """
-    # Remove backslash before ! (bash history expansion artifact)
-    return message.replace('\\!', '!')
-
-
 def main():
     import argparse
 
@@ -686,7 +317,7 @@ def main():
 
     args = parser.parse_args()
 
-    config = load_config()
+    config = load_config(require_user_id=True)
 
     # Clean message from bash escaping artifacts
     message = clean_message(args.message)

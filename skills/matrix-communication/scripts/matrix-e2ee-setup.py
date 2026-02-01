@@ -30,9 +30,19 @@ Options:
 
 import asyncio
 import json
-import os
 import sys
-from pathlib import Path
+import os
+
+# Add script directory to path for _lib imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _lib import (
+    load_config,
+    get_store_path,
+    load_credentials,
+    save_credentials,
+    delete_credentials,
+)
 
 # Check for libolm before importing nio
 try:
@@ -51,77 +61,6 @@ except ImportError as e:
         print("  macOS:         brew install libolm", file=sys.stderr)
         sys.exit(1)
     raise
-
-
-def load_config() -> dict:
-    """Load Matrix config from ~/.config/matrix/config.json"""
-    config_path = Path.home() / ".config" / "matrix" / "config.json"
-    if not config_path.exists():
-        print(f"Error: Config file not found: {config_path}", file=sys.stderr)
-        print("Create it with:", file=sys.stderr)
-        print(json.dumps({
-            "homeserver": "https://matrix.org",
-            "user_id": "@user:matrix.org"
-        }, indent=2), file=sys.stderr)
-        sys.exit(1)
-
-    with open(config_path) as f:
-        config = json.load(f)
-
-    required = ["homeserver", "user_id"]
-    missing = [f for f in required if f not in config]
-    if missing:
-        print(f"Error: Config missing required fields: {', '.join(missing)}", file=sys.stderr)
-        sys.exit(1)
-
-    return config
-
-
-def get_store_path() -> Path:
-    """Get or create the E2EE key store directory."""
-    xdg_data = os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")
-    store_path = Path(xdg_data) / "matrix-skill" / "store"
-    store_path.mkdir(parents=True, exist_ok=True)
-    return store_path
-
-
-def get_credentials_path() -> Path:
-    """Get path for stored E2EE device credentials."""
-    return get_store_path() / "credentials.json"
-
-
-def load_credentials() -> dict | None:
-    """Load stored device credentials if they exist."""
-    creds_path = get_credentials_path()
-    if creds_path.exists():
-        with open(creds_path) as f:
-            return json.load(f)
-    return None
-
-
-def save_credentials(user_id: str, device_id: str, access_token: str):
-    """Save device credentials for future use."""
-    creds_path = get_credentials_path()
-    with open(creds_path, "w") as f:
-        json.dump({
-            "user_id": user_id,
-            "device_id": device_id,
-            "access_token": access_token,
-        }, f, indent=2)
-    os.chmod(creds_path, 0o600)
-
-
-def delete_credentials():
-    """Remove stored device credentials."""
-    creds_path = get_credentials_path()
-    if creds_path.exists():
-        creds_path.unlink()
-    # Also remove key store databases
-    store_path = get_store_path()
-    for db_file in store_path.glob("*.db"):
-        db_file.unlink()
-    for key_file in store_path.glob("*_devices"):
-        key_file.unlink()
 
 
 async def setup_device(config: dict, password: str) -> dict:
@@ -204,7 +143,7 @@ def main():
 
     args = parser.parse_args()
 
-    config = load_config()
+    config = load_config(require_user_id=True)
 
     if args.status:
         if args.json:

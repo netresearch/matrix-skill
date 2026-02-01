@@ -6,11 +6,12 @@ Usage:
     matrix-edit.py --help
 
 Arguments:
-    ROOM        Room alias (#room:server) or room ID (!id:server)
+    ROOM        Room alias (#room:server), room ID (!id:server), or room name
     EVENT_ID    Event ID of the message to edit ($xxx:server)
     NEW_MESSAGE The new message content (replaces original)
 
 Options:
+    --no-prefix Don't add bot_prefix from config
     --json      Output as JSON
     --quiet     Minimal output
     --debug     Show debug information
@@ -18,237 +19,23 @@ Options:
 """
 
 import json
-import re
 import sys
+import os
 import time
-import urllib.request
-import urllib.error
 import urllib.parse
-from pathlib import Path
 
+# Add script directory to path for _lib imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-def load_config() -> dict:
-    """Load Matrix config from ~/.config/matrix/config.json"""
-    config_path = Path.home() / ".config" / "matrix" / "config.json"
-    if not config_path.exists():
-        print(f"Error: Config file not found: {config_path}", file=sys.stderr)
-        sys.exit(1)
-
-    with open(config_path) as f:
-        config = json.load(f)
-
-    # Add bot_prefix handling
-    return config
-
-
-def matrix_request(config: dict, method: str, endpoint: str, data: dict = None) -> dict:
-    """Make a Matrix API request."""
-    url = f"{config['homeserver']}/_matrix/client/v3{endpoint}"
-    headers = {
-        "Authorization": f"Bearer {config['access_token']}",
-        "Content-Type": "application/json"
-    }
-
-    body = json.dumps(data).encode() if data is not None else None
-    req = urllib.request.Request(url, data=body, headers=headers, method=method)
-
-    try:
-        with urllib.request.urlopen(req) as response:
-            return json.loads(response.read().decode())
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode()
-        try:
-            error_json = json.loads(error_body)
-            return {"error": error_json.get("error", error_body), "errcode": error_json.get("errcode")}
-        except:
-            return {"error": error_body, "errcode": str(e.code)}
-
-
-def resolve_room_alias(config: dict, alias: str) -> str:
-    """Resolve a room alias to room ID."""
-    encoded_alias = urllib.parse.quote(alias, safe='')
-    result = matrix_request(config, "GET", f"/directory/room/{encoded_alias}")
-    if "room_id" in result:
-        return result["room_id"]
-    raise ValueError(f"Could not resolve room alias: {result.get('error', 'Unknown error')}")
-
-
-def shorten_service_urls(text: str) -> str:
-    """Convert service URLs to shorter linked text."""
-    text = re.sub(
-        r'https?://[^/]+/browse/([A-Z][A-Z0-9]+-\d+)',
-        r'[\1](https://\g<0>)',
-        text
-    )
-    text = re.sub(r'\(https://https?://', r'(https://', text)
-    text = re.sub(
-        r'https?://github\.com/([^/]+)/([^/]+)/(issues|pull)/(\d+)',
-        r'[\1/\2#\4](\g<0>)',
-        text
-    )
-    text = re.sub(
-        r'https?://github\.com/([^/]+)/([^/]+)/commit/([a-f0-9]{7,40})',
-        r'[\1/\2@\3](\g<0>)',
-        text
-    )
-    text = re.sub(
-        r'https?://[^/]+/([^/]+/[^/]+)/-/(issues|merge_requests)/(\d+)',
-        r'[\1#\3](\g<0>)',
-        text
-    )
-    return text
-
-
-def markdown_to_html(text: str) -> str:
-    """Convert markdown to Matrix HTML."""
-    html = shorten_service_urls(text)
-
-    code_blocks = []
-    def save_code_block(match):
-        lang = match.group(1) or ''
-        code = match.group(2)
-        idx = len(code_blocks)
-        if lang:
-            code_blocks.append(f'<pre><code class="language-{lang}">{code}</code></pre>')
-        else:
-            code_blocks.append(f'<pre><code>{code}</code></pre>')
-        return f'{{{{CODEBLOCK_{idx}}}}}'
-
-    html = re.sub(r'```(\w*)\n(.*?)```', save_code_block, html, flags=re.DOTALL)
-    html = re.sub(r'(?<!\|)\|\|(.+?)\|\|(?!\|)', r'<span data-mx-spoiler>\1</span>', html)
-    html = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', html)
-    html = re.sub(
-        r'(?<!["\'/])(@[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
-        r'<a href="https://matrix.to/#/\1">\1</a>',
-        html
-    )
-    html = re.sub(
-        r'(?<!["\'/])(#[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
-        r'<a href="https://matrix.to/#/\1">\1</a>',
-        html
-    )
-    html = re.sub(r'~~(.+?)~~', r'<del>\1</del>', html)
-    html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
-    html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
-    html = re.sub(r'`(.+?)`', r'<code>\1</code>', html)
-    html = re.sub(r'\n{2,}', '\n', html)
-
-    lines = html.split('\n')
-    in_list = False
-    in_quote = False
-    in_table = False
-    result = []
-
-    for line in lines:
-        stripped = line.strip()
-
-        # Headings
-        heading_match = re.match(r'^(#{1,6})\s+(.+)$', stripped)
-        if heading_match:
-            if in_quote:
-                result.append('</blockquote>')
-                in_quote = False
-            if in_list:
-                result.append('</ul>')
-                in_list = False
-            if in_table:
-                result.append('</table>')
-                in_table = False
-            level = len(heading_match.group(1))
-            result.append(f'<h{level}>{heading_match.group(2)}</h{level}>')
-            continue
-
-        # Tables
-        if stripped.startswith('|') and stripped.endswith('|'):
-            cells = [c.strip() for c in stripped.split('|')[1:-1]]
-            if all(re.match(r'^[-:]+$', c) for c in cells if c):
-                continue
-            if in_quote:
-                result.append('</blockquote>')
-                in_quote = False
-            if in_list:
-                result.append('</ul>')
-                in_list = False
-            if not in_table:
-                result.append('<table>')
-                in_table = True
-                result.append('<tr>' + ''.join(f'<th>{c}</th>' for c in cells) + '</tr>')
-            else:
-                result.append('<tr>' + ''.join(f'<td>{c}</td>' for c in cells) + '</tr>')
-            continue
-
-        if in_table:
-            result.append('</table>')
-            in_table = False
-
-        if stripped.startswith('> '):
-            if not in_quote:
-                if in_list:
-                    result.append('</ul>')
-                    in_list = False
-                result.append('<blockquote>')
-                in_quote = True
-            result.append(stripped[2:])
-        elif stripped.startswith('- '):
-            if in_quote:
-                result.append('</blockquote>')
-                in_quote = False
-            if not in_list:
-                result.append('<ul>')
-                in_list = True
-            result.append(f'<li>{stripped[2:]}</li>')
-        elif stripped == '':
-            if in_quote:
-                result.append('</blockquote>')
-                in_quote = False
-            continue
-        else:
-            if in_quote:
-                result.append('</blockquote>')
-                in_quote = False
-            if in_list:
-                result.append('</ul>')
-                in_list = False
-            result.append(line)
-
-    if in_quote:
-        result.append('</blockquote>')
-    if in_list:
-        result.append('</ul>')
-    if in_table:
-        result.append('</table>')
-
-    html = '{{BR}}'.join(result)
-    html = re.sub(r'\{\{BR\}\}(?=<ul>|<li>|</ul>|</li>|<blockquote>|</blockquote>|<pre>|<table>|<tr>|</table>|<h[1-6]>)', '', html)
-    html = re.sub(r'(</ul>|</li>|</blockquote>|</pre>|</table>|</tr>|</h[1-6]>)\{\{BR\}\}', r'\1', html)
-    html = re.sub(r'(<blockquote>|<table>)\{\{BR\}\}', r'\1', html)
-    html = html.replace('{{BR}}', '<br>')
-
-    for idx, block in enumerate(code_blocks):
-        html = html.replace(f'{{{{CODEBLOCK_{idx}}}}}', block)
-
-    return html
-
-
-def add_bot_prefix(message: str, prefix: str) -> str:
-    """Add bot prefix intelligently - after heading if present, else at start."""
-    lines = message.split('\n')
-    if not lines:
-        return f"{prefix} {message}"
-    first_line = lines[0].strip()
-    if re.match(r'^#{1,6}\s+', first_line):
-        lines[0] = first_line
-        if len(lines) > 1:
-            lines.insert(1, f"\n{prefix}")
-        else:
-            lines.append(f"\n{prefix}")
-        return '\n'.join(lines)
-    return f"{prefix} {message}"
-
-
-def clean_message(message: str) -> str:
-    """Clean message from bash escaping artifacts."""
-    return message.replace('\\!', '!')
+from _lib import (
+    load_config,
+    matrix_request,
+    resolve_room_alias,
+    find_room_by_name,
+    markdown_to_html,
+    add_bot_prefix,
+    clean_message,
+)
 
 
 def edit_message(config: dict, room_id: str, event_id: str, new_message: str) -> dict:
@@ -289,7 +76,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Edit a message in a Matrix room")
-    parser.add_argument("room", help="Room alias (#room:server) or room ID (!id:server)")
+    parser.add_argument("room", help="Room alias (#room:server), room ID (!id:server), or room name")
     parser.add_argument("event_id", help="Event ID of the message to edit")
     parser.add_argument("message", help="New message content")
     parser.add_argument("--no-prefix", action="store_true",
@@ -309,18 +96,47 @@ def main():
     if not args.no_prefix and config.get("bot_prefix"):
         message = add_bot_prefix(message, config["bot_prefix"])
 
-    # Resolve room alias if needed
-    room_id = args.room
-    if args.room.startswith("#"):
+    # Clean and resolve room
+    room_input = clean_message(args.room)
+    room_id = room_input
+
+    if room_input.startswith("!"):
+        # Direct room ID
+        room_id = room_input
+        if args.debug:
+            print(f"Using room ID directly: {room_id}", file=sys.stderr)
+    elif room_input.startswith("#"):
+        # Room alias
         try:
-            room_id = resolve_room_alias(config, args.room)
+            room_id = resolve_room_alias(config, room_input)
             if args.debug:
-                print(f"Resolved {args.room} -> {room_id}", file=sys.stderr)
+                print(f"Resolved {room_input} -> {room_id}", file=sys.stderr)
         except ValueError as e:
             if args.json:
                 print(json.dumps({"error": str(e)}))
             else:
                 print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        # Room name lookup
+        found_id, matches = find_room_by_name(config, room_input)
+        if found_id:
+            room_id = found_id
+            if args.debug:
+                print(f"Found room: {room_id}", file=sys.stderr)
+        else:
+            error_msg = f"Could not find room '{room_input}'"
+            if matches:
+                error_msg += f". Multiple matches found:\n"
+                for m in matches:
+                    alias_str = f" ({m['alias']})" if m.get("alias") else ""
+                    error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
+            else:
+                error_msg += ". Use 'matrix-rooms.py' to list available rooms."
+            if args.json:
+                print(json.dumps({"error": error_msg}))
+            else:
+                print(f"Error: {error_msg}", file=sys.stderr)
             sys.exit(1)
 
     # Edit message

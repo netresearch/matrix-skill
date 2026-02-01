@@ -8,7 +8,7 @@ Usage:
     matrix-read.py --help
 
 Arguments:
-    ROOM        Room alias (#room:server) or room ID (!id:server)
+    ROOM        Room alias (#room:server), room ID (!id:server), or room name
 
 Options:
     --limit N   Number of messages to retrieve [default: 10]
@@ -17,54 +17,21 @@ Options:
 """
 
 import json
-import os
 import sys
-import urllib.request
-import urllib.error
+import os
 import urllib.parse
-from pathlib import Path
 
+# Add script directory to path for _lib imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-def load_config() -> dict:
-    """Load Matrix config from ~/.config/matrix/config.json"""
-    config_path = Path.home() / ".config" / "matrix" / "config.json"
-    if not config_path.exists():
-        print(f"Error: Config file not found: {config_path}", file=sys.stderr)
-        sys.exit(1)
-
-    with open(config_path) as f:
-        return json.load(f)
-
-
-def matrix_request(config: dict, method: str, endpoint: str) -> dict:
-    """Make a Matrix API request."""
-    url = f"{config['homeserver']}/_matrix/client/v3{endpoint}"
-    headers = {
-        "Authorization": f"Bearer {config['access_token']}",
-        "Content-Type": "application/json"
-    }
-
-    req = urllib.request.Request(url, headers=headers, method=method)
-
-    try:
-        with urllib.request.urlopen(req) as response:
-            return json.loads(response.read().decode())
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode()
-        try:
-            error_json = json.loads(error_body)
-            return {"error": error_json.get("error", error_body), "errcode": error_json.get("errcode")}
-        except:
-            return {"error": error_body}
-
-
-def resolve_room_alias(config: dict, alias: str) -> str:
-    """Resolve a room alias to room ID."""
-    encoded_alias = urllib.parse.quote(alias, safe='')
-    result = matrix_request(config, "GET", f"/directory/room/{encoded_alias}")
-    if "room_id" in result:
-        return result["room_id"]
-    raise ValueError(f"Could not resolve room alias: {result.get('error', 'Unknown error')}")
+from _lib import (
+    load_config,
+    matrix_request,
+    resolve_room_alias,
+    find_room_by_name,
+    format_timestamp,
+    clean_message,
+)
 
 
 def read_messages(config: dict, room_id: str, limit: int = 10) -> list:
@@ -94,33 +61,26 @@ def read_messages(config: dict, room_id: str, limit: int = 10) -> list:
                 "sender": event.get("sender", "unknown"),
                 "body": content.get("body", ""),
                 "msgtype": content.get("msgtype", "m.text"),
-                "timestamp": event.get("origin_server_ts", 0)
+                "timestamp": event.get("origin_server_ts", 0),
+                "event_id": event.get("event_id"),
             })
         elif event.get("type") == "m.room.encrypted":
             messages.append({
                 "sender": event.get("sender", "unknown"),
                 "body": "[encrypted]",
                 "msgtype": "m.room.encrypted",
-                "timestamp": event.get("origin_server_ts", 0)
+                "timestamp": event.get("origin_server_ts", 0),
+                "event_id": event.get("event_id"),
             })
 
     return messages
-
-
-def format_timestamp(ts: int) -> str:
-    """Format timestamp to readable string."""
-    from datetime import datetime
-    if ts == 0:
-        return "unknown"
-    dt = datetime.fromtimestamp(ts / 1000)
-    return dt.strftime("%Y-%m-%d %H:%M")
 
 
 def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Read recent messages from a Matrix room")
-    parser.add_argument("room", help="Room alias (#room:server) or room ID (!id:server)")
+    parser.add_argument("room", help="Room alias (#room:server), room ID (!id:server), or room name")
     parser.add_argument("--limit", "-l", type=int, default=10, help="Number of messages (default: 10)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
 
@@ -128,13 +88,35 @@ def main():
 
     config = load_config()
 
-    # Resolve room alias if needed
-    room_id = args.room
-    if args.room.startswith("#"):
+    # Clean and resolve room
+    room_input = clean_message(args.room)
+    room_id = room_input
+
+    if room_input.startswith("!"):
+        # Direct room ID
+        room_id = room_input
+    elif room_input.startswith("#"):
+        # Room alias
         try:
-            room_id = resolve_room_alias(config, args.room)
+            room_id = resolve_room_alias(config, room_input)
         except ValueError as e:
             print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        # Room name lookup
+        found_id, matches = find_room_by_name(config, room_input)
+        if found_id:
+            room_id = found_id
+        else:
+            error_msg = f"Could not find room '{room_input}'"
+            if matches:
+                error_msg += f". Multiple matches found:\n"
+                for m in matches:
+                    alias_str = f" ({m['alias']})" if m.get("alias") else ""
+                    error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
+            else:
+                error_msg += ". Use 'matrix-rooms.py' to list available rooms."
+            print(f"Error: {error_msg}", file=sys.stderr)
             sys.exit(1)
 
     messages = read_messages(config, room_id, args.limit)

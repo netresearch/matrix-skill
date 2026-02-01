@@ -8,14 +8,37 @@
 Usage:
     matrix-edit-e2ee.py ROOM EVENT_ID NEW_MESSAGE
     matrix-edit-e2ee.py --help
+
+Arguments:
+    ROOM        Room alias (#room:server), room ID (!id:server), or room name
+    EVENT_ID    Event ID of the message to edit ($xxx:server)
+    NEW_MESSAGE The new message content (replaces original)
+
+Options:
+    --no-prefix Don't add bot_prefix from config
+    --json      Output as JSON
+    --quiet     Minimal output
+    --debug     Show debug information
+    --help      Show this help
 """
 
 import asyncio
 import json
-import os
-import re
 import sys
-from pathlib import Path
+import os
+
+# Add script directory to path for _lib imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _lib import (
+    load_config,
+    get_store_path,
+    load_credentials,
+    find_room_by_name,
+    markdown_to_html,
+    add_bot_prefix,
+    clean_message,
+)
 
 try:
     from nio import (
@@ -31,138 +54,6 @@ except ImportError as e:
     raise
 
 
-def load_config() -> dict:
-    config_path = Path.home() / ".config" / "matrix" / "config.json"
-    if not config_path.exists():
-        print(f"Error: Config file not found: {config_path}", file=sys.stderr)
-        sys.exit(1)
-    with open(config_path) as f:
-        return json.load(f)
-
-
-def get_store_path() -> Path:
-    xdg_data = os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")
-    store_path = Path(xdg_data) / "matrix-skill" / "store"
-    store_path.mkdir(parents=True, exist_ok=True)
-    return store_path
-
-
-def load_credentials() -> dict | None:
-    creds_path = get_store_path() / "credentials.json"
-    if creds_path.exists():
-        with open(creds_path) as f:
-            return json.load(f)
-    return None
-
-
-def clean_message(message: str) -> str:
-    return message.replace('\\!', '!')
-
-
-def shorten_service_urls(text: str) -> str:
-    text = re.sub(r'https?://[^/]+/browse/([A-Z][A-Z0-9]+-\d+)', r'[\1](https://\g<0>)', text)
-    text = re.sub(r'\(https://https?://', r'(https://', text)
-    text = re.sub(r'https?://github\.com/([^/]+)/([^/]+)/(issues|pull)/(\d+)', r'[\1/\2#\4](\g<0>)', text)
-    text = re.sub(r'https?://github\.com/([^/]+)/([^/]+)/commit/([a-f0-9]{7,40})', r'[\1/\2@\3](\g<0>)', text)
-    text = re.sub(r'https?://[^/]+/([^/]+/[^/]+)/-/(issues|merge_requests)/(\d+)', r'[\1#\3](\g<0>)', text)
-    return text
-
-
-def markdown_to_html(text: str) -> str:
-    html = shorten_service_urls(text)
-    code_blocks = []
-    def save_code_block(match):
-        lang = match.group(1) or ''
-        code = match.group(2)
-        idx = len(code_blocks)
-        code_blocks.append(f'<pre><code class="language-{lang}">{code}</code></pre>' if lang else f'<pre><code>{code}</code></pre>')
-        return f'{{{{CODEBLOCK_{idx}}}}}'
-    html = re.sub(r'```(\w*)\n(.*?)```', save_code_block, html, flags=re.DOTALL)
-    html = re.sub(r'(?<!\|)\|\|(.+?)\|\|(?!\|)', r'<span data-mx-spoiler>\1</span>', html)
-    html = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', html)
-    html = re.sub(r'(?<!["\'/])(@[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', r'<a href="https://matrix.to/#/\1">\1</a>', html)
-    html = re.sub(r'(?<!["\'/])(#[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', r'<a href="https://matrix.to/#/\1">\1</a>', html)
-    html = re.sub(r'~~(.+?)~~', r'<del>\1</del>', html)
-    html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
-    html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
-    html = re.sub(r'`(.+?)`', r'<code>\1</code>', html)
-    html = re.sub(r'\n{2,}', '\n', html)
-
-    lines = html.split('\n')
-    in_list = in_quote = in_table = False
-    result = []
-    for line in lines:
-        stripped = line.strip()
-
-        # Headings
-        heading_match = re.match(r'^(#{1,6})\s+(.+)$', stripped)
-        if heading_match:
-            if in_quote: result.append('</blockquote>'); in_quote = False
-            if in_list: result.append('</ul>'); in_list = False
-            if in_table: result.append('</table>'); in_table = False
-            level = len(heading_match.group(1))
-            result.append(f'<h{level}>{heading_match.group(2)}</h{level}>')
-            continue
-
-        # Tables
-        if stripped.startswith('|') and stripped.endswith('|'):
-            cells = [c.strip() for c in stripped.split('|')[1:-1]]
-            if all(re.match(r'^[-:]+$', c) for c in cells if c): continue
-            if in_quote: result.append('</blockquote>'); in_quote = False
-            if in_list: result.append('</ul>'); in_list = False
-            if not in_table:
-                result.append('<table>'); in_table = True
-                result.append('<tr>' + ''.join(f'<th>{c}</th>' for c in cells) + '</tr>')
-            else:
-                result.append('<tr>' + ''.join(f'<td>{c}</td>' for c in cells) + '</tr>')
-            continue
-
-        if in_table: result.append('</table>'); in_table = False
-
-        if stripped.startswith('> '):
-            if not in_quote:
-                if in_list: result.append('</ul>'); in_list = False
-                result.append('<blockquote>'); in_quote = True
-            result.append(stripped[2:])
-        elif stripped.startswith('- '):
-            if in_quote: result.append('</blockquote>'); in_quote = False
-            if not in_list: result.append('<ul>'); in_list = True
-            result.append(f'<li>{stripped[2:]}</li>')
-        elif stripped == '':
-            if in_quote: result.append('</blockquote>'); in_quote = False
-        else:
-            if in_quote: result.append('</blockquote>'); in_quote = False
-            if in_list: result.append('</ul>'); in_list = False
-            result.append(line)
-    if in_quote: result.append('</blockquote>')
-    if in_list: result.append('</ul>')
-    if in_table: result.append('</table>')
-
-    html = '{{BR}}'.join(result)
-    html = re.sub(r'\{\{BR\}\}(?=<ul>|<li>|</ul>|</li>|<blockquote>|</blockquote>|<pre>|<table>|<tr>|</table>|<h[1-6]>)', '', html)
-    html = re.sub(r'(</ul>|</li>|</blockquote>|</pre>|</table>|</tr>|</h[1-6]>)\{\{BR\}\}', r'\1', html)
-    html = re.sub(r'(<blockquote>|<table>)\{\{BR\}\}', r'\1', html)
-    html = html.replace('{{BR}}', '<br>')
-    for idx, block in enumerate(code_blocks):
-        html = html.replace(f'{{{{CODEBLOCK_{idx}}}}}', block)
-    return html
-
-
-def add_bot_prefix(message: str, prefix: str) -> str:
-    """Add bot prefix intelligently - after heading if present, else at start."""
-    lines = message.split('\n')
-    if not lines: return f"{prefix} {message}"
-    first_line = lines[0].strip()
-    if re.match(r'^#{1,6}\s+', first_line):
-        lines[0] = first_line
-        if len(lines) > 1:
-            lines.insert(1, f"\n{prefix}")
-        else:
-            lines.append(f"\n{prefix}")
-        return '\n'.join(lines)
-    return f"{prefix} {message}"
-
-
 async def edit_message_e2ee(config: dict, room: str, event_id: str, message: str, debug: bool = False) -> dict:
     store_path = get_store_path()
     stored_creds = load_credentials()
@@ -170,7 +61,8 @@ async def edit_message_e2ee(config: dict, room: str, event_id: str, message: str
     if stored_creds and stored_creds.get("user_id") == config["user_id"]:
         device_id = stored_creds["device_id"]
         access_token = stored_creds["access_token"]
-        if debug: print(f"Using dedicated device: {device_id}", file=sys.stderr)
+        if debug:
+            print(f"Using dedicated device: {device_id}", file=sys.stderr)
     elif "access_token" in config:
         access_token = config["access_token"]
         from nio import WhoamiResponse
@@ -196,8 +88,10 @@ async def edit_message_e2ee(config: dict, room: str, event_id: str, message: str
 
     try:
         client.restore_login(user_id=config["user_id"], device_id=device_id, access_token=access_token)
-        if client.store: client.load_store()
-        if client.should_upload_keys: await client.keys_upload()
+        if client.store:
+            client.load_store()
+        if client.should_upload_keys:
+            await client.keys_upload()
 
         room_id = room
         if room.startswith("#"):
@@ -211,12 +105,15 @@ async def edit_message_e2ee(config: dict, room: str, event_id: str, message: str
 
         room_obj = client.rooms.get(room_id)
         if room_obj and room_obj.encrypted and client.olm:
-            if client.should_query_keys: await client.keys_query()
+            if client.should_query_keys:
+                await client.keys_query()
             for member_id in room_obj.users:
                 try:
                     for dev_id, device in client.device_store.active_user_devices(member_id):
-                        if not device.verified: client.verify_device(device)
-                except: pass
+                        if not device.verified:
+                            client.verify_device(device)
+                except:
+                    pass
 
         # Build edit content
         content = {
@@ -249,7 +146,7 @@ async def edit_message_e2ee(config: dict, room: str, event_id: str, message: str
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Edit a message in an E2EE Matrix room")
-    parser.add_argument("room", help="Room alias or ID")
+    parser.add_argument("room", help="Room alias (#room:server), room ID (!id:server), or room name")
     parser.add_argument("event_id", help="Event ID to edit")
     parser.add_argument("message", help="New message content")
     parser.add_argument("--no-prefix", action="store_true", help="Don't add bot_prefix")
@@ -258,22 +155,52 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Show debug info")
     args = parser.parse_args()
 
-    config = load_config()
+    config = load_config(require_user_id=True)
     message = clean_message(args.message)
-    room = clean_message(args.room)  # Room IDs also start with ! and need cleaning
+    room_input = clean_message(args.room)
+
     if not args.no_prefix and config.get("bot_prefix"):
         message = add_bot_prefix(message, config["bot_prefix"])
+
+    # Resolve room name if needed
+    room = room_input
+    if not room_input.startswith("!") and not room_input.startswith("#"):
+        found_id, matches = find_room_by_name(config, room_input)
+        if found_id:
+            room = found_id
+            if args.debug:
+                print(f"Found room: {room}", file=sys.stderr)
+        else:
+            error_msg = f"Could not find room '{room_input}'"
+            if matches:
+                error_msg += f". Multiple matches found:\n"
+                for m in matches:
+                    alias_str = f" ({m['alias']})" if m.get("alias") else ""
+                    error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
+            else:
+                error_msg += ". Use 'matrix-rooms.py' to list available rooms."
+            if args.json:
+                print(json.dumps({"error": error_msg}))
+            else:
+                print(f"Error: {error_msg}", file=sys.stderr)
+            sys.exit(1)
 
     result = asyncio.run(edit_message_e2ee(config, room, args.event_id, message, args.debug))
 
     if "error" in result:
-        if args.json: print(json.dumps(result))
-        else: print(f"Error: {result['error']}", file=sys.stderr)
+        if args.json:
+            print(json.dumps(result))
+        else:
+            print(f"Error: {result['error']}", file=sys.stderr)
         sys.exit(1)
 
-    if args.json: print(json.dumps(result))
-    elif args.quiet: print(result.get("event_id", ""))
-    else: print(f"Message edited in {args.room}\nEdit event ID: {result.get('event_id')}")
+    if args.json:
+        print(json.dumps(result))
+    elif args.quiet:
+        print(result.get("event_id", ""))
+    else:
+        print(f"Message edited in {args.room}")
+        print(f"Edit event ID: {result.get('event_id')}")
 
 
 if __name__ == "__main__":
