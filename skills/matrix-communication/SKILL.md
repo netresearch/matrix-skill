@@ -434,7 +434,7 @@ Thanks to everyone who contributed."
 
 ## Bash Quoting
 
-**Important:** When message ends with `!`, use single quotes or `$'...'` to avoid bash history expansion adding backslashes.
+**Important:** When message ends with !, use single quotes or $'...' to avoid bash history expansion adding backslashes.
 
 ```bash
 # WRONG - bash escapes !" to \!
