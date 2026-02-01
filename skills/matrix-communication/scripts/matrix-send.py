@@ -59,7 +59,7 @@ def matrix_request(config: dict, method: str, endpoint: str, data: dict = None) 
         "Content-Type": "application/json"
     }
 
-    body = json.dumps(data).encode() if data else None
+    body = json.dumps(data).encode() if data is not None else None
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
 
     try:

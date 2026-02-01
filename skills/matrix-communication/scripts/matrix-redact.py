@@ -45,7 +45,7 @@ def matrix_request(config: dict, method: str, endpoint: str, data: dict = None) 
         "Content-Type": "application/json"
     }
 
-    body = json.dumps(data).encode() if data else None
+    body = json.dumps(data).encode() if data is not None else None
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
 
     try:
@@ -84,7 +84,7 @@ def redact_message(config: dict, room_id: str, event_id: str, reason: str = None
         config,
         "PUT",
         f"/rooms/{urllib.parse.quote(room_id, safe='')}/redact/{encoded_event_id}/{txn_id}",
-        data if data else None
+        data  # Always pass dict, even if empty - {} is falsy but Matrix needs JSON body
     )
 
 
