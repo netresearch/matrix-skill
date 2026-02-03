@@ -11,6 +11,6 @@
   "keywords": ["agentic-skill", "matrix", "chat", "communication", "element"],
   "skills": "./skills/",
   "commands": [
-    "./commands/update.md"
+    "./commands/work-update.md"
   ]
 }
