@@ -375,6 +375,25 @@ async def run_verification(config: dict, request_device: str = None, timeout: in
 
             await client.sync(timeout=5000)
 
+        # After verification, sync longer to receive forwarded keys
+        if handler.verified:
+            print("\nSyncing to receive room keys from verified device...")
+            keys_before = len(client.olm.inbound_group_store) if hasattr(client, 'olm') and client.olm else 0
+
+            for i in range(6):  # 30 seconds of syncing
+                await client.sync(timeout=5000)
+                if i % 2 == 1:
+                    print(f"  Syncing... ({(i+1)*5}s)")
+
+            keys_after = len(client.olm.inbound_group_store) if hasattr(client, 'olm') and client.olm else 0
+            new_keys = keys_after - keys_before
+
+            if new_keys > 0:
+                print(f"\n Received {new_keys} room key(s)!")
+            else:
+                print("\n  No new keys received yet.")
+                print("  Keys may arrive later when reading encrypted rooms.")
+
         return handler.verified
 
     finally:
