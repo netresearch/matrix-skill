@@ -150,26 +150,36 @@ class VerificationHandler:
             try:
                 self.emojis = sas.get_emoji()
 
-                # Display emojis prominently
-                print("\n")
-                print("╔══════════════════════════════════════════════════════════╗")
-                print("║           🔐 VERIFICATION EMOJIS - COMPARE NOW! 🔐        ║")
-                print("╠══════════════════════════════════════════════════════════╣")
-                print("║                                                          ║")
+                # Build emoji display
+                emoji_lines = []
+                emoji_lines.append("")
+                emoji_lines.append("╔══════════════════════════════════════════════════════════╗")
+                emoji_lines.append("║           🔐 VERIFICATION EMOJIS - COMPARE NOW! 🔐        ║")
+                emoji_lines.append("╠══════════════════════════════════════════════════════════╣")
+                emoji_lines.append("║                                                          ║")
 
                 for emoji, name in self.emojis:
                     line = f"       {emoji}    {name}"
                     padding = 58 - len(line)
-                    print(f"║{line}{' ' * padding}║")
+                    emoji_lines.append(f"║{line}{' ' * padding}║")
 
-                print("║                                                          ║")
-                print("╠══════════════════════════════════════════════════════════╣")
-                print("║  👆 These emojis must EXACTLY match what Element shows!  ║")
-                print("║                                                          ║")
-                print("║  ➡️  Go to Element now and confirm the emojis match      ║")
-                print("║  ➡️  Click 'They match' in Element to complete           ║")
-                print("╚══════════════════════════════════════════════════════════╝")
-                print("\n")
+                emoji_lines.append("║                                                          ║")
+                emoji_lines.append("╠══════════════════════════════════════════════════════════╣")
+                emoji_lines.append("║  👆 These emojis must EXACTLY match what Element shows!  ║")
+                emoji_lines.append("║                                                          ║")
+                emoji_lines.append("║  ➡️  Go to Element now and confirm the emojis match      ║")
+                emoji_lines.append("║  ➡️  Click 'They match' in Element to complete           ║")
+                emoji_lines.append("╚══════════════════════════════════════════════════════════╝")
+                emoji_lines.append("")
+
+                # Write to file for agent polling (before stdout which may be buffered)
+                emoji_file = "/tmp/matrix_verification_emojis.txt"
+                with open(emoji_file, "w") as f:
+                    f.write("\n".join(emoji_lines))
+
+                # Also print to stdout
+                for line in emoji_lines:
+                    print(line)
 
                 # Share our key
                 key_msg = sas.share_key()
@@ -286,9 +296,26 @@ async def run_verification(config: dict, request_device: str = None, timeout: in
             if isinstance(resp, DevicesResponse):
                 other_devices = [d for d in resp.devices if d.id != device_id]
                 if other_devices:
-                    # Prefer devices with names (likely active)
-                    named = [d for d in other_devices if d.display_name]
-                    target = named[0] if named else other_devices[0]
+                    # Filter and prioritize devices
+                    def device_priority(d):
+                        name = (d.display_name or "").lower()
+                        # Skip backup devices (can't respond interactively)
+                        if "backup" in name:
+                            return (4, name)  # Lowest priority
+                        # Prefer Element clients (desktop/mobile - interactive)
+                        if "element" in name:
+                            return (0, name)  # Highest priority
+                        # Then riot/web clients
+                        if "riot" in name or "chrome" in name or "firefox" in name:
+                            return (1, name)
+                        # Named devices
+                        if d.display_name:
+                            return (2, name)
+                        # Unnamed devices last
+                        return (3, name)
+
+                    sorted_devices = sorted(other_devices, key=device_priority)
+                    target = sorted_devices[0]
                     request_device = target.id
                     print(f"Target device: {target.display_name or target.id} ({target.id})")
                 else:

@@ -14,13 +14,11 @@ Requires libolm system library:
     macOS:         brew install libolm
 
 Usage:
-    matrix-e2ee-setup.py PASSWORD
+    matrix-e2ee-setup.py              # Interactive password prompt
+    matrix-e2ee-setup.py PASSWORD     # Password as argument
     matrix-e2ee-setup.py --status
     matrix-e2ee-setup.py --logout
     matrix-e2ee-setup.py --help
-
-Arguments:
-    PASSWORD    Your Matrix account password (used once, not stored)
 
 Options:
     --status    Check if E2EE device is set up
@@ -29,6 +27,7 @@ Options:
 """
 
 import asyncio
+import getpass
 import json
 import sys
 import os
@@ -173,23 +172,6 @@ def main():
                 print("No E2EE credentials found.")
         return
 
-    if not args.password:
-        # Check if already set up
-        creds = load_credentials()
-        if creds and creds.get("user_id") == config["user_id"]:
-            if args.json:
-                print(json.dumps({"status": "already_configured", "device_id": creds["device_id"]}))
-            else:
-                print("E2EE already set up!")
-                print(f"Device: {creds['device_id']}")
-        else:
-            parser.print_help()
-            print("\n" + "="*50)
-            print("E2EE device not set up. Provide your Matrix password:")
-            print("  matrix-e2ee-setup.py YOUR_PASSWORD")
-            sys.exit(1)
-        return
-
     # Check if already set up
     creds = load_credentials()
     if creds and creds.get("user_id") == config["user_id"]:
@@ -202,8 +184,24 @@ def main():
             print("To reconfigure, first run: matrix-e2ee-setup.py --logout")
         return
 
+    # Get password - from argument, environment variable, or interactive prompt
+    password = args.password or os.environ.get("MATRIX_PASSWORD")
+    if not password:
+        print(f"Setting up E2EE device for {config['user_id']}")
+        print("Password is used once to create device, then not stored.")
+        print("")
+        try:
+            password = getpass.getpass(f"Matrix password for {config['user_id']}: ")
+        except (KeyboardInterrupt, EOFError):
+            print("\nAborted.")
+            sys.exit(1)
+
+        if not password:
+            print("Error: Password cannot be empty.", file=sys.stderr)
+            sys.exit(1)
+
     # Run setup
-    result = asyncio.run(setup_device(config, args.password))
+    result = asyncio.run(setup_device(config, password))
 
     if "error" in result:
         if args.json:
