@@ -106,20 +106,35 @@ uv run skills/matrix-communication/scripts/matrix-rooms.py
 
 **⚠️ STRONGLY RECOMMENDED:** Verify the new "Matrix Skill E2EE" device to avoid security warnings for other users.
 
-1. Open **Element** (web/desktop/mobile)
-2. Go to **Settings → Security & Privacy → Sessions**
-3. Find the new session named **"Matrix Skill E2EE"**
-4. Click on it and select **"Verify"**
-5. Choose **"Verify by comparing emojis"** or another method
+**Verification requires TWO sides:**
+1. **Agent** runs the verification listener script
+2. **User** initiates verification from Element
+
+**Agent workflow:**
+
+```bash
+# 1. Start verification listener (waits up to 120 seconds)
+uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 120
+```
+
+Then instruct the user:
+
+> "I'm now waiting for verification. Please complete these steps in Element:
+> 1. Open **Element** (web/desktop/mobile)
+> 2. Go to **Settings → Security & Privacy → Sessions**
+> 3. Find **"Matrix Skill E2EE"** and click **Verify**
+> 4. Choose **"Verify by comparing emojis"**
+> 5. Compare the emojis shown and confirm if they match"
 
 **Why verify?**
 - Other users see ⚠️ warnings when unverified devices send messages
 - Some rooms may block messages from unverified devices
 - Cross-signing establishes trust chain for your account
 
-**After setup, ALWAYS inform the user:**
-> "Your new Matrix Skill E2EE device is created. Please verify it in Element:
-> Settings → Security & Privacy → Sessions → Matrix Skill E2EE → Verify"
+**After setup, ALWAYS:**
+1. Run the verification script
+2. Guide user through Element verification
+3. Confirm verification succeeded
 
 ### Troubleshooting
 
