@@ -102,58 +102,67 @@ uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py --status
 uv run skills/matrix-communication/scripts/matrix-rooms.py
 ```
 
-### Step 8: Verify device in Element (IMPORTANT)
+### Step 8: Verify device (IMPORTANT)
 
-**⚠️ STRONGLY RECOMMENDED:** Verify the new "Matrix Skill E2EE" device to avoid security warnings for other users.
+**⚠️ STRONGLY RECOMMENDED:** Verify the new "Matrix Skill E2EE" device to avoid security warnings.
 
 **Why verify?**
 - Other users see ⚠️ warnings when unverified devices send messages
 - Some rooms may block messages from unverified devices
 - Cross-signing establishes trust chain for your account
+- Enables automatic room key sharing from other devices
 
-**Agent workflow (3 steps):**
+**Agent workflow:**
 
-**Step 8a: Start verification listener in BACKGROUND**
+**Step 8a: Start verification (agent initiates)**
 
 ```bash
-# Run in background so we can interact with user
 uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 180
 ```
 
-Use `run_in_background: true` for this command.
+The script will:
+1. Auto-find another device (or specify with `--request DEVICE`)
+2. Send verification request
+3. Display 7 emojis in a prominent box
+4. Wait for user to confirm in Element
 
-**Step 8b: Guide user with AskUserQuestion**
+**Step 8b: Display emojis to user**
 
-Use `AskUserQuestion` to guide the user through Element:
+The script outputs emojis in this format:
+```
+╔══════════════════════════════════════════════════════════╗
+║           🔐 VERIFICATION EMOJIS - COMPARE NOW! 🔐        ║
+╠══════════════════════════════════════════════════════════╣
+║       🐱    Cat                                          ║
+║       🔑    Key                                          ║
+║       🎸    Guitar                                       ║
+║       ...                                                ║
+╚══════════════════════════════════════════════════════════╝
+```
+
+**Step 8c: Guide user with AskUserQuestion**
 
 ```
-Question: "I'm listening for device verification. Please verify in Element now:"
+Question: "Verification emojis are displayed above. Do they match Element?"
 
 Options:
-1. "Ready - show me the steps" → Show detailed steps below
-2. "Skip verification" → Warn about consequences, proceed without
-
-Detailed steps to show:
-1. Open Element (web/desktop/mobile)
-2. Settings → Security & Privacy → Sessions
-3. Find "Matrix Skill E2EE" → click Verify
-4. Choose "Verify by comparing emojis"
-5. Confirm emojis match on both sides
+1. "Yes, they match - I confirmed in Element" → Success
+2. "No, they don't match" → Cancel and retry
+3. "I need help finding this in Element" → Show steps:
+   - Open Element → Settings → Security & Privacy → Sessions
+   - Find the verification popup or click "Verify" on the new device
+   - Compare the 7 emojis
+   - Click "They match" in Element
 ```
 
-**Step 8c: Check verification result**
+**Step 8d: Verification completes automatically**
 
-After user confirms, check the background task output for success/failure.
+Once the user confirms in Element, the script completes and fetches room keys.
 
-```bash
-# Check if verification succeeded (read background task output)
-```
-
-**Complete example flow:**
-1. Agent: Starts listener in background
-2. Agent: Uses AskUserQuestion to explain steps
-3. User: Performs verification in Element
-4. Agent: Confirms result from background task
+**Notes:**
+- The script auto-finds another device if `--request` is not specified
+- User confirms emojis in **Element**, not in the terminal
+- After verification, the script automatically fetches room keys
 
 ### Troubleshooting
 

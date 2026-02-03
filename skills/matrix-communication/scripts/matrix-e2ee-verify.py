@@ -5,20 +5,20 @@
 # ///
 """Interactive device verification for Matrix E2EE.
 
-Allows verifying this device with another device using emoji verification (SAS).
+This script initiates verification and displays emojis for the user to confirm.
+The user must confirm the emojis match in Element to complete verification.
 
 Usage:
-    matrix-e2ee-verify.py                    # Wait for incoming verification
-    matrix-e2ee-verify.py --request DEVICE   # Request verification with device
+    matrix-e2ee-verify.py                    # Auto-find device and verify
+    matrix-e2ee-verify.py --request DEVICE   # Verify with specific device
     matrix-e2ee-verify.py --list             # List your devices
-    matrix-e2ee-verify.py --help
 
-Options:
-    --request DEVICE   Initiate verification with specified device ID
-    --list             List all your devices
-    --timeout SECS     Timeout for waiting (default: 60)
-    --debug            Enable debug output
-    --help             Show this help
+The script will:
+1. Find another device (or use specified device)
+2. Initiate verification
+3. Display 7 emojis that must match Element
+4. Wait for user to confirm in Element
+5. Complete verification and fetch room keys
 """
 
 import asyncio
@@ -26,7 +26,6 @@ import json
 import sys
 import os
 
-# Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import load_config, get_store_path, load_credentials
@@ -45,8 +44,9 @@ try:
         UnknownToDeviceEvent,
         ToDeviceError,
         DevicesResponse,
+        MegolmEvent,
+        RoomMessagesResponse,
     )
-    # Try to import newer verification events (may not exist in older nio)
     try:
         from nio import KeyVerificationRequest
     except ImportError:
@@ -74,7 +74,7 @@ class VerificationHandler:
             print(f"[DEBUG] {msg}")
 
     async def handle_raw_event(self, event):
-        """Handle raw to-device events including unknown verification events."""
+        """Handle raw to-device events."""
         if isinstance(event, UnknownToDeviceEvent) and hasattr(event, 'source'):
             source = event.source
 
@@ -85,9 +85,7 @@ class VerificationHandler:
                 methods = content.get('methods', [])
                 sender = source.get('sender')
 
-                print(f"\nVerification request received!")
-                print(f"  From: {sender} / {from_device}")
-                print(f"  Methods: {methods}")
+                print(f"\nVerification request received from {from_device}")
 
                 if 'm.sas.v1' in methods:
                     self.current_verification = txn_id
@@ -107,79 +105,88 @@ class VerificationHandler:
                     )
 
                     await self.client.to_device(msg)
-                    self._debug("Ready response sent")
-                    print("Ready sent, waiting for Element to start verification...")
-                else:
-                    print(f"Unsupported methods: {methods}")
+                    print("Ready sent, waiting for emoji exchange...")
 
             elif source.get('type', '').startswith('m.key.verification.'):
-                self._debug(f"Other verification event: {source.get('type')}")
+                self._debug(f"Verification event: {source.get('type')}")
 
     async def handle_event(self, event):
         """Handle verification events."""
         event_type = type(event).__name__
-        self._debug(f"Received {event_type} from {event.sender}")
+        self._debug(f"Received {event_type}")
 
         if KeyVerificationRequest and isinstance(event, KeyVerificationRequest):
             print(f"\nVerification request from {event.sender}")
             self.current_verification = event.transaction_id
             try:
                 await self.client.accept_key_verification(event.transaction_id)
-                print("Accepted request, waiting for start...")
+                print("Accepted, waiting for emoji exchange...")
             except Exception as e:
-                self._debug(f"Error accepting request: {e}")
+                self._debug(f"Error accepting: {e}")
 
         elif isinstance(event, KeyVerificationStart):
             if self.sas_accepted:
-                self._debug("Already accepted start, ignoring duplicate")
                 return
-            print(f"\nVerification started (method: {event.method})")
+            print(f"Verification started")
             self.current_verification = event.transaction_id
             try:
                 await self.client.accept_key_verification(event.transaction_id)
                 self.sas_accepted = True
-                print("Accepted, waiting for key exchange...")
             except Exception as e:
                 self._debug(f"Error accepting: {e}")
 
         elif isinstance(event, KeyVerificationAccept):
-            print(f"\nOther device accepted verification")
+            print("Other device accepted")
 
         elif isinstance(event, KeyVerificationKey):
             if self.key_sent:
-                self._debug("Already processed key event, ignoring duplicate")
                 return
 
             sas = self.client.key_verifications.get(event.transaction_id)
             if not sas:
-                self._debug(f"No SAS for transaction {event.transaction_id}")
+                self._debug(f"No SAS for {event.transaction_id}")
                 return
 
             try:
                 self.emojis = sas.get_emoji()
-                print("\n" + "="*50)
-                print("VERIFY THESE EMOJIS MATCH ON BOTH DEVICES:")
-                print("="*50)
+
+                # Display emojis prominently
+                print("\n")
+                print("╔══════════════════════════════════════════════════════════╗")
+                print("║           🔐 VERIFICATION EMOJIS - COMPARE NOW! 🔐        ║")
+                print("╠══════════════════════════════════════════════════════════╣")
+                print("║                                                          ║")
+
                 for emoji, name in self.emojis:
-                    print(f"  {emoji}  {name}")
-                print("="*50)
+                    line = f"       {emoji}    {name}"
+                    padding = 58 - len(line)
+                    print(f"║{line}{' ' * padding}║")
 
-                if not self.key_sent:
-                    key_msg = sas.share_key()
-                    if key_msg:
-                        await self.client.to_device(key_msg)
-                    self.key_sent = True
+                print("║                                                          ║")
+                print("╠══════════════════════════════════════════════════════════╣")
+                print("║  👆 These emojis must EXACTLY match what Element shows!  ║")
+                print("║                                                          ║")
+                print("║  ➡️  Go to Element now and confirm the emojis match      ║")
+                print("║  ➡️  Click 'They match' in Element to complete           ║")
+                print("╚══════════════════════════════════════════════════════════╝")
+                print("\n")
 
-                print("\nConfirming emojis match...")
+                # Share our key
+                key_msg = sas.share_key()
+                if key_msg:
+                    await self.client.to_device(key_msg)
+                self.key_sent = True
+
+                # Accept our side (user confirms in Element)
                 sas.accept_sas()
-
                 mac_msg = sas.get_mac()
                 if mac_msg:
                     await self.client.to_device(mac_msg)
-                print("Waiting for other device to confirm...")
+
+                print("Waiting for you to confirm in Element...")
 
             except Exception as e:
-                self._debug(f"Error in key verification: {e}")
+                self._debug(f"Error in key exchange: {e}")
 
         elif isinstance(event, KeyVerificationMac):
             if self.verified:
@@ -192,7 +199,7 @@ class VerificationHandler:
 
                     if sas.verified:
                         self.verified = True
-                        print("\n Verification successful!")
+                        print("\n✅ VERIFICATION SUCCESSFUL!")
 
                         done_content = {"transaction_id": event.transaction_id}
                         done_msg = ToDeviceMessage(
@@ -202,19 +209,17 @@ class VerificationHandler:
                             content=done_content,
                         )
                         await self.client.to_device(done_msg)
-                        print("Device is now verified.")
 
                 except Exception as e:
                     self._debug(f"Error processing MAC: {e}")
 
         elif isinstance(event, KeyVerificationCancel):
-            if self.current_verification == event.transaction_id or self.current_verification is None:
-                print(f"\nVerification cancelled: {event.reason}")
-                self.cancelled = True
+            print(f"\n❌ Verification cancelled: {event.reason}")
+            self.cancelled = True
 
 
-async def run_verification(config: dict, request_device: str = None, timeout: int = 60, debug: bool = False):
-    """Run interactive verification."""
+async def run_verification(config: dict, request_device: str = None, timeout: int = 120, debug: bool = False):
+    """Run verification process."""
     store_path = get_store_path()
     creds = load_credentials()
 
@@ -238,7 +243,7 @@ async def run_verification(config: dict, request_device: str = None, timeout: in
         device_id = creds["device_id"]
         access_token = creds["access_token"]
 
-    print(f"Device ID: {device_id}")
+    print(f"This device: {device_id}")
 
     client_config = AsyncClientConfig(store_sync_tokens=True, encryption_enabled=True)
     client = AsyncClient(
@@ -274,129 +279,94 @@ async def run_verification(config: dict, request_device: str = None, timeout: in
         print("Syncing...")
         await client.sync(timeout=10000)
 
-        if request_device:
-            print(f"Querying keys for verification target...")
-            try:
-                await client.keys_query()
-            except Exception as e:
-                if debug:
-                    print(f"[DEBUG] Keys query skipped: {e}")
-
-            user_id = config["user_id"]
-            target_device = None
-
-            if user_id in client.device_store:
-                for dev_id, device in client.device_store[user_id].items():
-                    if dev_id == request_device:
-                        target_device = device
-                        break
-
-            if target_device:
-                print(f"Found device {request_device}, starting verification...")
-                try:
-                    msg = client.create_key_verification(target_device)
-                    if msg:
-                        await client.to_device(msg)
-                        handler.current_verification = list(client.key_verifications.keys())[-1] if client.key_verifications else None
-                        print(f"Verification request sent!")
-                except Exception as e:
-                    if debug:
-                        print(f"[DEBUG] create_key_verification failed: {e}")
-                    print("Falling back to direct request...")
-                    import secrets
-                    import time
-                    txn_id = secrets.token_hex(16)
-                    handler.current_verification = txn_id
-
-                    request_content = {
-                        "from_device": device_id,
-                        "transaction_id": txn_id,
-                        "methods": ["m.sas.v1"],
-                        "timestamp": int(time.time() * 1000),
-                    }
-
-                    msg = ToDeviceMessage(
-                        type="m.key.verification.request",
-                        recipient=user_id,
-                        recipient_device=request_device,
-                        content=request_content,
-                    )
-
-                    resp = await client.to_device(msg)
-                    if isinstance(resp, ToDeviceError):
-                        print(f"Error sending request: {resp}", file=sys.stderr)
-                        return False
-                    print(f"Verification request sent!")
-            else:
-                print(f"Device {request_device} not in local store, sending direct request...")
-                import secrets
-                import time
-                txn_id = secrets.token_hex(16)
-                handler.current_verification = txn_id
-
-                request_content = {
-                    "from_device": device_id,
-                    "transaction_id": txn_id,
-                    "methods": ["m.sas.v1"],
-                    "timestamp": int(time.time() * 1000),
-                }
-
-                msg = ToDeviceMessage(
-                    type="m.key.verification.request",
-                    recipient=user_id,
-                    recipient_device=request_device,
-                    content=request_content,
-                )
-
-                resp = await client.to_device(msg)
-                if isinstance(resp, ToDeviceError):
-                    print(f"Error sending request: {resp}", file=sys.stderr)
+        # Find target device if not specified
+        if not request_device:
+            print("Finding another device to verify with...")
+            resp = await client.devices()
+            if isinstance(resp, DevicesResponse):
+                other_devices = [d for d in resp.devices if d.id != device_id]
+                if other_devices:
+                    # Prefer devices with names (likely active)
+                    named = [d for d in other_devices if d.display_name]
+                    target = named[0] if named else other_devices[0]
+                    request_device = target.id
+                    print(f"Target device: {target.display_name or target.id} ({target.id})")
+                else:
+                    print("No other devices found!", file=sys.stderr)
+                    print("Open Element on another device first.", file=sys.stderr)
                     return False
-                print(f"Verification request sent!")
 
-            print(f"\nCheck Element for verification popup on device {request_device}")
-        else:
-            print(f"\nWaiting for verification request...")
-            print(f"In Element, go to: Settings > Security > Sessions")
-            print(f"Find '{device_id}' and click 'Verify'")
-            print(f"\nTimeout: {timeout} seconds")
+        # Initiate verification
+        print(f"\nInitiating verification with {request_device}...")
 
+        # Query keys first
+        try:
+            await client.keys_query()
+        except Exception as e:
+            if debug:
+                print(f"[DEBUG] Keys query: {e}")
+
+        # Try to find device in store
+        user_id = config["user_id"]
+        target_device = None
+        if user_id in client.device_store:
+            for dev_id, device in client.device_store[user_id].items():
+                if dev_id == request_device:
+                    target_device = device
+                    break
+
+        # Send verification request
+        import secrets
+        import time
+        txn_id = secrets.token_hex(16)
+        handler.current_verification = txn_id
+
+        request_content = {
+            "from_device": device_id,
+            "transaction_id": txn_id,
+            "methods": ["m.sas.v1"],
+            "timestamp": int(time.time() * 1000),
+        }
+
+        msg = ToDeviceMessage(
+            type="m.key.verification.request",
+            recipient=user_id,
+            recipient_device=request_device,
+            content=request_content,
+        )
+
+        resp = await client.to_device(msg)
+        if isinstance(resp, ToDeviceError):
+            print(f"Error: {resp}", file=sys.stderr)
+            return False
+
+        print("Verification request sent!")
+        print("\n📱 Check Element for the verification popup")
+        print(f"   Timeout: {timeout} seconds\n")
+
+        # Wait for verification
         start_time = asyncio.get_event_loop().time()
-        sync_count = 0
         while not handler.verified and not handler.cancelled:
             elapsed = asyncio.get_event_loop().time() - start_time
             if elapsed > timeout:
-                print("\nTimeout waiting for verification.")
+                print("\n⏰ Timeout waiting for verification.")
                 return False
-
-            sync_count += 1
-            if sync_count % 12 == 0:
-                print(f"Still waiting... ({int(elapsed)}s elapsed)")
 
             await client.sync(timeout=5000)
 
-        # After verification, fetch keys by accessing encrypted rooms
+        # Post-verification: fetch room keys
         if handler.verified:
-            print("\nFetching room keys from verified devices...")
-            print("(Accessing rooms to trigger key requests)")
+            print("\n📦 Fetching room keys from verified devices...")
 
-            # Import key request capability
-            from nio import MegolmEvent, RoomMessagesResponse
-
-            keys_received = 0
             rooms_checked = 0
-
-            # Check a few encrypted rooms to trigger key requests
             for room_id, room in list(client.rooms.items())[:10]:
                 if room.encrypted:
                     rooms_checked += 1
                     try:
-                        # Fetch recent messages - this triggers key requests for undecryptable events
                         result = await client.room_messages(room_id, start="", limit=50)
                         if isinstance(result, RoomMessagesResponse):
                             for event in result.chunk:
                                 if isinstance(event, MegolmEvent):
-                                    # Request key for undecryptable event
                                     try:
                                         await client.request_room_key(event)
                                     except Exception:
@@ -404,17 +374,16 @@ async def run_verification(config: dict, request_device: str = None, timeout: in
                     except Exception:
                         pass
 
-            print(f"  Checked {rooms_checked} encrypted rooms")
+            print(f"   Checked {rooms_checked} encrypted rooms")
+            print("   Waiting for keys (30s)...")
 
-            # Sync to receive forwarded keys
-            print("  Waiting for key forwarding (30s)...")
             for i in range(6):
                 await client.sync(timeout=5000)
-                if i % 2 == 1:
-                    print(f"    Syncing... ({(i+1)*5}s)")
+                if (i + 1) % 2 == 0:
+                    print(f"   ... {(i+1)*5}s")
 
-            print("\n✅ Verification complete!")
-            print("  Use matrix-fetch-keys.py ROOM to fetch keys for specific rooms")
+            print("\n🎉 Device verified and keys synced!")
+            print("   Use matrix-fetch-keys.py ROOM for additional keys")
 
         return handler.verified
 
@@ -474,10 +443,22 @@ async def list_devices(config: dict) -> list:
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Interactive device verification")
-    parser.add_argument("--request", metavar="DEVICE", help="Request verification with device ID")
+    parser = argparse.ArgumentParser(
+        description="Verify this device with another device using emoji verification",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s                    # Auto-find device and start verification
+  %(prog)s --request DEVICE   # Verify with specific device
+  %(prog)s --list             # List all your devices
+
+The script will display 7 emojis that must match what Element shows.
+Confirm the match in Element to complete verification.
+        """
+    )
+    parser.add_argument("--request", metavar="DEVICE", help="Target specific device ID")
     parser.add_argument("--list", action="store_true", help="List all your devices")
-    parser.add_argument("--timeout", type=int, default=60, help="Timeout in seconds")
+    parser.add_argument("--timeout", type=int, default=120, help="Timeout in seconds (default: 120)")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
 
     args = parser.parse_args()
@@ -486,13 +467,13 @@ def main():
     if args.list:
         devices = asyncio.run(list_devices(config))
         if not devices:
-            print("No devices found or error getting devices")
+            print("No devices found or error")
             sys.exit(1)
 
         print("Your devices:")
         for d in devices:
-            current = " (this device)" if d["is_current"] else ""
-            print(f"  {d['device_id']}: {d['display_name']}{current}")
+            marker = " ← this device" if d["is_current"] else ""
+            print(f"  {d['device_id']}: {d['display_name']}{marker}")
         sys.exit(0)
 
     success = asyncio.run(run_verification(
