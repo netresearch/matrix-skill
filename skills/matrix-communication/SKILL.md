@@ -102,6 +102,25 @@ uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py --status
 uv run skills/matrix-communication/scripts/matrix-rooms.py
 ```
 
+### Step 8: Verify device in Element (IMPORTANT)
+
+**⚠️ STRONGLY RECOMMENDED:** Verify the new "Matrix Skill E2EE" device to avoid security warnings for other users.
+
+1. Open **Element** (web/desktop/mobile)
+2. Go to **Settings → Security & Privacy → Sessions**
+3. Find the new session named **"Matrix Skill E2EE"**
+4. Click on it and select **"Verify"**
+5. Choose **"Verify by comparing emojis"** or another method
+
+**Why verify?**
+- Other users see ⚠️ warnings when unverified devices send messages
+- Some rooms may block messages from unverified devices
+- Cross-signing establishes trust chain for your account
+
+**After setup, ALWAYS inform the user:**
+> "Your new Matrix Skill E2EE device is created. Please verify it in Element:
+> Settings → Security & Privacy → Sessions → Matrix Skill E2EE → Verify"
+
 ### Troubleshooting
 
 **E2EE setup fails with "Invalid username or password":**
