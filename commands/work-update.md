@@ -7,6 +7,22 @@ allowed-tools: Bash(git:*), Bash(uv run:*), Bash(cat:*)
 
 Send a summary of recent work to a configured Matrix room.
 
+## Usage
+
+```
+/work-update [options] [room]
+```
+
+**Options:**
+- `-y`, `--yes` - Skip confirmation, send immediately
+- `[room]` - Override target room (default: from config or `agent-work`)
+
+**Examples:**
+- `/work-update` - Compose and confirm before sending
+- `/work-update -y` - Send immediately without confirmation
+- `/work-update ops` - Send to #ops room
+- `/work-update -y agent-work` - Send to agent-work immediately
+
 ## Context
 
 - Current directory: !`pwd`
@@ -14,10 +30,15 @@ Send a summary of recent work to a configured Matrix room.
 - Git remote: !`git remote get-url origin 2>/dev/null | sed 's/.*[:/]\([^/]*\/[^/]*\)\.git/\1/' || echo "unknown"`
 - Recent commits: !`git log --oneline -5 2>/dev/null || echo "no commits"`
 - Matrix config: !`cat ~/.config/matrix/config.json 2>/dev/null | grep -E '"(default_update_room|user_id)"' || echo "not configured"`
+- User args: !`echo "$ARGUMENTS"`
 
 ## Your Task
 
-1. **Compose a work summary** based on the git context above:
+1. **Parse arguments** from user input:
+   - Check for `-y`, `--yes`, or `--y` flag → sets `SKIP_CONFIRM=true`
+   - Check for room name argument → overrides default room
+
+2. **Compose a work summary** based on the git context above:
    ```
    🤖 **Work Update**
 
@@ -27,11 +48,16 @@ Send a summary of recent work to a configured Matrix room.
    - {commit summaries}
    ```
 
-2. **Ask user to confirm** using AskUserQuestion:
+3. **If SKIP_CONFIRM is false** (no -y flag):
+   - Ask user to confirm using AskUserQuestion
    - Show the composed message
-   - Options: "Send to agent-work", "Send to different room", "Edit message", "Cancel"
+   - Options: "Send", "Send to different room", "Edit message", "Cancel"
 
-3. **Send the message** using:
+4. **If SKIP_CONFIRM is true** (has -y flag):
+   - Skip AskUserQuestion
+   - Send immediately to configured room
+
+5. **Send the message** using:
    ```bash
    cd /home/sme/.claude/plugins/cache/netresearch-claude-code-marketplace/matrix-communication/1.11.0 && set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "MESSAGE"
    ```
