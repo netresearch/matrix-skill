@@ -106,35 +106,54 @@ uv run skills/matrix-communication/scripts/matrix-rooms.py
 
 **⚠️ STRONGLY RECOMMENDED:** Verify the new "Matrix Skill E2EE" device to avoid security warnings for other users.
 
-**Verification requires TWO sides:**
-1. **Agent** runs the verification listener script
-2. **User** initiates verification from Element
-
-**Agent workflow:**
-
-```bash
-# 1. Start verification listener (waits up to 120 seconds)
-uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 120
-```
-
-Then instruct the user:
-
-> "I'm now waiting for verification. Please complete these steps in Element:
-> 1. Open **Element** (web/desktop/mobile)
-> 2. Go to **Settings → Security & Privacy → Sessions**
-> 3. Find **"Matrix Skill E2EE"** and click **Verify**
-> 4. Choose **"Verify by comparing emojis"**
-> 5. Compare the emojis shown and confirm if they match"
-
 **Why verify?**
 - Other users see ⚠️ warnings when unverified devices send messages
 - Some rooms may block messages from unverified devices
 - Cross-signing establishes trust chain for your account
 
-**After setup, ALWAYS:**
-1. Run the verification script
-2. Guide user through Element verification
-3. Confirm verification succeeded
+**Agent workflow (3 steps):**
+
+**Step 8a: Start verification listener in BACKGROUND**
+
+```bash
+# Run in background so we can interact with user
+uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 180
+```
+
+Use `run_in_background: true` for this command.
+
+**Step 8b: Guide user with AskUserQuestion**
+
+Use `AskUserQuestion` to guide the user through Element:
+
+```
+Question: "I'm listening for device verification. Please verify in Element now:"
+
+Options:
+1. "Ready - show me the steps" → Show detailed steps below
+2. "Skip verification" → Warn about consequences, proceed without
+
+Detailed steps to show:
+1. Open Element (web/desktop/mobile)
+2. Settings → Security & Privacy → Sessions
+3. Find "Matrix Skill E2EE" → click Verify
+4. Choose "Verify by comparing emojis"
+5. Confirm emojis match on both sides
+```
+
+**Step 8c: Check verification result**
+
+After user confirms, check the background task output for success/failure.
+
+```bash
+# Check if verification succeeded (read background task output)
+```
+
+**Complete example flow:**
+1. Agent: Starts listener in background
+2. Agent: Uses AskUserQuestion to explain steps
+3. User: Performs verification in Element
+4. Agent: Confirms result from background task
 
 ### Troubleshooting
 
