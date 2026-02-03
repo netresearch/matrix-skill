@@ -64,15 +64,27 @@ chmod 600 ~/.config/matrix/config.json
 
 ### Step 5: Set up E2EE device (recommended)
 
-**⚠️ IMPORTANT: Disable bash history expansion** to handle passwords with special characters (`!`, `$`, etc.):
+**Three ways to provide the password:**
 
+**Option A: Environment variable (recommended for agents)**
 ```bash
-set +H && uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py "USER_PROVIDED_PASSWORD"
+MATRIX_PASSWORD="USER_PASSWORD" uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py
+```
+
+**Option B: Interactive prompt (recommended for users)**
+```bash
+uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py
+# Script will securely prompt for password
+```
+
+**Option C: Command line argument (use with caution)**
+```bash
+set +H && uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py "USER_PASSWORD"
 ```
 
 This creates a dedicated "Matrix Skill E2EE" device. The password is used once and not stored.
 
-**Why `set +H`?** Bash history expansion treats `!` specially (e.g., `Password!` becomes `Password\!`). Disabling it ensures the password is passed correctly.
+**Why environment variable?** Avoids shell escaping issues with special characters (`!`, `$`, etc.). The `set +H` workaround for command line is less reliable.
 
 ### Step 6: Add access token to config
 
@@ -112,23 +124,31 @@ uv run skills/matrix-communication/scripts/matrix-rooms.py
 - Cross-signing establishes trust chain for your account
 - Enables automatic room key sharing from other devices
 
-**Agent workflow:**
+**Agent workflow for real-time emoji display:**
 
-**Step 8a: Start verification (agent initiates)**
+The verification script writes emojis to `/tmp/matrix_verification_emojis.txt` for agent polling. This enables showing emojis to the user BEFORE they need to confirm in Element.
+
+**Step 8a: Clear emoji file and start verification in background**
 
 ```bash
-uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 180
+rm -f /tmp/matrix_verification_emojis.txt
+uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 180 > /tmp/verify_log.txt 2>&1 &
 ```
 
-The script will:
-1. Auto-find another device (or specify with `--request DEVICE`)
-2. Send verification request
-3. Display 7 emojis in a prominent box
-4. Wait for user to confirm in Element
+**Step 8b: Poll for emojis and show to user immediately**
 
-**Step 8b: Display emojis to user**
+```bash
+# Poll until emoji file appears (check every 1-2 seconds)
+for i in {1..30}; do
+    if [ -f /tmp/matrix_verification_emojis.txt ]; then
+        cat /tmp/matrix_verification_emojis.txt
+        break
+    fi
+    sleep 1
+done
+```
 
-The script outputs emojis in this format:
+The emojis display like this:
 ```
 ╔══════════════════════════════════════════════════════════╗
 ║           🔐 VERIFICATION EMOJIS - COMPARE NOW! 🔐        ║
@@ -136,33 +156,35 @@ The script outputs emojis in this format:
 ║       🐱    Cat                                          ║
 ║       🔑    Key                                          ║
 ║       🎸    Guitar                                       ║
-║       ...                                                ║
+║       ...   (7 emojis total)                             ║
 ╚══════════════════════════════════════════════════════════╝
 ```
 
-**Step 8c: Guide user with AskUserQuestion**
+**Step 8c: Tell user to confirm in Element**
 
-```
-Question: "Verification emojis are displayed above. Do they match Element?"
+Once emojis are displayed, instruct the user:
+- "Compare these emojis with what Element shows"
+- "Click 'They match' in Element to complete verification"
 
-Options:
-1. "Yes, they match - I confirmed in Element" → Success
-2. "No, they don't match" → Cancel and retry
-3. "I need help finding this in Element" → Show steps:
-   - Open Element → Settings → Security & Privacy → Sessions
-   - Find the verification popup or click "Verify" on the new device
-   - Compare the 7 emojis
-   - Click "They match" in Element
+**Step 8d: Wait for verification to complete**
+
+```bash
+# Check verification result
+grep -q "VERIFICATION SUCCESSFUL" /tmp/verify_log.txt && echo "✅ Verified!"
 ```
 
-**Step 8d: Verification completes automatically**
+**Device selection:** The script automatically prioritizes:
+1. Element Desktop/Mobile clients (interactive)
+2. Web clients (riot/chrome/firefox)
+3. Named devices
+4. Backup devices (lowest priority - can't respond interactively)
 
-Once the user confirms in Element, the script completes and fetches room keys.
+Use `--request DEVICE_ID` to target a specific device.
 
 **Notes:**
-- The script auto-finds another device if `--request` is not specified
 - User confirms emojis in **Element**, not in the terminal
 - After verification, the script automatically fetches room keys
+- The emoji file enables real-time display even with buffered command output
 
 ### Troubleshooting
 
@@ -171,10 +193,17 @@ Once the user confirms in Element, the script completes and fetches room keys.
 If your password contains special characters (`!`, `$`, `\`, etc.), bash may mangle them:
 
 ```bash
-# WRONG - bash history expansion corrupts passwords with !
+# WRONG - bash corrupts passwords with special characters
 uv run .../matrix-e2ee-setup.py "MyPass!word"
 
-# CORRECT - disable history expansion first
+# CORRECT - use environment variable (recommended)
+MATRIX_PASSWORD="MyPass!word" uv run .../matrix-e2ee-setup.py
+
+# CORRECT - use interactive prompt
+uv run .../matrix-e2ee-setup.py
+# Enter password when prompted
+
+# ALTERNATIVE - disable history expansion
 set +H && uv run .../matrix-e2ee-setup.py "MyPass!word"
 ```
 
@@ -446,8 +475,12 @@ URLs are automatically shortened to readable links:
 
 ```bash
 # One-time setup: create dedicated E2EE device
-# IMPORTANT: Use 'set +H' to handle passwords with special characters (!, $, etc.)
-set +H && uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py "YOUR_MATRIX_PASSWORD"
+
+# Option 1: Environment variable (recommended - handles special chars)
+MATRIX_PASSWORD="YOUR_PASSWORD" uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py
+
+# Option 2: Interactive prompt (secure - password not in history)
+uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py
 
 # Now send encrypted messages
 uv run skills/matrix-communication/scripts/matrix-send-e2ee.py '#room:server' 'Encrypted message'
@@ -478,19 +511,29 @@ Storage locations:
 - Device credentials: `~/.local/share/matrix-skill/store/credentials.json`
 - Encryption keys: `~/.local/share/matrix-skill/store/*.db`
 
-### Device Verification (Optional)
+### Device Verification (Recommended)
 
-Device verification marks a device as trusted. It's not required for E2EE to work - messages can still be encrypted/decrypted without verification.
+Device verification marks a device as trusted and enables automatic key sharing from other devices.
 
 ```bash
-# Wait for verification request from Element
-uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 120
+# Auto-find Element device and initiate verification
+uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 180
+
+# Target specific device
+uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --request DEVICE_ID --timeout 180
 
 # With debug output
-uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --debug --timeout 120
+uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --debug --timeout 180
 ```
 
-**Note:** Modern Matrix clients (Element) often use cross-signing and room-based verification, which may not work with this script. The device will show as "unverified" in Element but E2EE still functions.
+**Smart device selection:** The script automatically prioritizes Element clients (Desktop/Android/iOS) over backup devices that can't respond to verification.
+
+**Real-time emoji display:** Emojis are written to `/tmp/matrix_verification_emojis.txt` so agents can poll and display them immediately while the user confirms in Element.
+
+**Why verify?**
+- Removes ⚠️ "unverified device" warnings for other users
+- Enables automatic room key sharing from other devices
+- Required for some security-conscious rooms
 
 ### Reading E2EE Messages
 
@@ -670,13 +713,17 @@ uv run skills/matrix-communication/scripts/matrix-send.py "#room:server" "Done!"
 
 ### For Passwords with Special Characters
 
-Always use `set +H` when passing passwords:
+Use environment variable (most reliable) or interactive prompt:
 
 ```bash
-# WRONG - password gets mangled
-uv run .../matrix-e2ee-setup.py "MyP@ss!word"
+# BEST - environment variable handles all special characters
+MATRIX_PASSWORD="MyP@ss!word" uv run .../matrix-e2ee-setup.py
 
-# CORRECT - disable history expansion
+# GOOD - interactive prompt (password not in shell history)
+uv run .../matrix-e2ee-setup.py
+# Enter password when prompted
+
+# ALTERNATIVE - disable history expansion for command line
 set +H && uv run .../matrix-e2ee-setup.py "MyP@ss!word"
 ```
 
