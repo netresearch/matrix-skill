@@ -234,6 +234,7 @@ All scripts are in the `scripts/` directory. Run with `uv run`.
 | `matrix-resolve.py` | Resolve room alias to room ID |
 | `matrix-e2ee-setup.py` | One-time E2EE device setup |
 | `matrix-e2ee-verify.py` | Device verification (experimental) |
+| `matrix-key-backup.py` | Restore keys from server backup |
 
 ## Room Identification
 
@@ -493,13 +494,43 @@ uv run skills/matrix-communication/scripts/matrix-read-e2ee.py '#room:server' --
 
 **Note:** Messages sent before your device was created show as `[Unable to decrypt]` - this is normal E2EE behavior (new devices can't read old messages without key sharing).
 
+### Key Backup Restoration
+
+New devices can't decrypt old messages by default. To read historical encrypted messages, restore keys from the server backup using your **recovery key** or **recovery passphrase**.
+
+**Find your recovery key in Element:**
+1. Settings → Security & Privacy → Secure Backup
+2. Click "Show Recovery Key" or remember your passphrase
+
+**Check backup status:**
+```bash
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --status
+```
+
+**Restore keys from backup:**
+```bash
+# Using recovery key (looks like: EsTj qRGp YB4C ...)
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "EsTj qRGp YB4C ..."
+
+# Using passphrase
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --passphrase "your recovery passphrase"
+
+# Restore and import keys
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "..." --import-keys
+```
+
+| Script | Purpose |
+|--------|---------|
+| `matrix-key-backup.py` | Restore keys from server backup |
+
 ### Limitations
 
-- **Old messages**: Can't decrypt messages from before device creation (no session keys)
+- **Old messages**: Can't decrypt without key backup restoration
 - **First sync**: Initial run is slow due to key exchange
 - **Device trust**: Auto-trusts devices (TOFU model)
 - **Setup required**: First use requires user's Matrix password (one-time only)
 - **Verification**: Experimental - cross-signing/room-based verification not fully supported
+- **Key backup**: Requires recovery key/passphrase (stored in Element settings)
 
 ## Common Patterns
 
