@@ -234,6 +234,7 @@ All scripts are in the `scripts/` directory. Run with `uv run`.
 | `matrix-resolve.py` | Resolve room alias to room ID |
 | `matrix-e2ee-setup.py` | One-time E2EE device setup |
 | `matrix-e2ee-verify.py` | Device verification (experimental) |
+| `matrix-fetch-keys.py` | Request missing keys from other devices |
 | `matrix-key-backup.py` | Restore keys from server backup |
 
 ## Room Identification
@@ -494,34 +495,54 @@ uv run skills/matrix-communication/scripts/matrix-read-e2ee.py '#room:server' --
 
 **Note:** Messages sent before your device was created show as `[Unable to decrypt]` - this is normal E2EE behavior (new devices can't read old messages without key sharing).
 
-### Key Backup Restoration
+### Fetching Missing Keys
 
-New devices can't decrypt old messages by default. To read historical encrypted messages, restore keys from the server backup using your **recovery key** or **recovery passphrase**.
+New devices can't decrypt old messages by default. After verification, use these methods to get missing keys:
 
-**Find your recovery key in Element:**
-1. Settings → Security & Privacy → Secure Backup
-2. Click "Show Recovery Key" or remember your passphrase
+#### Method 1: Request from Other Devices (Recommended)
 
-**Check backup status:**
+After device verification, other devices can forward keys automatically. This works without any passwords or recovery keys:
+
 ```bash
-uv run skills/matrix-communication/scripts/matrix-key-backup.py --status
+# Fetch keys for a specific room
+uv run skills/matrix-communication/scripts/matrix-fetch-keys.py ROOM --sync-time 60
+
+# Example: Fetch keys for IT room with extended wait
+uv run skills/matrix-communication/scripts/matrix-fetch-keys.py IT --limit 200 --sync-time 120
 ```
 
-**Restore keys from backup:**
+This script:
+1. Reads room history to find undecryptable messages
+2. Requests keys from your other verified devices
+3. Receives forwarded keys automatically
+
+**Requirements:**
+- Device must be verified (run verification first)
+- Other verified devices must be online
+- Works best with Element running on another device
+
+#### Method 2: Restore from Server Backup
+
+If key forwarding doesn't work (no other devices online), restore from backup using your **recovery key** or **passphrase**:
+
 ```bash
-# Using recovery key (looks like: EsTj qRGp YB4C ...)
+# Check backup status
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --status
+
+# Restore using recovery key (looks like: EsTj qRGp YB4C ...)
 uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "EsTj qRGp YB4C ..."
 
-# Using passphrase
+# Restore using passphrase
 uv run skills/matrix-communication/scripts/matrix-key-backup.py --passphrase "your recovery passphrase"
-
-# Restore and import keys
-uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "..." --import-keys
 ```
+
+**Find your recovery key in Element:**
+Settings → Security & Privacy → Secure Backup → "Show Recovery Key"
 
 | Script | Purpose |
 |--------|---------|
-| `matrix-key-backup.py` | Restore keys from server backup |
+| `matrix-fetch-keys.py` | Request keys from other devices (no secrets needed) |
+| `matrix-key-backup.py` | Restore keys from server backup (needs recovery key) |
 
 ### Limitations
 

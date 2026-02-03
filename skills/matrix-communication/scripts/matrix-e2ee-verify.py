@@ -375,24 +375,46 @@ async def run_verification(config: dict, request_device: str = None, timeout: in
 
             await client.sync(timeout=5000)
 
-        # After verification, sync longer to receive forwarded keys
+        # After verification, fetch keys by accessing encrypted rooms
         if handler.verified:
-            print("\nSyncing to receive room keys from verified device...")
-            keys_before = len(client.olm.inbound_group_store) if hasattr(client, 'olm') and client.olm else 0
+            print("\nFetching room keys from verified devices...")
+            print("(Accessing rooms to trigger key requests)")
 
-            for i in range(6):  # 30 seconds of syncing
+            # Import key request capability
+            from nio import MegolmEvent, RoomMessagesResponse
+
+            keys_received = 0
+            rooms_checked = 0
+
+            # Check a few encrypted rooms to trigger key requests
+            for room_id, room in list(client.rooms.items())[:10]:
+                if room.encrypted:
+                    rooms_checked += 1
+                    try:
+                        # Fetch recent messages - this triggers key requests for undecryptable events
+                        result = await client.room_messages(room_id, start="", limit=50)
+                        if isinstance(result, RoomMessagesResponse):
+                            for event in result.chunk:
+                                if isinstance(event, MegolmEvent):
+                                    # Request key for undecryptable event
+                                    try:
+                                        await client.request_room_key(event)
+                                    except Exception:
+                                        pass
+                    except Exception:
+                        pass
+
+            print(f"  Checked {rooms_checked} encrypted rooms")
+
+            # Sync to receive forwarded keys
+            print("  Waiting for key forwarding (30s)...")
+            for i in range(6):
                 await client.sync(timeout=5000)
                 if i % 2 == 1:
-                    print(f"  Syncing... ({(i+1)*5}s)")
+                    print(f"    Syncing... ({(i+1)*5}s)")
 
-            keys_after = len(client.olm.inbound_group_store) if hasattr(client, 'olm') and client.olm else 0
-            new_keys = keys_after - keys_before
-
-            if new_keys > 0:
-                print(f"\n Received {new_keys} room key(s)!")
-            else:
-                print("\n  No new keys received yet.")
-                print("  Keys may arrive later when reading encrypted rooms.")
+            print("\n✅ Verification complete!")
+            print("  Use matrix-fetch-keys.py ROOM to fetch keys for specific rooms")
 
         return handler.verified
 
