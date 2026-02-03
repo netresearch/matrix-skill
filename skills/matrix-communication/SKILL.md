@@ -27,18 +27,34 @@ cat ~/.config/matrix/config.json 2>/dev/null && echo "Config exists" || echo "No
 
 ### Step 2: If not configured, ask user for:
 
-1. **Homeserver URL** - e.g., `https://matrix.org` or `https://matrix.company.com`
-2. **User ID** - e.g., `@username:matrix.org`
-3. **Matrix password** - for E2EE device creation (not stored, used once)
-4. **Bot prefix** (optional) - e.g., `🤖` to mark automated messages
+1. **User ID** - e.g., `@username:matrix.org` or `@username:company.com`
+2. **Matrix password** - for E2EE device creation (not stored, used once)
+3. **Bot prefix** (optional) - e.g., `🤖` to mark automated messages
 
-### Step 3: Create config file
+### Step 3: Discover homeserver URL
+
+Extract the domain from the user ID and discover the homeserver via `.well-known`:
+
+```bash
+# Extract domain from user ID (e.g., @user:example.com -> example.com)
+MATRIX_DOMAIN="DOMAIN_FROM_USER_ID"
+
+# Discover homeserver URL
+curl -s "https://${MATRIX_DOMAIN}/.well-known/matrix/client" | python3 -c "import sys,json; print(json.load(sys.stdin)['m.homeserver']['base_url'])"
+```
+
+**Example:** For `@sebastian.mendel:netresearch.de`:
+- Domain: `netresearch.de`
+- Discovery URL: `https://netresearch.de/.well-known/matrix/client`
+- Returns homeserver: `https://matrix.netresearch.de`
+
+### Step 4: Create config file
 
 ```bash
 mkdir -p ~/.config/matrix
 cat > ~/.config/matrix/config.json << 'EOF'
 {
-  "homeserver": "USER_PROVIDED_HOMESERVER",
+  "homeserver": "DISCOVERED_HOMESERVER_URL",
   "user_id": "USER_PROVIDED_USER_ID",
   "bot_prefix": "🤖"
 }
@@ -46,15 +62,40 @@ EOF
 chmod 600 ~/.config/matrix/config.json
 ```
 
-### Step 4: Set up E2EE device (recommended)
+### Step 5: Set up E2EE device (recommended)
+
+**⚠️ IMPORTANT: Disable bash history expansion** to handle passwords with special characters (`!`, `$`, etc.):
 
 ```bash
-uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py "USER_PROVIDED_PASSWORD"
+set +H && uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py "USER_PROVIDED_PASSWORD"
 ```
 
 This creates a dedicated "Matrix Skill E2EE" device. The password is used once and not stored.
 
-### Step 5: Verify setup
+**Why `set +H`?** Bash history expansion treats `!` specially (e.g., `Password!` becomes `Password\!`). Disabling it ensures the password is passed correctly.
+
+### Step 6: Add access token to config
+
+After E2EE setup, copy the access token to enable non-E2EE scripts:
+
+```bash
+# Extract access token from E2EE credentials and add to config
+ACCESS_TOKEN=$(python3 -c "import json; print(json.load(open('$HOME/.local/share/matrix-skill/store/credentials.json'))['access_token'])")
+
+# Update config with access token
+python3 -c "
+import json
+config_path = '$HOME/.config/matrix/config.json'
+with open(config_path) as f:
+    config = json.load(f)
+config['access_token'] = '$ACCESS_TOKEN'
+with open(config_path, 'w') as f:
+    json.dump(config, f, indent=2)
+print('Access token added to config')
+"
+```
+
+### Step 7: Verify setup
 
 ```bash
 uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py --status
@@ -63,7 +104,19 @@ uv run skills/matrix-communication/scripts/matrix-rooms.py
 
 ### Troubleshooting
 
-If E2EE setup fails with libolm error:
+**E2EE setup fails with "Invalid username or password":**
+
+If your password contains special characters (`!`, `$`, `\`, etc.), bash may mangle them:
+
+```bash
+# WRONG - bash history expansion corrupts passwords with !
+uv run .../matrix-e2ee-setup.py "MyPass!word"
+
+# CORRECT - disable history expansion first
+set +H && uv run .../matrix-e2ee-setup.py "MyPass!word"
+```
+
+**E2EE setup fails with libolm error:**
 ```bash
 # Debian/Ubuntu
 sudo apt install libolm-dev
@@ -73,6 +126,21 @@ sudo dnf install libolm-devel
 
 # macOS
 brew install libolm
+```
+
+**Non-E2EE scripts fail with "Config missing required fields: access_token":**
+
+After E2EE setup, the access token is stored separately. Copy it to the main config:
+```bash
+# Get token and add to config
+python3 -c "
+import json
+creds = json.load(open('$HOME/.local/share/matrix-skill/store/credentials.json'))
+config = json.load(open('$HOME/.config/matrix/config.json'))
+config['access_token'] = creds['access_token']
+json.dump(config, open('$HOME/.config/matrix/config.json', 'w'), indent=2)
+print('Done')
+"
 ```
 
 ## Config Reference
@@ -314,7 +382,8 @@ URLs are automatically shortened to readable links:
 
 ```bash
 # One-time setup: create dedicated E2EE device
-uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py "YOUR_MATRIX_PASSWORD"
+# IMPORTANT: Use 'set +H' to handle passwords with special characters (!, $, etc.)
+set +H && uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py "YOUR_MATRIX_PASSWORD"
 
 # Now send encrypted messages
 uv run skills/matrix-communication/scripts/matrix-send-e2ee.py '#room:server' 'Encrypted message'
@@ -465,17 +534,36 @@ Thanks to everyone who contributed."
 
 ## Bash Quoting
 
-**Important:** When message ends with !, use single quotes or $'...' to avoid bash history expansion adding backslashes.
+**Important:** Bash history expansion treats `!` specially, which can corrupt messages and passwords.
+
+### Best Solution: Disable History Expansion
 
 ```bash
-# WRONG - bash escapes !" to \!
-uv run skills/matrix-communication/scripts/matrix-send.py "#room:server" "Done!"
+# MOST RELIABLE - disable history expansion for the command
+set +H && uv run skills/matrix-communication/scripts/matrix-send.py "#room:server" "Done!"
+```
 
-# CORRECT - single quotes
+### Alternative: Quote Carefully
+
+```bash
+# Single quotes - works for simple messages
 uv run skills/matrix-communication/scripts/matrix-send.py "#room:server" 'Done!'
 
-# CORRECT - $'...' syntax
-uv run skills/matrix-communication/scripts/matrix-send.py "#room:server" $'Done!'
+# WRONG - double quotes allow history expansion
+uv run skills/matrix-communication/scripts/matrix-send.py "#room:server" "Done!"
+# Results in: Done\!
+```
+
+### For Passwords with Special Characters
+
+Always use `set +H` when passing passwords:
+
+```bash
+# WRONG - password gets mangled
+uv run .../matrix-e2ee-setup.py "MyP@ss!word"
+
+# CORRECT - disable history expansion
+set +H && uv run .../matrix-e2ee-setup.py "MyP@ss!word"
 ```
 
 ## Related
