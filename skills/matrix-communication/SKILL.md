@@ -15,6 +15,24 @@ Send messages to Matrix chat rooms on behalf of users.
 - **Matrix URLs**: `https://matrix.*/`, `https://element.*/`
 - **Setup requests**: "configure matrix", "set up matrix skill"
 
+## Prerequisites
+
+Before using E2EE features, check dependencies:
+
+```bash
+# Run health check (checks all dependencies)
+python3 skills/matrix-communication/scripts/matrix-doctor.py
+
+# Auto-install missing dependencies
+python3 skills/matrix-communication/scripts/matrix-doctor.py --install
+```
+
+**Required for E2EE:**
+- `matrix-nio[e2e]` - Matrix client library with encryption support
+- `libolm` - System library for Olm encryption (install via apt/dnf/brew)
+
+**Package manager priority:** The doctor script tries: `uvx pip` > `uv pip` > `pip` > `pip3`
+
 ## Setup Guide (for Agent)
 
 When user asks to set up Matrix, guide them through these steps:
@@ -691,7 +709,7 @@ Thanks to everyone who contributed."
 
 ## Bash Quoting
 
-**Important:** Bash history expansion treats `!` specially, which can corrupt messages and passwords.
+**Important:** Bash history expansion treats the exclamation mark specially, which can corrupt messages and passwords.
 
 ### Best Solution: Disable History Expansion
 
