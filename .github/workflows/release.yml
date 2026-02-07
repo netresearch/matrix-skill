@@ -10,58 +10,64 @@ permissions:
 
 jobs:
   release:
+    name: Create Release
     runs-on: ubuntu-latest
+
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+        with:
+          egress-policy: audit
+
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Get version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: echo "version=${{GITHUB_REF#refs/tags/}}" >> $GITHUB_OUTPUT
 
-      - name: Build full plugin package
+      - name: Create matrix-communication skill package
         run: |
-          mkdir -p dist
-          zip -r "dist/matrix-communication-plugin-${{ steps.version.outputs.VERSION }}.zip" . \
-            -x ".git/*" \
-            -x ".github/*" \
-            -x "dist/*" \
-            -x "*.pyc" \
-            -x "__pycache__/*" \
-            -x ".DS_Store"
+          mkdir -p dist-skill
+          cp skills/matrix-communication/SKILL.md dist-skill/
+          cp LICENSE dist-skill/
+          [ -d "skills/matrix-communication/references" ] && cp -r skills/matrix-communication/references dist-skill/
+          [ -d "skills/matrix-communication/scripts" ] && cp -r skills/matrix-communication/scripts dist-skill/
+          [ -d "skills/matrix-communication/assets" ] && cp -r skills/matrix-communication/assets dist-skill/
+          [ -d "skills/matrix-communication/templates" ] && cp -r skills/matrix-communication/templates dist-skill/
+          [ -d "skills/matrix-communication/examples" ] && cp -r skills/matrix-communication/examples dist-skill/
+          [ -f "skills/matrix-communication/checkpoints.yaml" ] && cp skills/matrix-communication/checkpoints.yaml dist-skill/
+          cd dist-skill
+          zip -r ../matrix-communication-skill-${{ steps.version.outputs.version }}.zip .
+          tar -czvf ../matrix-communication-skill-${{ steps.version.outputs.version }}.tar.gz .
 
-      - name: Build matrix-communication skill package
+      - name: Create matrix-communication plugin package
         run: |
-          SKILL_DIR="skills/matrix-communication"
-          TEMP_DIR=$(mktemp -d)
-
-          # Copy skill contents to temp dir (flat structure for Claude Desktop)
-          cp "$SKILL_DIR/SKILL.md" "$TEMP_DIR/"
-          cp -r "$SKILL_DIR/references" "$TEMP_DIR/"
-          cp LICENSE "$TEMP_DIR/"
-
-          # Create ZIP from temp dir
-          cd "$TEMP_DIR"
-          zip -r "$GITHUB_WORKSPACE/dist/matrix-communication-skill-${{ steps.version.outputs.VERSION }}.zip" .
-          cd -
-          rm -rf "$TEMP_DIR"
-
-      - name: List packages
-        run: ls -la dist/
+          mkdir -p dist-plugin
+          # Include matrix-communication skill files
+          mkdir -p dist-plugin/skills/matrix-communication
+          cp skills/matrix-communication/SKILL.md dist-plugin/skills/matrix-communication/
+          [ -d "skills/matrix-communication/references" ] && cp -r skills/matrix-communication/references dist-plugin/skills/matrix-communication/
+          [ -d "skills/matrix-communication/scripts" ] && cp -r skills/matrix-communication/scripts dist-plugin/skills/matrix-communication/
+          [ -d "skills/matrix-communication/assets" ] && cp -r skills/matrix-communication/assets dist-plugin/skills/matrix-communication/
+          [ -d "skills/matrix-communication/templates" ] && cp -r skills/matrix-communication/templates dist-plugin/skills/matrix-communication/
+          [ -d "skills/matrix-communication/examples" ] && cp -r skills/matrix-communication/examples dist-plugin/skills/matrix-communication/
+          [ -f "skills/matrix-communication/checkpoints.yaml" ] && cp skills/matrix-communication/checkpoints.yaml dist-plugin/skills/matrix-communication/
+          cp LICENSE dist-plugin/
+          # Include plugin manifest
+          [ -d ".claude-plugin" ] && cp -r .claude-plugin dist-plugin/
+          cd dist-plugin
+          zip -r ../matrix-communication-plugin-${{ steps.version.outputs.version }}.zip .
+          tar -czvf ../matrix-communication-plugin-${{ steps.version.outputs.version }}.tar.gz .
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           files: |
-            dist/matrix-communication-plugin-${{ steps.version.outputs.VERSION }}.zip
-            dist/matrix-communication-skill-${{ steps.version.outputs.VERSION }}.zip
+            matrix-communication-skill-${{ steps.version.outputs.version }}.zip
+            matrix-communication-skill-${{ steps.version.outputs.version }}.tar.gz
+            matrix-communication-plugin-${{ steps.version.outputs.version }}.zip
+            matrix-communication-plugin-${{ steps.version.outputs.version }}.tar.gz
           generate_release_notes: true
-          body: |
-            ## Downloads
-
-            | Package | Description |
-            |---------|-------------|
-            | `matrix-communication-plugin-${{ steps.version.outputs.VERSION }}.zip` | Full plugin (for multi-skill compatible tools) |
-            | `matrix-communication-skill-${{ steps.version.outputs.VERSION }}.zip` | Matrix communication skill (Claude Desktop compatible) |
-
-            **Claude Desktop users**: Download `matrix-communication-skill` package.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
