@@ -11,21 +11,21 @@ Default -- use for most communication.
 Like IRC `/me` -- displays as action. Use `--emote` flag.
 ```bash
 # Appears as: "* username is deploying to production"
-uv run skills/matrix-communication/scripts/matrix-send.py "#ops:matrix.org" "is deploying to production" --emote
+uv run skills/matrix-communication/scripts/matrix-send-e2ee.py "#ops:matrix.org" "is deploying to production" --emote
 ```
 **When to use:** Status updates, actions, presence indicators.
 
 ### Thread Replies
 Reply in a thread to keep discussions organized. Use `--thread` with root event ID.
 ```bash
-uv run skills/matrix-communication/scripts/matrix-send.py "#dev:matrix.org" "Update: tests passing" --thread '$rootEventId'
+uv run skills/matrix-communication/scripts/matrix-send-e2ee.py "#dev:matrix.org" "Update: tests passing" --thread '$rootEventId'
 ```
 **When to use:** Ongoing updates, multi-step processes, avoiding main room clutter.
 
 ### Direct Replies
 Reply to a specific message. Use `--reply` with event ID.
 ```bash
-uv run skills/matrix-communication/scripts/matrix-send.py "#team:matrix.org" "Agreed, let's proceed" --reply '$eventId'
+uv run skills/matrix-communication/scripts/matrix-send-e2ee.py "#team:matrix.org" "Agreed, let's proceed" --reply '$eventId'
 ```
 
 ## Reactions
@@ -41,12 +41,12 @@ uv run skills/matrix-communication/scripts/matrix-react.py "#dev:matrix.org" '$e
 
 | Emoji | Meaning | Use Case |
 |-------|---------|----------|
-| Checkmark | Done/Complete | Mark task as finished |
-| Thumbs up | Acknowledged | Confirm receipt |
-| Eyes | Looking into it | Started investigating |
-| Rocket | Deployed/Shipped | Indicate release |
-| Hourglass | In progress | Working on it |
-| X mark | Failed/Blocked | Indicate problem |
+| ✅ | Done/Complete | Mark task as finished |
+| 👍 | Acknowledged | Confirm receipt |
+| 👀 | Looking into it | Started investigating |
+| 🚀 | Deployed/Shipped | Indicate release |
+| ⏳ | In progress | Working on it |
+| ❌ | Failed/Blocked | Indicate problem |
 
 **Workflow example:** Send "Going to reboot server" then later add checkmark reaction when complete.
 
@@ -56,9 +56,9 @@ Include specific emoji to trigger visual effects in Element/SchildiChat:
 
 | Emoji | Effect | Use Case |
 |-------|--------|----------|
-| Party popper / confetti ball | Confetti | Celebrations, milestones |
-| Fireworks | Fireworks | Major achievements |
-| Snowflake | Snowfall | Seasonal, cool features |
+| 🎉 / 🎊 | Confetti | Celebrations, milestones |
+| 🎆 | Fireworks | Major achievements |
+| ❄️ | Snowfall | Seasonal, cool features |
 
 **Note:** Effects only show for Element/SchildiChat users. Other clients see the emoji normally.
 
@@ -101,7 +101,7 @@ URLs are automatically shortened:
 
 ### Deployment notification with Jira link
 ```bash
-uv run .../matrix-send.py "#ops:matrix.org" \
+uv run .../matrix-send-e2ee.py "#ops:matrix.org" \
   "**Deployed** to production
 
 https://jira.example.com/browse/PROJ-123
@@ -112,7 +112,7 @@ https://jira.example.com/browse/PROJ-123
 
 ### Status update with mentions
 ```bash
-uv run .../matrix-send.py "#dev:matrix.org" \
+uv run .../matrix-send-e2ee.py "#dev:matrix.org" \
   "**Done**: API refactoring complete
 
 @lead:matrix.org ready for review
@@ -122,7 +122,7 @@ See #code-review:matrix.org for PR discussion"
 
 ### Share code snippet
 ```bash
-uv run .../matrix-send.py "#dev:matrix.org" \
+uv run .../matrix-send-e2ee.py "#dev:matrix.org" \
   "Fix for the auth bug:
 
 \`\`\`python
@@ -134,20 +134,20 @@ def validate_token(token):
 ### Server maintenance with status updates
 ```bash
 # 1. Announce (save event ID from output)
-uv run .../matrix-send.py "#ops:matrix.org" "Starting server maintenance..."
+uv run .../matrix-send-e2ee.py "#ops:matrix.org" "Starting server maintenance..."
 # Output: Event ID: $abc123
 
 # 2. Update status via reaction
 uv run .../matrix-react.py "#ops:matrix.org" '$abc123' "checkmark"
 
 # 3. Or add thread update
-uv run .../matrix-send.py "#ops:matrix.org" "Maintenance complete" --thread '$abc123'
+uv run .../matrix-send-e2ee.py "#ops:matrix.org" "Maintenance complete" --thread '$abc123'
 ```
 
 ### Check room before sending
 ```bash
 uv run .../matrix-rooms.py | grep -i ops
-uv run .../matrix-send.py "#ops-team:matrix.org" "Message here"
+uv run .../matrix-send-e2ee.py "#ops-team:matrix.org" "Message here"
 ```
 
 ## When to Use Each Feature

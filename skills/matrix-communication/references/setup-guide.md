@@ -60,7 +60,7 @@ cat > ~/.config/matrix/config.json << 'EOF'
 {
   "homeserver": "DISCOVERED_HOMESERVER_URL",
   "user_id": "USER_PROVIDED_USER_ID",
-  "bot_prefix": "bot-emoji"
+  "bot_prefix": "🤖"
 }
 EOF
 chmod 600 ~/.config/matrix/config.json
@@ -155,10 +155,10 @@ Bash history expansion treats `!` specially, which can corrupt messages and pass
 
 ```bash
 # MOST RELIABLE - disable history expansion
-set +H && uv run .../matrix-send.py "#room:server" "Done!"
+set +H && uv run .../matrix-send-e2ee.py "#room:server" "Done!"
 
 # Single quotes work for simple messages
-uv run .../matrix-send.py "#room:server" 'Done!'
+uv run .../matrix-send-e2ee.py "#room:server" 'Done!'
 
 # For passwords, use environment variable
 MATRIX_PASSWORD="MyP@ss!word" uv run .../matrix-e2ee-setup.py
