@@ -18,8 +18,5 @@
   "skills": "./skills/",
   "commands": [
     "./commands/work-update.md"
-  ],
-  "support": {
-    "issues": "https://github.com/netresearch/matrix-skill/issues"
-  }
+  ]
 }
