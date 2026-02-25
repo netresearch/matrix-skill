@@ -1,5 +1,8 @@
 {
-  "name": "netresearch/agent-matrix-communication",
+  "name": "netresearch/matrix-skill",
+  "replace": {
+    "netresearch/agent-matrix-communication": "self.version"
+  },
   "description": "AI agent skill for Matrix chat communication",
   "type": "ai-agent-skill",
   "license": "MIT",
