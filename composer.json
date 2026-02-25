@@ -1,0 +1,23 @@
+{
+  "name": "netresearch/agent-matrix-communication",
+  "description": "AI agent skill for Matrix chat communication",
+  "type": "ai-agent-skill",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Netresearch DTT GmbH",
+      "homepage": "https://www.netresearch.de/",
+      "role": "Manufacturer"
+    }
+  ],
+  "require": {
+    "netresearch/composer-agent-skill-plugin": "*"
+  },
+  "extra": {
+    "ai-agent-skill": "skills/matrix-communication/SKILL.md"
+  },
+  "support": {
+    "issues": "https://github.com/netresearch/matrix-skill/issues",
+    "source": "https://github.com/netresearch/matrix-skill"
+  }
+}
