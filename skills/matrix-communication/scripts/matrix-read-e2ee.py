@@ -30,7 +30,6 @@ Note: First run may be slow (~5-10s) for initial sync and key setup.
 
 import asyncio
 import json
-import socket
 import sys
 import os
 
@@ -44,6 +43,8 @@ from _lib import (
     find_room_by_name,
     format_timestamp,
     clean_message,
+    prefer_ipv4,
+    suppress_nio_logging,
 )
 
 # Check dependencies before importing nio
@@ -335,18 +336,9 @@ def main():
 
     args = parser.parse_args()
 
-    # Prefer IPv4 DNS resolution (workaround for WSL2 IPv6 connectivity issues)
-    _orig_getaddrinfo = socket.getaddrinfo
-    socket.getaddrinfo = lambda *a, **kw: sorted(
-        _orig_getaddrinfo(*a, **kw), key=lambda r: r[0] != socket.AF_INET
-    )
-
-    # Suppress noisy matrix-nio crypto/sync warnings unless --debug
+    prefer_ipv4()
     if not args.debug:
-        import logging
-
-        for name in ("nio", "nio.crypto", "nio.responses", "peewee"):
-            logging.getLogger(name).setLevel(logging.ERROR)
+        suppress_nio_logging()
 
     config = load_config(require_user_id=True)
 

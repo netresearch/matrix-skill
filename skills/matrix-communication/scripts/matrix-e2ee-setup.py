@@ -29,7 +29,6 @@ Options:
 import asyncio
 import getpass
 import json
-import socket
 import sys
 import os
 
@@ -42,6 +41,8 @@ from _lib import (
     load_credentials,
     save_credentials,
     delete_credentials,
+    prefer_ipv4,
+    suppress_nio_logging,
 )
 
 # Check dependencies before importing nio
@@ -160,20 +161,13 @@ def main():
         "--logout", action="store_true", help="Remove stored device credentials"
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument("--debug", action="store_true", help="Show debug info")
 
     args = parser.parse_args()
 
-    # Prefer IPv4 DNS resolution (workaround for WSL2 IPv6 connectivity issues)
-    _orig_getaddrinfo = socket.getaddrinfo
-    socket.getaddrinfo = lambda *a, **kw: sorted(
-        _orig_getaddrinfo(*a, **kw), key=lambda r: r[0] != socket.AF_INET
-    )
-
-    # Suppress noisy matrix-nio crypto/sync warnings
-    import logging
-
-    for name in ("nio", "nio.crypto", "nio.responses", "peewee"):
-        logging.getLogger(name).setLevel(logging.ERROR)
+    prefer_ipv4()
+    if not args.debug:
+        suppress_nio_logging()
 
     config = load_config(require_user_id=True)
 

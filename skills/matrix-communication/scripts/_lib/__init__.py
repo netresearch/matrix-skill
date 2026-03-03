@@ -37,6 +37,8 @@ from _lib.formatting import (
 from _lib.utils import (
     clean_message,
     format_timestamp,
+    prefer_ipv4,
+    suppress_nio_logging,
 )
 
 # E2EE (only used by E2EE scripts, but still stdlib-only)
@@ -65,6 +67,8 @@ __all__ = [
     # Utils
     "clean_message",
     "format_timestamp",
+    "prefer_ipv4",
+    "suppress_nio_logging",
     # E2EE
     "get_store_path",
     "get_credentials_path",

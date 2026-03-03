@@ -86,5 +86,5 @@ def matrix_request(config: dict, method: str, endpoint: str, data: dict = None) 
                 return _do_request(req2)
         except urllib.error.HTTPError as e2:
             return _parse_http_error(e2)
-        except OSError:
-            return {"error": str(e)}
+        except OSError as e2:
+            return {"error": str(e2)}

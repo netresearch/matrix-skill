@@ -3,6 +3,8 @@
 All functions use ONLY stdlib.
 """
 
+import logging
+import socket
 from datetime import datetime
 
 
@@ -14,6 +16,28 @@ def clean_message(message: str) -> str:
     """
     # Remove backslash before ! (bash history expansion artifact)
     return message.replace("\\!", "!")
+
+
+def prefer_ipv4():
+    """Monkey-patch socket.getaddrinfo to prefer IPv4 results.
+
+    Workaround for WSL2 environments where IPv6 routes are often
+    unreachable while IPv4 works fine.  Call once at script startup.
+    """
+    _orig = socket.getaddrinfo
+    socket.getaddrinfo = lambda *a, **kw: sorted(
+        _orig(*a, **kw), key=lambda r: r[0] != socket.AF_INET
+    )
+
+
+def suppress_nio_logging():
+    """Suppress noisy matrix-nio crypto/sync warnings.
+
+    Sets nio and peewee loggers to ERROR level to hide megolm session
+    warnings that clutter output during normal operation.
+    """
+    for name in ("nio", "nio.crypto", "nio.responses", "peewee"):
+        logging.getLogger(name).setLevel(logging.ERROR)
 
 
 def format_timestamp(ts: int) -> str:
