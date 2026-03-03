@@ -85,6 +85,12 @@ File: `~/.config/matrix/config.json`
 | `Could not find room` | Use `matrix-rooms.py` to list available rooms |
 | `Multiple matches` | Use more specific name or room ID |
 
+## Source & Contributing
+
+- **Source repository**: [netresearch/matrix-skill](https://github.com/netresearch/matrix-skill)
+- **Distributed via**: [netresearch/claude-code-marketplace](https://github.com/netresearch/claude-code-marketplace)
+- **Issues & PRs**: File at the source repository, not the marketplace
+
 ## References
 
 - `references/setup-guide.md` -- Full setup walkthrough (homeserver discovery, E2EE device creation, verification)

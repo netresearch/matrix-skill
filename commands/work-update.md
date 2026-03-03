@@ -57,9 +57,9 @@ Send a summary of recent work to a configured Matrix room.
    - Skip AskUserQuestion
    - Send immediately to configured room
 
-5. **Send the message** using:
+5. **Find skill directory** and send the message:
    ```bash
-   cd /home/sme/.claude/plugins/cache/netresearch-claude-code-marketplace/matrix-communication/1.11.0 && set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "MESSAGE"
+   SKILL_DIR=$(ls -td ~/.claude/plugins/cache/*/matrix-communication/*/skills/matrix-communication 2>/dev/null | head -1) && cd "$SKILL_DIR" && set +H && uv run scripts/matrix-send-e2ee.py ROOM "MESSAGE"
    ```
 
 Use `default_update_room` from config if available, otherwise default to `agent-work`.

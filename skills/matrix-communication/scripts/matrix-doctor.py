@@ -16,7 +16,6 @@ Options:
 """
 
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -52,12 +51,7 @@ def run_pip_command(pip_cmd: str, args: list[str]) -> tuple[bool, str]:
         full_cmd = [pip_cmd] + args
 
     try:
-        result = subprocess.run(
-            full_cmd,
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
+        result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=120)
         return result.returncode == 0, result.stdout + result.stderr
     except subprocess.TimeoutExpired:
         return False, "Command timed out"
@@ -77,10 +71,12 @@ def check_python_package(package: str) -> bool:
 def check_matrix_nio_e2ee() -> tuple[bool, str]:
     """Check if matrix-nio with E2EE support is installed."""
     try:
-        import nio
+        import nio  # noqa: F401
+
         # Try to get version
         try:
             from importlib.metadata import version
+
             nio_version = version("matrix-nio")
         except Exception:
             nio_version = "unknown"
@@ -88,6 +84,7 @@ def check_matrix_nio_e2ee() -> tuple[bool, str]:
         # Check for E2EE support by trying to import olm
         try:
             from nio.crypto import Olm  # noqa: F401
+
             return True, f"matrix-nio {nio_version} with E2EE support"
         except ImportError:
             return False, f"matrix-nio {nio_version} installed but E2EE deps missing"
@@ -99,12 +96,14 @@ def check_libolm() -> tuple[bool, str]:
     """Check if libolm system library is installed."""
     try:
         import _libolm  # noqa: F401
+
         return True, "libolm available"
     except ImportError:
         pass
 
     # Try loading the shared library
     import ctypes.util
+
     lib = ctypes.util.find_library("olm")
     if lib:
         return True, f"libolm found: {lib}"
@@ -124,7 +123,11 @@ def check_config() -> tuple[bool, str, dict]:
         required = ["homeserver", "user_id"]
         missing = [k for k in required if k not in config]
         if missing:
-            return False, f"Config missing required fields: {', '.join(missing)}", config
+            return (
+                False,
+                f"Config missing required fields: {', '.join(missing)}",
+                config,
+            )
 
         return True, f"Config OK: {config.get('user_id')}", config
     except json.JSONDecodeError as e:
@@ -175,8 +178,11 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Matrix Skill health check and setup")
-    parser.add_argument("--install", action="store_true",
-                        help="Automatically install missing dependencies")
+    parser.add_argument(
+        "--install",
+        action="store_true",
+        help="Automatically install missing dependencies",
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Only show errors")
 
@@ -196,7 +202,9 @@ def main():
         checks["pip_available"]["ok"] = True
         checks["pip_available"]["message"] = f"Using: {pip_cmd}"
     else:
-        checks["pip_available"]["message"] = "No pip command found (tried: uvx, uv pip, pip, pip3)"
+        checks["pip_available"]["message"] = (
+            "No pip command found (tried: uvx, uv pip, pip, pip3)"
+        )
 
     # Check matrix-nio
     nio_ok, nio_msg = check_matrix_nio_e2ee()
@@ -276,7 +284,7 @@ def main():
         if not checks["pip_available"]["ok"]:
             print("  - Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh")
         if not checks["matrix_nio"]["ok"]:
-            print(f"  - Run: matrix-doctor.py --install")
+            print("  - Run: matrix-doctor.py --install")
         if not checks["config"]["ok"]:
             print("  - Set up Matrix: see SKILL.md Setup Guide")
         if not checks["e2ee_setup"]["ok"] and checks["config"]["ok"]:

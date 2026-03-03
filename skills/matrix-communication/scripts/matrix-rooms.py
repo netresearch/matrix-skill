@@ -42,8 +42,12 @@ def main():
     parser = argparse.ArgumentParser(description="List joined Matrix rooms")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--search", "-s", help="Filter rooms by name")
-    parser.add_argument("--lookup", "-l", metavar="NAME",
-                        help="Find room by name and output room ID (for scripts)")
+    parser.add_argument(
+        "--lookup",
+        "-l",
+        metavar="NAME",
+        help="Find room by name and output room ID (for scripts)",
+    )
 
     args = parser.parse_args()
 
@@ -63,10 +67,15 @@ def main():
         else:
             # Check if it's an ambiguous match
             if matches:
-                print(f"Error: Ambiguous match for '{args.lookup}'. Found {len(matches)} rooms:", file=sys.stderr)
+                print(
+                    f"Error: Ambiguous match for '{args.lookup}'. Found {len(matches)} rooms:",
+                    file=sys.stderr,
+                )
                 for m in matches:
                     alias_str = f" ({m['alias']})" if m.get("alias") else ""
-                    print(f"  - {m['name']}{alias_str}: {m['room_id']}", file=sys.stderr)
+                    print(
+                        f"  - {m['name']}{alias_str}: {m['room_id']}", file=sys.stderr
+                    )
             else:
                 print(f"Error: No room found matching '{args.lookup}'", file=sys.stderr)
             sys.exit(1)
@@ -76,8 +85,12 @@ def main():
 
     if args.search:
         search_lower = args.search.lower()
-        rooms = [r for r in rooms if search_lower in r["name"].lower() or
-                (r.get("alias") and search_lower in r["alias"].lower())]
+        rooms = [
+            r
+            for r in rooms
+            if search_lower in r["name"].lower()
+            or (r.get("alias") and search_lower in r["alias"].lower())
+        ]
 
     if args.json:
         print(json.dumps(rooms, indent=2))

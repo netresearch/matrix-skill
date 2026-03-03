@@ -45,11 +45,15 @@ def save_credentials(user_id: str, device_id: str, access_token: str):
     """
     creds_path = get_credentials_path()
     with open(creds_path, "w") as f:
-        json.dump({
-            "user_id": user_id,
-            "device_id": device_id,
-            "access_token": access_token,
-        }, f, indent=2)
+        json.dump(
+            {
+                "user_id": user_id,
+                "device_id": device_id,
+                "access_token": access_token,
+            },
+            f,
+            indent=2,
+        )
     os.chmod(creds_path, 0o600)
 
 

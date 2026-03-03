@@ -54,18 +54,20 @@ class KeyFetcher:
         """Handle incoming key events."""
         if isinstance(event, (ForwardedRoomKeyEvent, RoomKeyEvent)):
             self.received_keys += 1
-            room_id = getattr(event, 'room_id', 'unknown')
-            session_id = getattr(event, 'session_id', 'unknown')
+            room_id = getattr(event, "room_id", "unknown")
+            session_id = getattr(event, "session_id", "unknown")
             print(f"  📨 Received key: {room_id[:20]}... / {session_id[:20]}...")
 
-        elif isinstance(event, UnknownToDeviceEvent) and hasattr(event, 'source'):
-            event_type = event.source.get('type', '')
-            if 'room_key' in event_type.lower():
+        elif isinstance(event, UnknownToDeviceEvent) and hasattr(event, "source"):
+            event_type = event.source.get("type", "")
+            if "room_key" in event_type.lower():
                 self.received_keys += 1
-                content = event.source.get('content', {})
-                room_id = content.get('room_id', 'unknown')
-                session_id = content.get('session_id', 'unknown')
-                print(f"  📨 Received key ({event_type}): {room_id[:20]}... / {session_id[:20]}...")
+                content = event.source.get("content", {})
+                room_id = content.get("room_id", "unknown")
+                session_id = content.get("session_id", "unknown")
+                print(
+                    f"  📨 Received key ({event_type}): {room_id[:20]}... / {session_id[:20]}..."
+                )
 
     async def request_key_for_event(self, event: MegolmEvent) -> bool:
         """Request key for an undecryptable event."""
@@ -115,7 +117,10 @@ class KeyFetcher:
                 # This is an undecrypted event - request the key
                 if await self.request_key_for_event(event):
                     request_count += 1
-            elif hasattr(event, 'source') and event.source.get('type') == 'm.room.encrypted':
+            elif (
+                hasattr(event, "source")
+                and event.source.get("type") == "m.room.encrypted"
+            ):
                 # Decrypted successfully
                 decrypted_count += 1
 
@@ -129,7 +134,9 @@ async def main():
     parser = argparse.ArgumentParser(description="Fetch missing room keys")
     parser.add_argument("room", help="Room name, ID, or alias")
     parser.add_argument("--limit", type=int, default=100, help="Messages to scan")
-    parser.add_argument("--sync-time", type=int, default=60, help="Seconds to wait for keys")
+    parser.add_argument(
+        "--sync-time", type=int, default=60, help="Seconds to wait for keys"
+    )
     parser.add_argument("--debug", action="store_true", help="Debug output")
     args = parser.parse_args()
 
@@ -153,7 +160,9 @@ async def main():
     fetcher = KeyFetcher(client, debug=args.debug)
 
     try:
-        client.restore_login(config["user_id"], creds["device_id"], creds["access_token"])
+        client.restore_login(
+            config["user_id"], creds["device_id"], creds["access_token"]
+        )
         if client.store:
             client.load_store()
 
@@ -179,7 +188,9 @@ async def main():
                 if matches:
                     print(f"Multiple matches for '{args.room}':", file=sys.stderr)
                     for m in matches:
-                        print(f"  {m['name']} ({m['room_id'][:20]}...)", file=sys.stderr)
+                        print(
+                            f"  {m['name']} ({m['room_id'][:20]}...)", file=sys.stderr
+                        )
                 else:
                     print(f"Could not find room: {args.room}", file=sys.stderr)
                 return 1
@@ -210,7 +221,7 @@ async def main():
             elif elapsed % 15 == 0 and elapsed > 0:
                 print(f"  [{elapsed}s] Received {fetcher.received_keys} keys...")
 
-        print(f"\n=== Results ===")
+        print("\n=== Results ===")
         print(f"Key requests sent: {len(fetcher.requested_sessions)}")
         print(f"Keys received: {fetcher.received_keys}")
 

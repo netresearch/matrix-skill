@@ -22,13 +22,18 @@ The script will:
 """
 
 import asyncio
-import json
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import load_config, get_store_path, load_credentials
+from _lib import (
+    load_config,
+    get_store_path,
+    load_credentials,
+    prefer_ipv4,
+    suppress_nio_logging,
+)
 
 # Check dependencies before importing nio
 try:
@@ -48,6 +53,7 @@ try:
         MegolmEvent,
         RoomMessagesResponse,
     )
+
     try:
         from nio import KeyVerificationRequest
     except ImportError:
@@ -96,19 +102,19 @@ class VerificationHandler:
 
     async def handle_raw_event(self, event):
         """Handle raw to-device events."""
-        if isinstance(event, UnknownToDeviceEvent) and hasattr(event, 'source'):
+        if isinstance(event, UnknownToDeviceEvent) and hasattr(event, "source"):
             source = event.source
 
-            if source.get('type') == 'm.key.verification.request':
-                content = source.get('content', {})
-                txn_id = content.get('transaction_id')
-                from_device = content.get('from_device')
-                methods = content.get('methods', [])
-                sender = source.get('sender')
+            if source.get("type") == "m.key.verification.request":
+                content = source.get("content", {})
+                txn_id = content.get("transaction_id")
+                from_device = content.get("from_device")
+                methods = content.get("methods", [])
+                sender = source.get("sender")
 
                 print(f"\nVerification request received from {from_device}")
 
-                if 'm.sas.v1' in methods:
+                if "m.sas.v1" in methods:
                     self.current_verification = txn_id
                     self._debug(f"Sending ready response for {txn_id}")
 
@@ -128,7 +134,7 @@ class VerificationHandler:
                     await self.client.to_device(msg)
                     print("Ready sent, waiting for emoji exchange...")
 
-            elif source.get('type', '').startswith('m.key.verification.'):
+            elif source.get("type", "").startswith("m.key.verification."):
                 self._debug(f"Verification event: {source.get('type')}")
 
     async def handle_event(self, event):
@@ -148,7 +154,7 @@ class VerificationHandler:
         elif isinstance(event, KeyVerificationStart):
             if self.sas_accepted:
                 return
-            print(f"Verification started")
+            print("Verification started")
             self.current_verification = event.transaction_id
             try:
                 await self.client.accept_key_verification(event.transaction_id)
@@ -174,23 +180,45 @@ class VerificationHandler:
                 # Build emoji display
                 emoji_lines = []
                 emoji_lines.append("")
-                emoji_lines.append("╔══════════════════════════════════════════════════════════╗")
-                emoji_lines.append("║           🔐 VERIFICATION EMOJIS - COMPARE NOW! 🔐        ║")
-                emoji_lines.append("╠══════════════════════════════════════════════════════════╣")
-                emoji_lines.append("║                                                          ║")
+                emoji_lines.append(
+                    "╔══════════════════════════════════════════════════════════╗"
+                )
+                emoji_lines.append(
+                    "║           🔐 VERIFICATION EMOJIS - COMPARE NOW! 🔐        ║"
+                )
+                emoji_lines.append(
+                    "╠══════════════════════════════════════════════════════════╣"
+                )
+                emoji_lines.append(
+                    "║                                                          ║"
+                )
 
                 for emoji, name in self.emojis:
                     line = f"       {emoji}    {name}"
                     padding = 58 - len(line)
                     emoji_lines.append(f"║{line}{' ' * padding}║")
 
-                emoji_lines.append("║                                                          ║")
-                emoji_lines.append("╠══════════════════════════════════════════════════════════╣")
-                emoji_lines.append("║  👆 These emojis must EXACTLY match what Element shows!  ║")
-                emoji_lines.append("║                                                          ║")
-                emoji_lines.append("║  ➡️  Go to Element now and confirm the emojis match      ║")
-                emoji_lines.append("║  ➡️  Click 'They match' in Element to complete           ║")
-                emoji_lines.append("╚══════════════════════════════════════════════════════════╝")
+                emoji_lines.append(
+                    "║                                                          ║"
+                )
+                emoji_lines.append(
+                    "╠══════════════════════════════════════════════════════════╣"
+                )
+                emoji_lines.append(
+                    "║  👆 These emojis must EXACTLY match what Element shows!  ║"
+                )
+                emoji_lines.append(
+                    "║                                                          ║"
+                )
+                emoji_lines.append(
+                    "║  ➡️  Go to Element now and confirm the emojis match      ║"
+                )
+                emoji_lines.append(
+                    "║  ➡️  Click 'They match' in Element to complete           ║"
+                )
+                emoji_lines.append(
+                    "╚══════════════════════════════════════════════════════════╝"
+                )
                 emoji_lines.append("")
 
                 # Write to file for agent polling (before stdout which may be buffered)
@@ -236,7 +264,9 @@ class VerificationHandler:
                         done_msg = ToDeviceMessage(
                             type="m.key.verification.done",
                             recipient=event.sender,
-                            recipient_device=sas.other_device_id if hasattr(sas, 'other_device_id') else sas.other_olm_device.device_id,
+                            recipient_device=sas.other_device_id
+                            if hasattr(sas, "other_device_id")
+                            else sas.other_olm_device.device_id,
                             content=done_content,
                         )
                         await self.client.to_device(done_msg)
@@ -249,17 +279,23 @@ class VerificationHandler:
             self.cancelled = True
 
 
-async def run_verification(config: dict, request_device: str = None, timeout: int = 120, debug: bool = False):
+async def run_verification(
+    config: dict, request_device: str = None, timeout: int = 120, debug: bool = False
+):
     """Run verification process."""
     store_path = get_store_path()
     creds = load_credentials()
 
     if not creds or creds.get("user_id") != config["user_id"]:
         if "access_token" not in config:
-            print("Error: No credentials. Run matrix-e2ee-setup.py first.", file=sys.stderr)
+            print(
+                "Error: No credentials. Run matrix-e2ee-setup.py first.",
+                file=sys.stderr,
+            )
             return False
 
         from nio import WhoamiResponse
+
         temp_client = AsyncClient(config["homeserver"], config["user_id"])
         temp_client.access_token = config["access_token"]
         whoami = await temp_client.whoami()
@@ -338,7 +374,9 @@ async def run_verification(config: dict, request_device: str = None, timeout: in
                     sorted_devices = sorted(other_devices, key=device_priority)
                     target = sorted_devices[0]
                     request_device = target.id
-                    print(f"Target device: {target.display_name or target.id} ({target.id})")
+                    print(
+                        f"Target device: {target.display_name or target.id} ({target.id})"
+                    )
                 else:
                     print("No other devices found!", file=sys.stderr)
                     print("Open Element on another device first.", file=sys.stderr)
@@ -356,16 +394,15 @@ async def run_verification(config: dict, request_device: str = None, timeout: in
 
         # Try to find device in store
         user_id = config["user_id"]
-        target_device = None
         if user_id in client.device_store:
             for dev_id, device in client.device_store[user_id].items():
                 if dev_id == request_device:
-                    target_device = device
                     break
 
         # Send verification request
         import secrets
         import time
+
         txn_id = secrets.token_hex(16)
         handler.current_verification = txn_id
 
@@ -428,7 +465,7 @@ async def run_verification(config: dict, request_device: str = None, timeout: in
             for i in range(6):
                 await client.sync(timeout=5000)
                 if (i + 1) % 2 == 0:
-                    print(f"   ... {(i+1)*5}s")
+                    print(f"   ... {(i + 1) * 5}s")
 
             print("\n🎉 Device verified and keys synced!")
             print("   Use matrix-fetch-keys.py ROOM for additional keys")
@@ -450,6 +487,7 @@ async def list_devices(config: dict) -> list:
     elif "access_token" in config:
         access_token = config["access_token"]
         from nio import WhoamiResponse
+
         temp_client = AsyncClient(config["homeserver"], config["user_id"])
         temp_client.access_token = access_token
         whoami = await temp_client.whoami()
@@ -477,11 +515,13 @@ async def list_devices(config: dict) -> list:
         if isinstance(resp, DevicesResponse):
             devices = []
             for d in resp.devices:
-                devices.append({
-                    "device_id": d.id,
-                    "display_name": d.display_name or "No name",
-                    "is_current": d.id == device_id,
-                })
+                devices.append(
+                    {
+                        "device_id": d.id,
+                        "display_name": d.display_name or "No name",
+                        "is_current": d.id == device_id,
+                    }
+                )
             return devices
         return []
     finally:
@@ -502,14 +542,21 @@ Examples:
 
 The script will display 7 emojis that must match what Element shows.
 Confirm the match in Element to complete verification.
-        """
+        """,
     )
     parser.add_argument("--request", metavar="DEVICE", help="Target specific device ID")
     parser.add_argument("--list", action="store_true", help="List all your devices")
-    parser.add_argument("--timeout", type=int, default=120, help="Timeout in seconds (default: 120)")
+    parser.add_argument(
+        "--timeout", type=int, default=120, help="Timeout in seconds (default: 120)"
+    )
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
 
     args = parser.parse_args()
+
+    prefer_ipv4()
+    if not args.debug:
+        suppress_nio_logging()
+
     config = load_config(require_user_id=True)
 
     if args.list:
@@ -524,12 +571,14 @@ Confirm the match in Element to complete verification.
             print(f"  {d['device_id']}: {d['display_name']}{marker}")
         sys.exit(0)
 
-    success = asyncio.run(run_verification(
-        config=config,
-        request_device=args.request,
-        timeout=args.timeout,
-        debug=args.debug,
-    ))
+    success = asyncio.run(
+        run_verification(
+            config=config,
+            request_device=args.request,
+            timeout=args.timeout,
+            debug=args.debug,
+        )
+    )
 
     sys.exit(0 if success else 1)
 

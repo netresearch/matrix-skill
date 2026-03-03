@@ -53,7 +53,7 @@ def edit_message(config: dict, room_id: str, event_id: str, new_message: str) ->
         "m.relates_to": {
             "rel_type": "m.replace",
             "event_id": event_id,
-        }
+        },
     }
 
     # Add HTML formatting
@@ -68,7 +68,7 @@ def edit_message(config: dict, room_id: str, event_id: str, new_message: str) ->
         config,
         "PUT",
         f"/rooms/{urllib.parse.quote(room_id, safe='')}/send/m.room.message/{txn_id}",
-        content
+        content,
     )
 
 
@@ -76,11 +76,14 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Edit a message in a Matrix room")
-    parser.add_argument("room", help="Room alias (#room:server), room ID (!id:server), or room name")
+    parser.add_argument(
+        "room", help="Room alias (#room:server), room ID (!id:server), or room name"
+    )
     parser.add_argument("event_id", help="Event ID of the message to edit")
     parser.add_argument("message", help="New message content")
-    parser.add_argument("--no-prefix", action="store_true",
-                        help="Don't add bot_prefix from config")
+    parser.add_argument(
+        "--no-prefix", action="store_true", help="Don't add bot_prefix from config"
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
@@ -127,7 +130,7 @@ def main():
         else:
             error_msg = f"Could not find room '{room_input}'"
             if matches:
-                error_msg += f". Multiple matches found:\n"
+                error_msg += ". Multiple matches found:\n"
                 for m in matches:
                     alias_str = f" ({m['alias']})" if m.get("alias") else ""
                     error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
