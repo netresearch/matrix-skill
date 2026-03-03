@@ -49,23 +49,27 @@ def send_reaction(config: dict, room_id: str, event_id: str, emoji: str) -> dict
     txn_id = str(int(time.time() * 1000))
 
     content = {
-        "m.relates_to": {
-            "rel_type": "m.annotation",
-            "event_id": event_id,
-            "key": emoji
-        }
+        "m.relates_to": {"rel_type": "m.annotation", "event_id": event_id, "key": emoji}
     }
 
-    return matrix_request(config, "PUT", f"/rooms/{room_id}/send/m.reaction/{txn_id}", content)
+    return matrix_request(
+        config, "PUT", f"/rooms/{room_id}/send/m.reaction/{txn_id}", content
+    )
 
 
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="React to a Matrix message with an emoji")
-    parser.add_argument("room", help="Room alias (#room:server), room ID (!id:server), or room name")
+    parser = argparse.ArgumentParser(
+        description="React to a Matrix message with an emoji"
+    )
+    parser.add_argument(
+        "room", help="Room alias (#room:server), room ID (!id:server), or room name"
+    )
     parser.add_argument("event_id", help="Event ID of message to react to")
-    parser.add_argument("emoji", help="Emoji reaction (e.g., checkmark, thumbsup, party)")
+    parser.add_argument(
+        "emoji", help="Emoji reaction (e.g., checkmark, thumbsup, party)"
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
@@ -105,7 +109,7 @@ def main():
         else:
             error_msg = f"Could not find room '{room_input}'"
             if matches:
-                error_msg += f". Multiple matches found:\n"
+                error_msg += ". Multiple matches found:\n"
                 for m in matches:
                     alias_str = f" ({m['alias']})" if m.get("alias") else ""
                     error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"

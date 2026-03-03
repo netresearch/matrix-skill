@@ -44,7 +44,10 @@ def load_config(require_user_id: bool = False) -> dict:
 
     missing = [f for f in required if f not in config]
     if missing:
-        print(f"Error: Config missing required fields: {', '.join(missing)}", file=sys.stderr)
+        print(
+            f"Error: Config missing required fields: {', '.join(missing)}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     return config

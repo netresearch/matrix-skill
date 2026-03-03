@@ -35,7 +35,9 @@ from _lib import (
 )
 
 
-def redact_message(config: dict, room_id: str, event_id: str, reason: str = None) -> dict:
+def redact_message(
+    config: dict, room_id: str, event_id: str, reason: str = None
+) -> dict:
     """Redact a message from a Matrix room."""
     txn_id = str(int(time.time() * 1000))
 
@@ -44,13 +46,13 @@ def redact_message(config: dict, room_id: str, event_id: str, reason: str = None
         data["reason"] = reason
 
     # URL encode the event_id (it contains special characters like $ and :)
-    encoded_event_id = urllib.parse.quote(event_id, safe='')
+    encoded_event_id = urllib.parse.quote(event_id, safe="")
 
     return matrix_request(
         config,
         "PUT",
         f"/rooms/{urllib.parse.quote(room_id, safe='')}/redact/{encoded_event_id}/{txn_id}",
-        data  # Always pass dict, even if empty - {} is falsy but Matrix needs JSON body
+        data,  # Always pass dict, even if empty - {} is falsy but Matrix needs JSON body
     )
 
 
@@ -58,7 +60,9 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Redact a message from a Matrix room")
-    parser.add_argument("room", help="Room alias (#room:server), room ID (!id:server), or room name")
+    parser.add_argument(
+        "room", help="Room alias (#room:server), room ID (!id:server), or room name"
+    )
     parser.add_argument("event_id", help="Event ID of the message to redact")
     parser.add_argument("--reason", help="Reason for redaction")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
@@ -100,7 +104,7 @@ def main():
         else:
             error_msg = f"Could not find room '{room_input}'"
             if matches:
-                error_msg += f". Multiple matches found:\n"
+                error_msg += ". Multiple matches found:\n"
                 for m in matches:
                     alias_str = f" ({m['alias']})" if m.get("alias") else ""
                     error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"

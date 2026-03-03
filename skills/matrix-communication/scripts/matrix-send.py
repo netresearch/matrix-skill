@@ -57,8 +57,15 @@ from _lib import (
 )
 
 
-def send_message(config: dict, room_id: str, message: str, format: str = "markdown",
-                 emote: bool = False, thread_id: str = None, reply_id: str = None) -> dict:
+def send_message(
+    config: dict,
+    room_id: str,
+    message: str,
+    format: str = "markdown",
+    emote: bool = False,
+    thread_id: str = None,
+    reply_id: str = None,
+) -> dict:
     """Send a message to a Matrix room.
 
     Args:
@@ -72,10 +79,7 @@ def send_message(config: dict, room_id: str, message: str, format: str = "markdo
     """
     txn_id = str(int(time.time() * 1000))
 
-    content = {
-        "msgtype": "m.emote" if emote else "m.text",
-        "body": message
-    }
+    content = {"msgtype": "m.emote" if emote else "m.text", "body": message}
 
     if format == "markdown":
         html = markdown_to_html(message)
@@ -98,11 +102,11 @@ def send_message(config: dict, room_id: str, message: str, format: str = "markdo
 
     # Regular reply (not in thread)
     elif reply_id:
-        content["m.relates_to"] = {
-            "m.in_reply_to": {"event_id": reply_id}
-        }
+        content["m.relates_to"] = {"m.in_reply_to": {"event_id": reply_id}}
 
-    return matrix_request(config, "PUT", f"/rooms/{room_id}/send/m.room.message/{txn_id}", content)
+    return matrix_request(
+        config, "PUT", f"/rooms/{room_id}/send/m.room.message/{txn_id}", content
+    )
 
 
 def main():
@@ -111,16 +115,24 @@ def main():
     parser = argparse.ArgumentParser(description="Send a message to a Matrix room")
     parser.add_argument("room", help="Room ID (!id), alias (#room:server), or name")
     parser.add_argument("message", help="Message content (markdown supported)")
-    parser.add_argument("--format", choices=["text", "markdown"], default="markdown",
-                        help="Message format (default: markdown)")
-    parser.add_argument("--emote", action="store_true",
-                        help="Send as /me action (m.emote msgtype)")
-    parser.add_argument("--thread", metavar="EVENT_ID",
-                        help="Reply in thread (event ID of thread root)")
-    parser.add_argument("--reply", metavar="EVENT_ID",
-                        help="Reply to message (event ID)")
-    parser.add_argument("--no-prefix", action="store_true",
-                        help="Don't add bot_prefix from config")
+    parser.add_argument(
+        "--format",
+        choices=["text", "markdown"],
+        default="markdown",
+        help="Message format (default: markdown)",
+    )
+    parser.add_argument(
+        "--emote", action="store_true", help="Send as /me action (m.emote msgtype)"
+    )
+    parser.add_argument(
+        "--thread", metavar="EVENT_ID", help="Reply in thread (event ID of thread root)"
+    )
+    parser.add_argument(
+        "--reply", metavar="EVENT_ID", help="Reply to message (event ID)"
+    )
+    parser.add_argument(
+        "--no-prefix", action="store_true", help="Don't add bot_prefix from config"
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
@@ -156,7 +168,10 @@ def main():
             # Alias resolution failed - try name lookup as fallback
             alias_name = room_input.split(":")[0].lstrip("#")
             if args.debug:
-                print(f"Alias resolution failed, trying name lookup for '{alias_name}'", file=sys.stderr)
+                print(
+                    f"Alias resolution failed, trying name lookup for '{alias_name}'",
+                    file=sys.stderr,
+                )
 
             found_id, matches = find_room_by_name(config, alias_name)
             if found_id:
@@ -166,7 +181,7 @@ def main():
             else:
                 error_msg = f"Could not resolve room '{room_input}'"
                 if matches:
-                    error_msg += f". Multiple matches found:\n"
+                    error_msg += ". Multiple matches found:\n"
                     for m in matches:
                         alias_str = f" ({m['alias']})" if m.get("alias") else ""
                         error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
@@ -191,7 +206,7 @@ def main():
         else:
             error_msg = f"Could not find room '{room_input}'"
             if matches:
-                error_msg += f". Multiple matches found:\n"
+                error_msg += ". Multiple matches found:\n"
                 for m in matches:
                     alias_str = f" ({m['alias']})" if m.get("alias") else ""
                     error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
@@ -204,8 +219,15 @@ def main():
             sys.exit(1)
 
     # Send message
-    result = send_message(config, room_id, message, args.format,
-                         emote=args.emote, thread_id=args.thread, reply_id=args.reply)
+    result = send_message(
+        config,
+        room_id,
+        message,
+        args.format,
+        emote=args.emote,
+        thread_id=args.thread,
+        reply_id=args.reply,
+    )
 
     if "error" in result:
         if args.json:

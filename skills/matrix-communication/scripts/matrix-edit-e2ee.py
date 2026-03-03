@@ -76,7 +76,9 @@ except ImportError as e:
     sys.exit(1)
 
 
-async def edit_message_e2ee(config: dict, room: str, event_id: str, message: str, debug: bool = False) -> dict:
+async def edit_message_e2ee(
+    config: dict, room: str, event_id: str, message: str, debug: bool = False
+) -> dict:
     store_path = get_store_path()
     stored_creds = load_credentials()
 
@@ -88,6 +90,7 @@ async def edit_message_e2ee(config: dict, room: str, event_id: str, message: str
     elif "access_token" in config:
         access_token = config["access_token"]
         from nio import WhoamiResponse
+
         temp_client = AsyncClient(config["homeserver"], config["user_id"])
         temp_client.access_token = access_token
         whoami = await temp_client.whoami()
@@ -109,7 +112,9 @@ async def edit_message_e2ee(config: dict, room: str, event_id: str, message: str
     )
 
     try:
-        client.restore_login(user_id=config["user_id"], device_id=device_id, access_token=access_token)
+        client.restore_login(
+            user_id=config["user_id"], device_id=device_id, access_token=access_token
+        )
         if client.store:
             client.load_store()
         if client.should_upload_keys:
@@ -131,10 +136,12 @@ async def edit_message_e2ee(config: dict, room: str, event_id: str, message: str
                 await client.keys_query()
             for member_id in room_obj.users:
                 try:
-                    for dev_id, device in client.device_store.active_user_devices(member_id):
+                    for dev_id, device in client.device_store.active_user_devices(
+                        member_id
+                    ):
                         if not device.verified:
                             client.verify_device(device)
-                except:
+                except Exception:
                     pass
 
         # Build edit content
@@ -167,8 +174,13 @@ async def edit_message_e2ee(config: dict, room: str, event_id: str, message: str
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Edit a message in an E2EE Matrix room")
-    parser.add_argument("room", help="Room alias (#room:server), room ID (!id:server), or room name")
+
+    parser = argparse.ArgumentParser(
+        description="Edit a message in an E2EE Matrix room"
+    )
+    parser.add_argument(
+        "room", help="Room alias (#room:server), room ID (!id:server), or room name"
+    )
     parser.add_argument("event_id", help="Event ID to edit")
     parser.add_argument("message", help="New message content")
     parser.add_argument("--no-prefix", action="store_true", help="Don't add bot_prefix")
@@ -186,6 +198,7 @@ def main():
     # Suppress noisy matrix-nio crypto/sync warnings unless --debug
     if not args.debug:
         import logging
+
         for name in ("nio", "nio.crypto", "nio.responses", "peewee"):
             logging.getLogger(name).setLevel(logging.ERROR)
 
@@ -207,7 +220,7 @@ def main():
         else:
             error_msg = f"Could not find room '{room_input}'"
             if matches:
-                error_msg += f". Multiple matches found:\n"
+                error_msg += ". Multiple matches found:\n"
                 for m in matches:
                     alias_str = f" ({m['alias']})" if m.get("alias") else ""
                     error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
@@ -219,7 +232,9 @@ def main():
                 print(f"Error: {error_msg}", file=sys.stderr)
             sys.exit(1)
 
-    result = asyncio.run(edit_message_e2ee(config, room, args.event_id, message, args.debug))
+    result = asyncio.run(
+        edit_message_e2ee(config, room, args.event_id, message, args.debug)
+    )
 
     if "error" in result:
         if args.json:

@@ -43,7 +43,7 @@ def _parse_http_error(e: urllib.error.HTTPError) -> dict:
         error_json = json.loads(error_body)
         return {
             "error": error_json.get("error", error_body),
-            "errcode": error_json.get("errcode")
+            "errcode": error_json.get("errcode"),
         }
     except json.JSONDecodeError:
         return {"error": error_body, "errcode": str(e.code)}
@@ -64,7 +64,7 @@ def matrix_request(config: dict, method: str, endpoint: str, data: dict = None) 
     url = f"{config['homeserver']}/_matrix/client/v3{endpoint}"
     headers = {
         "Authorization": f"Bearer {config['access_token']}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
     body = json.dumps(data).encode() if data is not None else None
@@ -80,7 +80,9 @@ def matrix_request(config: dict, method: str, endpoint: str, data: dict = None) 
         # IPv6 likely unreachable — retry with IPv4 preference
         try:
             with _prefer_ipv4():
-                req2 = urllib.request.Request(url, data=body, headers=headers, method=method)
+                req2 = urllib.request.Request(
+                    url, data=body, headers=headers, method=method
+                )
                 return _do_request(req2)
         except urllib.error.HTTPError as e2:
             return _parse_http_error(e2)

@@ -118,14 +118,14 @@ def process_event(event, debug=False) -> tuple[dict | None, bool]:
             "timestamp": event.server_timestamp,
             "event_id": event.event_id,
             "encrypted": True,
-            "session_id": event.session_id if hasattr(event, 'session_id') else None,
+            "session_id": event.session_id if hasattr(event, "session_id") else None,
         }, True
-    elif hasattr(event, 'source') and event.source.get('type') == 'm.room.message':
-        content = event.source.get('content', {})
+    elif hasattr(event, "source") and event.source.get("type") == "m.room.message":
+        content = event.source.get("content", {})
         return {
             "sender": event.sender,
-            "body": content.get('body', ''),
-            "msgtype": content.get('msgtype', 'm.text'),
+            "body": content.get("body", ""),
+            "msgtype": content.get("msgtype", "m.text"),
             "timestamp": event.server_timestamp,
             "event_id": event.event_id,
             "encrypted": True,
@@ -154,6 +154,7 @@ async def read_messages_e2ee(
     elif "access_token" in config:
         access_token = config["access_token"]
         from nio import WhoamiResponse
+
         temp_client = AsyncClient(config["homeserver"], config["user_id"])
         temp_client.access_token = access_token
         whoami = await temp_client.whoami()
@@ -180,7 +181,9 @@ async def read_messages_e2ee(
     undecryptable_events = []
 
     try:
-        client.restore_login(user_id=config["user_id"], device_id=device_id, access_token=access_token)
+        client.restore_login(
+            user_id=config["user_id"], device_id=device_id, access_token=access_token
+        )
 
         if client.store:
             client.load_store()
@@ -204,12 +207,7 @@ async def read_messages_e2ee(
         if debug:
             print("Syncing...", file=sys.stderr)
 
-        sync_filter = {
-            "room": {
-                "rooms": [room_id],
-                "timeline": {"limit": limit}
-            }
-        }
+        sync_filter = {"room": {"rooms": [room_id], "timeline": {"limit": limit}}}
 
         await client.sync(timeout=30000, full_state=True, sync_filter=sync_filter)
 
@@ -231,7 +229,9 @@ async def read_messages_e2ee(
         if debug:
             print("Fetching messages...", file=sys.stderr)
 
-        msg_response = await client.room_messages(room_id=room_id, start="", limit=limit)
+        msg_response = await client.room_messages(
+            room_id=room_id, start="", limit=limit
+        )
 
         if isinstance(msg_response, RoomMessagesResponse):
             for event in msg_response.chunk:
@@ -244,35 +244,49 @@ async def read_messages_e2ee(
         # Request keys for undecryptable messages
         if request_keys and undecryptable_events:
             if debug:
-                print(f"\nRequesting keys for {len(undecryptable_events)} undecryptable messages...", file=sys.stderr)
+                print(
+                    f"\nRequesting keys for {len(undecryptable_events)} undecryptable messages...",
+                    file=sys.stderr,
+                )
 
             keys_requested = set()
             for event in undecryptable_events:
-                if hasattr(event, 'session_id') and event.session_id not in keys_requested:
+                if (
+                    hasattr(event, "session_id")
+                    and event.session_id not in keys_requested
+                ):
                     keys_requested.add(event.session_id)
                     try:
                         await client.request_room_key(event)
                         if debug:
-                            print(f"  Requested key for session {event.session_id[:16]}...", file=sys.stderr)
+                            print(
+                                f"  Requested key for session {event.session_id[:16]}...",
+                                file=sys.stderr,
+                            )
                     except Exception as e:
                         if debug:
                             print(f"  Failed to request key: {e}", file=sys.stderr)
 
             if keys_requested:
                 if debug:
-                    print(f"\nWaiting for {len(keys_requested)} key(s) to arrive...", file=sys.stderr)
+                    print(
+                        f"\nWaiting for {len(keys_requested)} key(s) to arrive...",
+                        file=sys.stderr,
+                    )
 
                 for i in range(6):
                     await asyncio.sleep(5)
                     await client.sync(timeout=5000)
                     if debug:
-                        print(f"  Sync {i+1}/6...", file=sys.stderr)
+                        print(f"  Sync {i + 1}/6...", file=sys.stderr)
 
                 if debug:
                     print("\nRetrying decryption...", file=sys.stderr)
 
                 messages = []
-                msg_response = await client.room_messages(room_id=room_id, start="", limit=limit)
+                msg_response = await client.room_messages(
+                    room_id=room_id, start="", limit=limit
+                )
 
                 if isinstance(msg_response, RoomMessagesResponse):
                     decrypted_count = 0
@@ -287,7 +301,10 @@ async def read_messages_e2ee(
                                 decrypted_count += 1
 
                     if debug:
-                        print(f"  Decrypted: {decrypted_count}, Still encrypted: {still_encrypted}", file=sys.stderr)
+                        print(
+                            f"  Decrypted: {decrypted_count}, Still encrypted: {still_encrypted}",
+                            file=sys.stderr,
+                        )
 
         return messages
 
@@ -298,11 +315,21 @@ async def read_messages_e2ee(
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Read messages from an E2EE Matrix room")
-    parser.add_argument("room", help="Room alias (#room:server), room ID (!id:server), or room name")
-    parser.add_argument("--limit", "-l", type=int, default=10, help="Number of messages (default: 10)")
-    parser.add_argument("--request-keys", "-k", action="store_true",
-                        help="Request keys from other devices for undecryptable messages")
+    parser = argparse.ArgumentParser(
+        description="Read messages from an E2EE Matrix room"
+    )
+    parser.add_argument(
+        "room", help="Room alias (#room:server), room ID (!id:server), or room name"
+    )
+    parser.add_argument(
+        "--limit", "-l", type=int, default=10, help="Number of messages (default: 10)"
+    )
+    parser.add_argument(
+        "--request-keys",
+        "-k",
+        action="store_true",
+        help="Request keys from other devices for undecryptable messages",
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
 
@@ -317,6 +344,7 @@ def main():
     # Suppress noisy matrix-nio crypto/sync warnings unless --debug
     if not args.debug:
         import logging
+
         for name in ("nio", "nio.crypto", "nio.responses", "peewee"):
             logging.getLogger(name).setLevel(logging.ERROR)
 
@@ -334,7 +362,7 @@ def main():
         else:
             error_msg = f"Could not find room '{room_input}'"
             if matches:
-                error_msg += f". Multiple matches found:\n"
+                error_msg += ". Multiple matches found:\n"
                 for m in matches:
                     alias_str = f" ({m['alias']})" if m.get("alias") else ""
                     error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
@@ -343,13 +371,15 @@ def main():
             print(f"Error: {error_msg}", file=sys.stderr)
             sys.exit(1)
 
-    messages = asyncio.run(read_messages_e2ee(
-        config=config,
-        room=room,
-        limit=args.limit,
-        request_keys=args.request_keys,
-        debug=args.debug,
-    ))
+    messages = asyncio.run(
+        read_messages_e2ee(
+            config=config,
+            room=room,
+            limit=args.limit,
+            request_keys=args.request_keys,
+            debug=args.debug,
+        )
+    )
 
     if messages and "error" in messages[0]:
         print(f"Error: {messages[0]['error']}", file=sys.stderr)

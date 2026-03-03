@@ -13,7 +13,7 @@ def clean_message(message: str) -> str:
     when using double quotes. This removes those artifacts.
     """
     # Remove backslash before ! (bash history expansion artifact)
-    return message.replace('\\!', '!')
+    return message.replace("\\!", "!")
 
 
 def format_timestamp(ts: int) -> str:

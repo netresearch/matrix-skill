@@ -18,7 +18,6 @@ import base64
 import json
 import sys
 import os
-import struct
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lib import load_config, get_store_path, load_credentials
@@ -44,7 +43,7 @@ def decode_base58(s: str) -> bytes:
     for char in s:
         result = result * 58 + BASE58_ALPHABET.index(char)
     byte_length = (result.bit_length() + 7) // 8
-    return result.to_bytes(byte_length, 'big')
+    return result.to_bytes(byte_length, "big")
 
 
 def decode_recovery_key(recovery_key: str) -> bytes:
@@ -52,7 +51,7 @@ def decode_recovery_key(recovery_key: str) -> bytes:
     decoded = decode_base58(recovery_key)
 
     # Check prefix 0x8B 0x01
-    if decoded[:2] != b'\x8b\x01':
+    if decoded[:2] != b"\x8b\x01":
         raise ValueError(f"Invalid recovery key prefix: {decoded[:2].hex()}")
 
     # Remove prefix (2 bytes) and parity byte (1 byte at end)
@@ -88,7 +87,7 @@ def derive_key_from_passphrase(passphrase: str, key_info: dict) -> bytes:
         iterations=iterations,
     )
 
-    return kdf.derive(passphrase.encode('utf-8'))
+    return kdf.derive(passphrase.encode("utf-8"))
 
 
 def decode_unpadded_base64(data: str) -> bytes:
@@ -104,8 +103,8 @@ def derive_ssss_keys(secret: bytes) -> tuple[bytes, bytes]:
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
         length=64,
-        salt=b'\x00' * 32,
-        info=b'',
+        salt=b"\x00" * 32,
+        info=b"",
     )
     derived = hkdf.derive(secret)
     return derived[:32], derived[32:]
@@ -138,8 +137,8 @@ def derive_backup_keys(backup_key: bytes) -> tuple[bytes, bytes]:
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
         length=64,
-        salt=b'\x00' * 32,
-        info=b'',
+        salt=b"\x00" * 32,
+        info=b"",
     )
     derived = hkdf.derive(backup_key)
     return derived[:32], derived[32:]
@@ -167,6 +166,7 @@ def decrypt_backup_session(encrypted: dict, backup_key: bytes) -> dict:
     # ECDH: shared_secret = backup_private_key * ephemeral_public
     private_key = X25519PrivateKey.from_private_bytes(backup_key)
     from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PublicKey
+
     ephemeral_public = X25519PublicKey.from_public_bytes(ephemeral)
     shared_secret = private_key.exchange(ephemeral_public)
 
@@ -174,8 +174,8 @@ def decrypt_backup_session(encrypted: dict, backup_key: bytes) -> dict:
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
         length=80,  # 32 AES + 32 HMAC + 16 IV (but IV comes from first 16 bytes separately)
-        salt=b'',
-        info=b'',
+        salt=b"",
+        info=b"",
     )
     derived = hkdf.derive(shared_secret)
 
@@ -190,7 +190,7 @@ def decrypt_backup_session(encrypted: dict, backup_key: bytes) -> dict:
     h.update(ciphertext)
     expected_mac = h.finalize()
 
-    if mac != expected_mac[:len(mac)]:  # MAC might be truncated
+    if mac != expected_mac[: len(mac)]:  # MAC might be truncated
         raise ValueError("Session MAC verification failed")
 
     # The first 16 bytes of ciphertext are the IV
@@ -214,7 +214,9 @@ async def main():
     parser.add_argument("--recovery-key", help="Recovery key (base58 format)")
     parser.add_argument("--passphrase", help="Recovery passphrase")
     parser.add_argument("--status", action="store_true", help="Show backup status")
-    parser.add_argument("--import-keys", action="store_true", help="Import keys after decryption")
+    parser.add_argument(
+        "--import-keys", action="store_true", help="Import keys after decryption"
+    )
     args = parser.parse_args()
 
     config = load_config(require_user_id=True)
@@ -239,7 +241,7 @@ async def main():
                 return 1
             backup_info = await resp.json()
 
-        print(f"=== Key Backup Info ===")
+        print("=== Key Backup Info ===")
         print(f"Version: {backup_info.get('version')}")
         print(f"Algorithm: {backup_info.get('algorithm')}")
         auth_data = backup_info.get("auth_data", {})
@@ -254,8 +256,7 @@ async def main():
                     keys_data = await resp.json()
                     rooms = keys_data.get("rooms", {})
                     session_count = sum(
-                        len(sessions.get("sessions", {}))
-                        for sessions in rooms.values()
+                        len(sessions.get("sessions", {})) for sessions in rooms.values()
                     )
                     print(f"Rooms with backups: {len(rooms)}")
                     print(f"Total sessions: {session_count}")
@@ -285,7 +286,7 @@ async def main():
             key_info = await resp.json()
 
         # Derive SSSS key
-        print(f"\n=== Deriving SSSS Key ===")
+        print("\n=== Deriving SSSS Key ===")
         if args.recovery_key:
             ssss_key = decode_recovery_key(args.recovery_key)
             print("Using recovery key")
@@ -333,11 +334,15 @@ async def main():
         # Save backup key for future use
         backup_key_file = store_path / "backup_key.json"
         with open(backup_key_file, "w") as f:
-            json.dump({
-                "backup_key": base64.b64encode(backup_key).decode(),
-                "version": backup_info.get("version"),
-                "algorithm": backup_info.get("algorithm"),
-            }, f, indent=2)
+            json.dump(
+                {
+                    "backup_key": base64.b64encode(backup_key).decode(),
+                    "version": backup_info.get("version"),
+                    "algorithm": backup_info.get("algorithm"),
+                },
+                f,
+                indent=2,
+            )
         print(f"\n✅ Backup key saved to: {backup_key_file}")
 
         if not args.import_keys:
@@ -347,7 +352,9 @@ async def main():
         # Fetch and import keys
         print("\n=== Fetching Keys from Backup ===")
         version = backup_info.get("version")
-        url = f"{config['homeserver']}/_matrix/client/v3/room_keys/keys?version={version}"
+        url = (
+            f"{config['homeserver']}/_matrix/client/v3/room_keys/keys?version={version}"
+        )
         async with session.get(url, headers=headers) as resp:
             if resp.status != 200:
                 print(f"Failed to fetch keys: {resp.status}")
@@ -358,7 +365,9 @@ async def main():
         print(f"Found {len(rooms)} rooms with backups")
 
         # Connect to nio client for importing
-        client_config = AsyncClientConfig(store_sync_tokens=True, encryption_enabled=True)
+        client_config = AsyncClientConfig(
+            store_sync_tokens=True, encryption_enabled=True
+        )
         client = AsyncClient(
             homeserver=config["homeserver"],
             user=config["user_id"],
@@ -368,7 +377,9 @@ async def main():
         )
 
         try:
-            client.restore_login(config["user_id"], creds["device_id"], creds["access_token"])
+            client.restore_login(
+                config["user_id"], creds["device_id"], creds["access_token"]
+            )
             if client.store:
                 client.load_store()
 
@@ -381,10 +392,10 @@ async def main():
                 sessions = room_data.get("sessions", {})
                 for session_id, session_data in sessions.items():
                     try:
-                        decrypted = decrypt_backup_session(session_data, backup_key)
+                        decrypt_backup_session(session_data, backup_key)
 
                         # Import the session
-                        if hasattr(client.olm, 'import_inbound_group_session'):
+                        if hasattr(client.olm, "import_inbound_group_session"):
                             # This would need the session export format
                             pass
 
@@ -397,7 +408,7 @@ async def main():
                         if failed <= 5:
                             print(f"  Failed to decrypt session {session_id[:20]}: {e}")
 
-            print(f"\n=== Import Complete ===")
+            print("\n=== Import Complete ===")
             print(f"Imported: {imported}")
             print(f"Failed: {failed}")
 

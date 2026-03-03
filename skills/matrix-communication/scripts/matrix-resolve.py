@@ -20,13 +20,15 @@ import os
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import load_config, matrix_request, resolve_room_alias
+from _lib import load_config, resolve_room_alias
 
 
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Resolve a Matrix room alias to room ID")
+    parser = argparse.ArgumentParser(
+        description="Resolve a Matrix room alias to room ID"
+    )
     parser.add_argument("alias", help="Room alias (e.g., #myroom:matrix.org)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
 

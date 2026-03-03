@@ -127,6 +127,7 @@ async def send_message_e2ee(
         access_token = config["access_token"]
         # Get device_id from server
         from nio import WhoamiResponse
+
         temp_client = AsyncClient(config["homeserver"], config["user_id"])
         temp_client.access_token = access_token
         whoami = await temp_client.whoami()
@@ -168,7 +169,7 @@ async def send_message_e2ee(
             access_token=access_token,
         )
         if debug:
-            print(f"Session restored", file=sys.stderr)
+            print("Session restored", file=sys.stderr)
 
         if debug:
             print(f"Store initialized: {client.store is not None}", file=sys.stderr)
@@ -178,17 +179,21 @@ async def send_message_e2ee(
         if client.store:
             client.load_store()
             if debug:
-                print(f"Keys loaded. Olm account shared: {client.olm_account_shared}", file=sys.stderr)
+                print(
+                    f"Keys loaded. Olm account shared: {client.olm_account_shared}",
+                    file=sys.stderr,
+                )
 
         # Upload device keys if needed
         if client.should_upload_keys:
             if debug:
                 print("Uploading device keys...", file=sys.stderr)
             from nio import KeysUploadResponse
+
             keys_response = await client.keys_upload()
             if isinstance(keys_response, KeysUploadResponse):
                 if debug:
-                    print(f"Keys uploaded successfully", file=sys.stderr)
+                    print("Keys uploaded successfully", file=sys.stderr)
             else:
                 if debug:
                     print(f"Keys upload response: {keys_response}", file=sys.stderr)
@@ -209,7 +214,10 @@ async def send_message_e2ee(
             print("Syncing to fetch device keys...", file=sys.stderr)
 
         sync_response = await client.sync(timeout=30000, full_state=True)
-        if hasattr(sync_response, "transport_response") and sync_response.transport_response.status != 200:
+        if (
+            hasattr(sync_response, "transport_response")
+            and sync_response.transport_response.status != 200
+        ):
             return {"error": f"Sync failed: {sync_response}"}
 
         if debug:
@@ -229,43 +237,59 @@ async def send_message_e2ee(
                 if debug:
                     print("Querying device keys...", file=sys.stderr)
                 from nio import KeysQueryResponse
+
                 keys_query_response = await client.keys_query()
                 if debug:
                     if isinstance(keys_query_response, KeysQueryResponse):
-                        print(f"Keys query successful", file=sys.stderr)
+                        print("Keys query successful", file=sys.stderr)
                     else:
-                        print(f"Keys query response: {keys_query_response}", file=sys.stderr)
+                        print(
+                            f"Keys query response: {keys_query_response}",
+                            file=sys.stderr,
+                        )
 
             # Claim one-time keys for devices we don't have sessions with
             try:
                 users_to_claim = client.get_users_for_key_claiming()
                 if users_to_claim:
                     if debug:
-                        print(f"Claiming keys for {len(users_to_claim)} users...", file=sys.stderr)
+                        print(
+                            f"Claiming keys for {len(users_to_claim)} users...",
+                            file=sys.stderr,
+                        )
                     from nio import KeysClaimResponse
+
                     claim_response = await client.keys_claim(users_to_claim)
                     if debug:
                         if isinstance(claim_response, KeysClaimResponse):
-                            print(f"Keys claimed successfully", file=sys.stderr)
+                            print("Keys claimed successfully", file=sys.stderr)
                         else:
-                            print(f"Keys claim response: {claim_response}", file=sys.stderr)
+                            print(
+                                f"Keys claim response: {claim_response}",
+                                file=sys.stderr,
+                            )
             except Exception as e:
                 if debug:
                     print(f"Key claiming skipped: {e}", file=sys.stderr)
 
             # Trust all devices in the room (TOFU - Trust On First Use)
             if debug:
-                print(f"Room is encrypted. Trusting devices...", file=sys.stderr)
+                print("Room is encrypted. Trusting devices...", file=sys.stderr)
             for member_id in room_obj.users:
                 try:
-                    for dev_id, device in client.device_store.active_user_devices(member_id):
+                    for dev_id, device in client.device_store.active_user_devices(
+                        member_id
+                    ):
                         if not device.verified:
                             client.verify_device(device)
                             if debug:
                                 print(f"Trusted: {member_id}/{dev_id}", file=sys.stderr)
                 except Exception as e:
                     if debug:
-                        print(f"Could not verify devices for {member_id}: {e}", file=sys.stderr)
+                        print(
+                            f"Could not verify devices for {member_id}: {e}",
+                            file=sys.stderr,
+                        )
 
         # Build message content with HTML formatting
         content = {
@@ -288,9 +312,7 @@ async def send_message_e2ee(
                 "m.in_reply_to": {"event_id": reply_id or thread_id},
             }
         elif reply_id:
-            content["m.relates_to"] = {
-                "m.in_reply_to": {"event_id": reply_id}
-            }
+            content["m.relates_to"] = {"m.in_reply_to": {"event_id": reply_id}}
 
         # Send message (ignore unverified devices for TOFU model)
         response = await client.room_send(
@@ -317,14 +339,18 @@ def main():
     )
     parser.add_argument("room", help="Room ID (!id), alias (#room:server), or name")
     parser.add_argument("message", help="Message content")
-    parser.add_argument("--emote", action="store_true",
-                        help="Send as /me action (m.emote msgtype)")
-    parser.add_argument("--thread", metavar="EVENT_ID",
-                        help="Reply in thread (event ID of thread root)")
-    parser.add_argument("--reply", metavar="EVENT_ID",
-                        help="Reply to message (event ID)")
-    parser.add_argument("--no-prefix", action="store_true",
-                        help="Don't add bot_prefix from config")
+    parser.add_argument(
+        "--emote", action="store_true", help="Send as /me action (m.emote msgtype)"
+    )
+    parser.add_argument(
+        "--thread", metavar="EVENT_ID", help="Reply in thread (event ID of thread root)"
+    )
+    parser.add_argument(
+        "--reply", metavar="EVENT_ID", help="Reply to message (event ID)"
+    )
+    parser.add_argument(
+        "--no-prefix", action="store_true", help="Don't add bot_prefix from config"
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
@@ -340,6 +366,7 @@ def main():
     # Suppress noisy matrix-nio crypto/sync warnings unless --debug
     if not args.debug:
         import logging
+
         for name in ("nio", "nio.crypto", "nio.responses", "peewee"):
             logging.getLogger(name).setLevel(logging.ERROR)
 
@@ -362,7 +389,10 @@ def main():
             # Missing server part, treat as name
             alias_name = room_input.lstrip("#")
             if args.debug:
-                print(f"Alias missing server, trying name lookup for '{alias_name}'", file=sys.stderr)
+                print(
+                    f"Alias missing server, trying name lookup for '{alias_name}'",
+                    file=sys.stderr,
+                )
             found_id, matches = find_room_by_name(config, alias_name)
             if found_id:
                 room = found_id
@@ -382,7 +412,7 @@ def main():
         else:
             error_msg = f"Could not find room '{room_input}'"
             if matches:
-                error_msg += f". Multiple matches found:\n"
+                error_msg += ". Multiple matches found:\n"
                 for m in matches:
                     alias_str = f" ({m['alias']})" if m.get("alias") else ""
                     error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
@@ -399,15 +429,17 @@ def main():
         message = add_bot_prefix(message, config["bot_prefix"])
 
     # Run async send
-    result = asyncio.run(send_message_e2ee(
-        config=config,
-        room=room,
-        message=message,
-        emote=args.emote,
-        thread_id=args.thread,
-        reply_id=args.reply,
-        debug=args.debug,
-    ))
+    result = asyncio.run(
+        send_message_e2ee(
+            config=config,
+            room=room,
+            message=message,
+            emote=args.emote,
+            thread_id=args.thread,
+            reply_id=args.reply,
+            debug=args.debug,
+        )
+    )
 
     if "error" in result:
         if args.json:

@@ -37,15 +37,14 @@ from _lib import (
 def read_messages(config: dict, room_id: str, limit: int = 10) -> list:
     """Read recent messages from a room using sync."""
     # Use sync with a filter for this specific room
-    filter_json = json.dumps({
-        "room": {
-            "rooms": [room_id],
-            "timeline": {"limit": limit}
-        }
-    })
-    encoded_filter = urllib.parse.quote(filter_json, safe='')
+    filter_json = json.dumps(
+        {"room": {"rooms": [room_id], "timeline": {"limit": limit}}}
+    )
+    encoded_filter = urllib.parse.quote(filter_json, safe="")
 
-    result = matrix_request(config, "GET", f"/sync?timeout=0&full_state=true&filter={encoded_filter}")
+    result = matrix_request(
+        config, "GET", f"/sync?timeout=0&full_state=true&filter={encoded_filter}"
+    )
 
     if "error" in result:
         return []
@@ -57,21 +56,25 @@ def read_messages(config: dict, room_id: str, limit: int = 10) -> list:
     for event in events:
         if event.get("type") == "m.room.message":
             content = event.get("content", {})
-            messages.append({
-                "sender": event.get("sender", "unknown"),
-                "body": content.get("body", ""),
-                "msgtype": content.get("msgtype", "m.text"),
-                "timestamp": event.get("origin_server_ts", 0),
-                "event_id": event.get("event_id"),
-            })
+            messages.append(
+                {
+                    "sender": event.get("sender", "unknown"),
+                    "body": content.get("body", ""),
+                    "msgtype": content.get("msgtype", "m.text"),
+                    "timestamp": event.get("origin_server_ts", 0),
+                    "event_id": event.get("event_id"),
+                }
+            )
         elif event.get("type") == "m.room.encrypted":
-            messages.append({
-                "sender": event.get("sender", "unknown"),
-                "body": "[encrypted]",
-                "msgtype": "m.room.encrypted",
-                "timestamp": event.get("origin_server_ts", 0),
-                "event_id": event.get("event_id"),
-            })
+            messages.append(
+                {
+                    "sender": event.get("sender", "unknown"),
+                    "body": "[encrypted]",
+                    "msgtype": "m.room.encrypted",
+                    "timestamp": event.get("origin_server_ts", 0),
+                    "event_id": event.get("event_id"),
+                }
+            )
 
     return messages
 
@@ -79,9 +82,15 @@ def read_messages(config: dict, room_id: str, limit: int = 10) -> list:
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Read recent messages from a Matrix room")
-    parser.add_argument("room", help="Room alias (#room:server), room ID (!id:server), or room name")
-    parser.add_argument("--limit", "-l", type=int, default=10, help="Number of messages (default: 10)")
+    parser = argparse.ArgumentParser(
+        description="Read recent messages from a Matrix room"
+    )
+    parser.add_argument(
+        "room", help="Room alias (#room:server), room ID (!id:server), or room name"
+    )
+    parser.add_argument(
+        "--limit", "-l", type=int, default=10, help="Number of messages (default: 10)"
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     args = parser.parse_args()
@@ -110,7 +119,7 @@ def main():
         else:
             error_msg = f"Could not find room '{room_input}'"
             if matches:
-                error_msg += f". Multiple matches found:\n"
+                error_msg += ". Multiple matches found:\n"
                 for m in matches:
                     alias_str = f" ({m['alias']})" if m.get("alias") else ""
                     error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"

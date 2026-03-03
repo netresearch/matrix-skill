@@ -90,7 +90,9 @@ async def setup_device(config: dict, password: str) -> dict:
     # Extract localpart from user_id for login (some servers require this)
     # @user:server -> user
     user_id = config["user_id"]
-    login_user = user_id.split(":")[0].lstrip("@") if user_id.startswith("@") else user_id
+    login_user = (
+        user_id.split(":")[0].lstrip("@") if user_id.startswith("@") else user_id
+    )
 
     client = AsyncClient(
         homeserver=config["homeserver"],
@@ -102,6 +104,7 @@ async def setup_device(config: dict, password: str) -> dict:
     try:
         # Login to create new device with hostname suffix
         import socket
+
         hostname = socket.gethostname()
         device_name = f"Matrix Skill E2EE @ {hostname}"
 
@@ -148,12 +151,14 @@ def show_status(config: dict):
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Set up E2EE device for Matrix Skill"
+    parser = argparse.ArgumentParser(description="Set up E2EE device for Matrix Skill")
+    parser.add_argument(
+        "password", nargs="?", help="Matrix account password (used once, not stored)"
     )
-    parser.add_argument("password", nargs="?", help="Matrix account password (used once, not stored)")
     parser.add_argument("--status", action="store_true", help="Check E2EE setup status")
-    parser.add_argument("--logout", action="store_true", help="Remove stored device credentials")
+    parser.add_argument(
+        "--logout", action="store_true", help="Remove stored device credentials"
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     args = parser.parse_args()
@@ -166,6 +171,7 @@ def main():
 
     # Suppress noisy matrix-nio crypto/sync warnings
     import logging
+
     for name in ("nio", "nio.crypto", "nio.responses", "peewee"):
         logging.getLogger(name).setLevel(logging.ERROR)
 
@@ -175,7 +181,11 @@ def main():
         if args.json:
             creds = load_credentials()
             if creds and creds.get("user_id") == config["user_id"]:
-                print(json.dumps({"status": "configured", "device_id": creds["device_id"]}))
+                print(
+                    json.dumps(
+                        {"status": "configured", "device_id": creds["device_id"]}
+                    )
+                )
             else:
                 print(json.dumps({"status": "not_configured"}))
         else:
@@ -203,7 +213,11 @@ def main():
     creds = load_credentials()
     if creds and creds.get("user_id") == config["user_id"]:
         if args.json:
-            print(json.dumps({"status": "already_configured", "device_id": creds["device_id"]}))
+            print(
+                json.dumps(
+                    {"status": "already_configured", "device_id": creds["device_id"]}
+                )
+            )
         else:
             print("E2EE already set up!")
             print(f"Device: {creds['device_id']}")

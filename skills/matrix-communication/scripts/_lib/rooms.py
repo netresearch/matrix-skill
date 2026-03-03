@@ -20,11 +20,13 @@ def resolve_room_alias(config: dict, alias: str) -> str:
     Raises:
         ValueError if alias cannot be resolved
     """
-    encoded_alias = urllib.parse.quote(alias, safe='')
+    encoded_alias = urllib.parse.quote(alias, safe="")
     result = matrix_request(config, "GET", f"/directory/room/{encoded_alias}")
     if "room_id" in result:
         return result["room_id"]
-    raise ValueError(f"Could not resolve room alias: {result.get('error', 'Unknown error')}")
+    raise ValueError(
+        f"Could not resolve room alias: {result.get('error', 'Unknown error')}"
+    )
 
 
 def get_room_info(config: dict, room_id: str) -> dict:
@@ -43,7 +45,9 @@ def get_room_info(config: dict, room_id: str) -> dict:
     if "name" in result:
         info["name"] = result["name"]
 
-    result = matrix_request(config, "GET", f"/rooms/{room_id}/state/m.room.canonical_alias")
+    result = matrix_request(
+        config, "GET", f"/rooms/{room_id}/state/m.room.canonical_alias"
+    )
     if "alias" in result:
         info["alias"] = result["alias"]
 
@@ -67,11 +71,7 @@ def list_joined_rooms(config: dict) -> list:
     for room_id in result.get("joined_rooms", []):
         info = get_room_info(config, room_id)
         display_name = info["name"] or info["alias"] or room_id
-        rooms.append({
-            "room_id": room_id,
-            "name": display_name,
-            "alias": info["alias"]
-        })
+        rooms.append({"room_id": room_id, "name": display_name, "alias": info["alias"]})
 
     return rooms
 
@@ -122,8 +122,9 @@ def find_room_by_name(config: dict, search_term: str) -> tuple[str | None, list]
         # Room has no alias — check if other rooms have names containing
         # the search term, which suggests the user may want a different room
         alternatives = [
-            r for r in rooms if r not in name_matches
-            and search_lower in r["name"].lower()
+            r
+            for r in rooms
+            if r not in name_matches and search_lower in r["name"].lower()
         ]
         if alternatives:
             return None, name_matches + alternatives
