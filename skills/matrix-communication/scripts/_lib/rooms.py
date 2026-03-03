@@ -79,11 +79,14 @@ def list_joined_rooms(config: dict) -> list:
 def find_room_by_name(config: dict, search_term: str) -> tuple[str | None, list]:
     """Find a room by name or alias (case-insensitive).
 
-    Supports:
-    - Exact match on room name
-    - Exact match on full alias (#room:server)
-    - Exact match on alias name without server (e.g., "agent-work" matches "#agent-work:server")
-    - Partial match on name or alias
+    Match priority:
+    1. Exact alias match (#room:server)
+    2. Exact alias name match (without server part, e.g. "agent-work")
+    3. Exact room name match (rooms with aliases preferred)
+    4. Single partial match on name or alias
+
+    When an exact name match has no alias but other rooms also have names
+    containing the search term, all candidates are returned for disambiguation.
 
     Args:
         config: Matrix config with homeserver and access_token
@@ -97,17 +100,36 @@ def find_room_by_name(config: dict, search_term: str) -> tuple[str | None, list]
     rooms = list_joined_rooms(config)
     search_lower = search_term.lower()
 
-    # Try exact match first
+    # Try exact alias match (most specific)
     for room in rooms:
-        if room["name"].lower() == search_lower:
-            return room["room_id"], [room]
         if room.get("alias") and room["alias"].lower() == search_lower:
             return room["room_id"], [room]
-        # Match alias without server part (e.g., "agent-work" matches "#agent-work:server")
+
+    # Try exact alias name match (without server part)
+    for room in rooms:
         if room.get("alias"):
             alias_name = room["alias"].split(":")[0].lstrip("#")
             if alias_name.lower() == search_lower:
                 return room["room_id"], [room]
+
+    # Try exact name match
+    name_matches = [r for r in rooms if r["name"].lower() == search_lower]
+    if len(name_matches) == 1:
+        room = name_matches[0]
+        if room.get("alias"):
+            # Room has an alias — well-identified, return directly
+            return room["room_id"], name_matches
+        # Room has no alias — check if other rooms have names containing
+        # the search term, which suggests the user may want a different room
+        alternatives = [
+            r for r in rooms if r not in name_matches
+            and search_lower in r["name"].lower()
+        ]
+        if alternatives:
+            return None, name_matches + alternatives
+        return room["room_id"], name_matches
+    if len(name_matches) > 1:
+        return None, name_matches
 
     # Try partial match
     matches = []

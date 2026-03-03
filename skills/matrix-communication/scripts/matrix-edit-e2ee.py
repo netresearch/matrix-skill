@@ -24,6 +24,7 @@ Options:
 
 import asyncio
 import json
+import socket
 import sys
 import os
 
@@ -175,6 +176,18 @@ def main():
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
     args = parser.parse_args()
+
+    # Prefer IPv4 DNS resolution (workaround for WSL2 IPv6 connectivity issues)
+    _orig_getaddrinfo = socket.getaddrinfo
+    socket.getaddrinfo = lambda *a, **kw: sorted(
+        _orig_getaddrinfo(*a, **kw), key=lambda r: r[0] != socket.AF_INET
+    )
+
+    # Suppress noisy matrix-nio crypto/sync warnings unless --debug
+    if not args.debug:
+        import logging
+        for name in ("nio", "nio.crypto", "nio.responses", "peewee"):
+            logging.getLogger(name).setLevel(logging.ERROR)
 
     config = load_config(require_user_id=True)
     message = clean_message(args.message)
