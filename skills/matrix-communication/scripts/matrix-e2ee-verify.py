@@ -395,7 +395,7 @@ async def run_verification(
         # Try to find device in store
         user_id = config["user_id"]
         if user_id in client.device_store:
-            for dev_id, device in client.device_store[user_id].items():
+            for dev_id, _device in client.device_store[user_id].items():
                 if dev_id == request_device:
                     break
 
