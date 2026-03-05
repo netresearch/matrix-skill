@@ -39,6 +39,12 @@ uv run skills/matrix-communication/scripts/matrix-send-e2ee.py room-name "Update
 # Emote message (like /me)
 uv run skills/matrix-communication/scripts/matrix-send-e2ee.py room-name "is deploying" --emote
 
+# Fetch missing keys from other devices
+uv run skills/matrix-communication/scripts/matrix-fetch-keys.py room-name --sync-time 60
+
+# Restore keys from server backup (decrypt old messages)
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "EsTj ..." --import-keys
+
 # Health check / auto-install deps
 python3 skills/matrix-communication/scripts/matrix-doctor.py --install
 ```
@@ -75,6 +81,23 @@ File: `~/.config/matrix/config.json`
 | `user_id` | Yes | Full Matrix user ID (`@user:server`) |
 | `bot_prefix` | No | Prefix for messages (e.g., bot emoji) |
 | `access_token` | No | Auto-created by E2EE setup |
+
+## Reading Room History
+
+- **First run is slow** (~5-10s) due to key sync
+- **Old messages** show `[Unable to decrypt]` until keys are recovered (see key backup above)
+- Use `--json` for programmatic analysis (reactions, polls, attendance)
+- Reactions appear as separate `m.reaction` events — see `references/messaging-guide.md`
+
+## E2EE Troubleshooting
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| `[Unable to decrypt]` | Missing session keys | Restore from backup: `matrix-key-backup.py --recovery-key "..." --import-keys` |
+| Script hangs silently | stdout buffering | Already fixed — scripts use `line_buffering=True` |
+| Verification not completing | No `--listen` mode | Run verify with `--timeout 180`, confirm in Element |
+| Element X won't verify | Cross-signing compat | Use Element Desktop/Android instead of Element X |
+| `MAC verification failed` | Wrong recovery key/passphrase | Double-check recovery key from Element settings |
 
 ## Error Handling
 

@@ -109,15 +109,30 @@ grep -q "VERIFICATION SUCCESSFUL" /tmp/verify_log.txt && echo "Verified!"
 # Read recent encrypted messages
 uv run skills/matrix-communication/scripts/matrix-read-e2ee.py '#room:server' --limit 10
 
-# JSON output
+# JSON output for programmatic analysis
 uv run skills/matrix-communication/scripts/matrix-read-e2ee.py '#room:server' --json
 ```
 
-**Note:** Messages sent before your device was created show as `[Unable to decrypt]` -- this is normal E2EE behavior.
+**First run is slow** (~5-10s) — the client needs to sync keys with the server.
+
+### Understanding `[Unable to decrypt]`
+
+Messages showing `[Unable to decrypt]` mean your device lacks the Megolm session keys for those messages. This is **not** permanent — keys can be recovered:
+
+| Situation | Solution |
+|-----------|----------|
+| Messages sent before device was created | Restore from server-side key backup |
+| Messages from before verification | Verify device, then request key forwarding |
+| No other devices online | Use key backup with recovery key/passphrase |
+
+**Decision tree:**
+1. Have you verified your device? → If no, verify first (see above)
+2. Are other verified devices online? → Try `matrix-fetch-keys.py` (Method 1)
+3. Do you have a recovery key/passphrase? → Try `matrix-key-backup.py` (Method 2)
 
 ## Fetching Missing Keys
 
-### Method 1: Request from Other Devices (Recommended)
+### Method 1: Request from Other Devices
 
 After device verification, other devices can forward keys automatically:
 
@@ -131,28 +146,61 @@ uv run skills/matrix-communication/scripts/matrix-fetch-keys.py IT --limit 200 -
 
 Requirements: device must be verified, other verified devices must be online.
 
-### Method 2: Restore from Server Backup
+### Method 2: Restore from Server Backup (Recommended for old messages)
 
-If key forwarding doesn't work (no other devices online):
+The `matrix-key-backup.py` script handles the full workflow: SSSS decryption → backup key derivation → session key decryption → import into local store.
 
 ```bash
 # Check backup status
 uv run skills/matrix-communication/scripts/matrix-key-backup.py --status
 
-# Restore using recovery key
-uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "EsTj qRGp YB4C ..."
+# Restore using recovery key AND import into local store
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "EsTj qRGp YB4C ..." --import-keys
 
-# Restore using passphrase
-uv run skills/matrix-communication/scripts/matrix-key-backup.py --passphrase "your recovery passphrase"
+# Restore using passphrase AND import
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --passphrase "your recovery passphrase" --import-keys
 ```
 
-Find your recovery key in Element: Settings > Security & Privacy > Secure Backup > "Show Recovery Key"
+**Important:** The `--import-keys` flag is required to actually import decrypted session keys into your local store. Without it, keys are only displayed but not saved.
+
+Find your recovery key in Element: Settings → Security & Privacy → Secure Backup → "Show Recovery Key"
+
+**Note:** matrix-nio does not natively support server-side key backup (see [matrix-nio#218](https://github.com/matrix-nio/matrix-nio/issues/218)). The `matrix-key-backup.py` script implements this manually using the Matrix API directly.
+
+### Verification with `--listen` Mode
+
+The verification script supports waiting for incoming verification requests:
+
+```bash
+# Listen for incoming verification requests (e.g., from Element)
+uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 180
+
+# The script will:
+# 1. Sync with server
+# 2. Auto-detect Element devices
+# 3. Initiate or accept verification
+# 4. Display emoji for comparison
+# 5. Write emojis to /tmp/matrix_verification_emojis.txt for agent polling
+```
+
+**Element X compatibility:** Element X uses different verification flows that may not be fully compatible. Use Element Desktop or Element Android for verification.
+
+## Troubleshooting
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `[Unable to decrypt]` | Missing session keys | Restore from backup with `--import-keys` |
+| `MAC verification failed` | Wrong recovery key or passphrase | Verify recovery key from Element settings |
+| `PkDecryption` errors | libolm version mismatch | Update libolm: `apt install libolm-dev` |
+| Script hangs silently | stdout buffering in non-interactive context | Fixed in scripts (line_buffering=True) |
+| Verification times out | No compatible device responding | Use Element Desktop, not Element X |
+| `signature verification failed` | Reusing Element's device | Use dedicated device via `matrix-e2ee-setup.py` |
 
 ## Limitations
 
-- **Old messages**: Can't decrypt without key backup restoration
-- **First sync**: Initial run is slow due to key exchange
+- **First sync**: Initial run is slow (~5-10s) due to key exchange
 - **Device trust**: Auto-trusts devices (TOFU model)
 - **Setup required**: First use requires user's Matrix password (one-time only)
-- **Verification**: Experimental -- cross-signing/room-based verification not fully supported
-- **Key backup**: Requires recovery key/passphrase (stored in Element settings)
+- **Verification**: Cross-signing/room-based verification not fully supported by matrix-nio
+- **Key backup**: Requires recovery key or passphrase (found in Element settings)
+- **matrix-nio limitation**: No native server-side key backup support — `matrix-key-backup.py` works around this via direct API calls
