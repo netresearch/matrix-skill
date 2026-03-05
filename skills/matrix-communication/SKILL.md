@@ -61,7 +61,7 @@ Always prefer E2EE scripts (`*-e2ee.py`) -- most Matrix rooms are encrypted.
 | React | `matrix-react.py` | (same) |
 | Redact | `matrix-redact.py` | (same) |
 
-Other scripts: `matrix-rooms.py` (list rooms), `matrix-resolve.py` (alias lookup), `matrix-e2ee-setup.py` (one-time device setup), `matrix-e2ee-verify.py` (device verification), `matrix-fetch-keys.py` / `matrix-key-backup.py` (key recovery).
+Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-e2ee-setup.py`, `matrix-e2ee-verify.py`, `matrix-fetch-keys.py`, `matrix-key-backup.py`.
 
 ## Room Identification
 
@@ -82,22 +82,11 @@ File: `~/.config/matrix/config.json`
 | `bot_prefix` | No | Prefix for messages (e.g., bot emoji) |
 | `access_token` | No | Auto-created by E2EE setup |
 
-## Reading Room History
+## E2EE Notes
 
-- **First run is slow** (~5-10s) due to key sync
-- **Old messages** show `[Unable to decrypt]` until keys are recovered (see key backup above)
-- Use `--json` for programmatic analysis (reactions, polls, attendance)
-- Reactions appear as separate `m.reaction` events — see `references/messaging-guide.md`
-
-## E2EE Troubleshooting
-
-| Problem | Cause | Solution |
-|---------|-------|----------|
-| `[Unable to decrypt]` | Missing session keys | Restore from backup: `matrix-key-backup.py --recovery-key "..." --import-keys` |
-| Script hangs silently | stdout buffering | Already fixed — scripts use `line_buffering=True` |
-| Verification not completing | No `--listen` mode | Run verify with `--timeout 180`, confirm in Element |
-| Element X won't verify | Cross-signing compat | Use Element Desktop/Android instead of Element X |
-| `MAC verification failed` | Wrong recovery key/passphrase | Double-check recovery key from Element settings |
+- First run slow (~5-10s) due to key sync. `[Unable to decrypt]` = missing keys, recoverable via key backup
+- Use `--json` for programmatic analysis; reactions are `m.reaction` events (see `references/messaging-guide.md`)
+- Verify with Element Desktop/Android (not Element X). Use `--timeout 180` for verification
 
 ## Error Handling
 
@@ -108,15 +97,10 @@ File: `~/.config/matrix/config.json`
 | `Could not find room` | Use `matrix-rooms.py` to list available rooms |
 | `Multiple matches` | Use more specific name or room ID |
 
-## Source & Contributing
-
-- **Source repository**: [netresearch/matrix-skill](https://github.com/netresearch/matrix-skill)
-- **Distributed via**: [netresearch/claude-code-marketplace](https://github.com/netresearch/claude-code-marketplace)
-- **Issues & PRs**: File at the source repository, not the marketplace
-
 ## References
 
-- `references/setup-guide.md` -- Full setup walkthrough (homeserver discovery, E2EE device creation, verification)
-- `references/e2ee-guide.md` -- E2EE details, key recovery, device verification workflow
-- `references/messaging-guide.md` -- Formatting, reactions, visual effects, common patterns
+- `references/setup-guide.md` -- Setup walkthrough
+- `references/e2ee-guide.md` -- E2EE details, key recovery, verification
+- `references/messaging-guide.md` -- Formatting, reactions, common patterns
 - `references/api-reference.md` -- Matrix API endpoints
+- Source: [netresearch/matrix-skill](https://github.com/netresearch/matrix-skill)
