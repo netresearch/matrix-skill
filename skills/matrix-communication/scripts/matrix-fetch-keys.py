@@ -27,9 +27,9 @@ sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _lib import load_config, get_store_path, load_credentials, find_room_by_name
+from _lib import load_config, get_store_path, load_credentials, find_room_by_name  # noqa: E402
 
-from nio import (
+from nio import (  # noqa: E402
     AsyncClient,
     AsyncClientConfig,
     MegolmEvent,
