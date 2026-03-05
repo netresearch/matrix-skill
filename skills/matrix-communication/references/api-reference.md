@@ -108,6 +108,50 @@ GET /sync?timeout=0&full_state=true&filter={...}
 | `m.image` | Image attachment |
 | `m.file` | File attachment |
 
+### Reactions
+
+```bash
+# Send reaction
+PUT /rooms/{roomId}/send/m.reaction/{txnId}
+
+# Body:
+{
+  "m.relates_to": {
+    "rel_type": "m.annotation",
+    "event_id": "$target_event_id",
+    "key": "👍"
+  }
+}
+```
+
+### Account Data
+
+```bash
+# Get account data (e.g., key backup passphrase info)
+GET /user/{userId}/account_data/{type}
+
+# Types: m.megolm_backup.v1, m.secret_storage.default_key, m.secret_storage.key.{keyId}
+```
+
+### Key Backup
+
+```bash
+# Get current backup version
+GET /room_keys/version
+
+# Response:
+{
+  "algorithm": "m.megolm_backup.v1.curve25519-aes-sha2",
+  "auth_data": { ... },
+  "count": 1234,
+  "etag": "...",
+  "version": "5"
+}
+
+# Get backed-up keys
+GET /room_keys/keys?version={version}
+```
+
 ## Event Types
 
 | type | Description |
@@ -117,6 +161,7 @@ GET /sync?timeout=0&full_state=true&filter={...}
 | `m.room.name` | Room name state |
 | `m.room.topic` | Room topic state |
 | `m.room.member` | Membership event |
+| `m.reaction` | Reaction annotation (relates_to another event) |
 
 ## Error Codes
 

@@ -343,6 +343,7 @@ async def main():
                 f,
                 indent=2,
             )
+        os.chmod(backup_key_file, 0o600)
         print(f"\n✅ Backup key saved to: {backup_key_file}")
 
         if not args.import_keys:

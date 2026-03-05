@@ -116,6 +116,20 @@ uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py --status
 uv run skills/matrix-communication/scripts/matrix-rooms.py
 ```
 
+### Step 8: Set up key backup recovery (optional)
+
+To decrypt old messages sent before your device was created, restore keys from server-side backup:
+
+```bash
+# Check if backup exists
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --status
+
+# Restore with recovery key (from Element → Settings → Security → "Show Recovery Key")
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "EsTj qRGp YB4C ..." --import-keys
+```
+
+**Note on non-interactive contexts:** All scripts use line buffering (`sys.stdout.reconfigure(line_buffering=True)`) to prevent output from hanging in piped/non-interactive environments like Claude Code.
+
 ## Troubleshooting
 
 **E2EE setup fails with "Invalid username or password":**

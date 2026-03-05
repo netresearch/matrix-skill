@@ -39,6 +39,12 @@ uv run skills/matrix-communication/scripts/matrix-send-e2ee.py room-name "Update
 # Emote message (like /me)
 uv run skills/matrix-communication/scripts/matrix-send-e2ee.py room-name "is deploying" --emote
 
+# Fetch missing keys from other devices
+uv run skills/matrix-communication/scripts/matrix-fetch-keys.py room-name --sync-time 60
+
+# Restore keys from server backup (decrypt old messages)
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "EsTj ..." --import-keys
+
 # Health check / auto-install deps
 python3 skills/matrix-communication/scripts/matrix-doctor.py --install
 ```
@@ -55,7 +61,7 @@ Always prefer E2EE scripts (`*-e2ee.py`) -- most Matrix rooms are encrypted.
 | React | `matrix-react.py` | (same) |
 | Redact | `matrix-redact.py` | (same) |
 
-Other scripts: `matrix-rooms.py` (list rooms), `matrix-resolve.py` (alias lookup), `matrix-e2ee-setup.py` (one-time device setup), `matrix-e2ee-verify.py` (device verification), `matrix-fetch-keys.py` / `matrix-key-backup.py` (key recovery).
+Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-e2ee-setup.py`, `matrix-e2ee-verify.py`, `matrix-fetch-keys.py`, `matrix-key-backup.py`.
 
 ## Room Identification
 
@@ -76,6 +82,12 @@ File: `~/.config/matrix/config.json`
 | `bot_prefix` | No | Prefix for messages (e.g., bot emoji) |
 | `access_token` | No | Auto-created by E2EE setup |
 
+## E2EE Notes
+
+- First run slow (~5-10s) due to key sync. `[Unable to decrypt]` = missing keys, recoverable via key backup
+- Use `--json` for programmatic analysis; reactions are `m.reaction` events (see `references/messaging-guide.md`)
+- Verify with Element Desktop/Android (not Element X). Use `--timeout 180` for verification
+
 ## Error Handling
 
 | Error | Solution |
@@ -85,15 +97,10 @@ File: `~/.config/matrix/config.json`
 | `Could not find room` | Use `matrix-rooms.py` to list available rooms |
 | `Multiple matches` | Use more specific name or room ID |
 
-## Source & Contributing
-
-- **Source repository**: [netresearch/matrix-skill](https://github.com/netresearch/matrix-skill)
-- **Distributed via**: [netresearch/claude-code-marketplace](https://github.com/netresearch/claude-code-marketplace)
-- **Issues & PRs**: File at the source repository, not the marketplace
-
 ## References
 
-- `references/setup-guide.md` -- Full setup walkthrough (homeserver discovery, E2EE device creation, verification)
-- `references/e2ee-guide.md` -- E2EE details, key recovery, device verification workflow
-- `references/messaging-guide.md` -- Formatting, reactions, visual effects, common patterns
+- `references/setup-guide.md` -- Setup walkthrough
+- `references/e2ee-guide.md` -- E2EE details, key recovery, verification
+- `references/messaging-guide.md` -- Formatting, reactions, common patterns
 - `references/api-reference.md` -- Matrix API endpoints
+- Source: [netresearch/matrix-skill](https://github.com/netresearch/matrix-skill)

@@ -142,8 +142,12 @@ async def edit_message_e2ee(
                     ):
                         if not device.verified:
                             client.verify_device(device)
-                except Exception:
-                    pass
+                except Exception as e:
+                    if debug:
+                        print(
+                            f"Could not verify devices for {member_id}: {e}",
+                            file=sys.stderr,
+                        )
 
         # Build edit content
         content = {

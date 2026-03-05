@@ -168,3 +168,50 @@ uv run .../matrix-send-e2ee.py "#ops-team:matrix.org" "Message here"
 
 **Sensitive information:**
 - Use `||spoiler||` for credentials or secrets in examples
+
+## Reading Reactions
+
+Reactions are `m.reaction` events that reference a target event via `relates_to`. When reading room history with `--json`, reactions appear as separate events.
+
+### How Reactions Work
+
+- Each reaction is a standalone `m.reaction` event
+- The `content.m.relates_to` field links it to the original message
+- `rel_type` is always `m.annotation`
+- `key` contains the emoji or text of the reaction
+
+### JSON Output Structure
+
+```json
+{
+  "type": "m.reaction",
+  "sender": "@user:server",
+  "content": {
+    "m.relates_to": {
+      "rel_type": "m.annotation",
+      "event_id": "$original_message_id",
+      "key": "👍"
+    }
+  }
+}
+```
+
+### Analyzing Reactions Programmatically
+
+Use `--json` output and filter for `m.reaction` events:
+
+```bash
+# Read room history as JSON
+uv run skills/matrix-communication/scripts/matrix-read-e2ee.py room-name --limit 200 --json
+
+# Use jq to extract reactions for a specific event
+... | jq '[.[] | select(.type == "m.reaction") | {sender: .sender, emoji: .content."m.relates_to".key, target: .content."m.relates_to".event_id}]'
+```
+
+### Use Case: Polls and Attendance via Reactions
+
+Reactions can serve as lightweight polls. Post a message with options and ask users to react:
+
+1. Send a message with options (e.g., "React with your lunch preference: 🍕 Pizza, 🍔 Burger, 🥗 Salad")
+2. Read reactions with `--json` and group by emoji `key`
+3. Count unique senders per emoji to tally votes
