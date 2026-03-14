@@ -154,7 +154,8 @@ matrix-skill/
 │       │   └── matrix-e2ee-verify.py    # Device verification
 │       └── references/
 │           └── api-reference.md
-├── LICENSE
+├── LICENSE-MIT           # Code license (MIT)
+├── LICENSE-CC-BY-SA-4.0  # Content license (CC-BY-SA-4.0)
 └── README.md
 ```
 
