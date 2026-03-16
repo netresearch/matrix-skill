@@ -282,7 +282,7 @@ def main():
         print()
         print("Quick fix:")
         if not checks["pip_available"]["ok"]:
-            print("  - Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh")
+            print("  - Install uv: pip install uv")
         if not checks["matrix_nio"]["ok"]:
             print("  - Run: matrix-doctor.py --install")
         if not checks["config"]["ok"]:
