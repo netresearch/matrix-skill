@@ -27,34 +27,42 @@ This skill enables AI coding agents to send messages to Matrix chat rooms on beh
 - **Bot prefix** - optional 🤖 prefix for automated messages
 - **Device verification** - SAS emoji verification for E2EE
 
-## Installation & Setup
+## Installation
 
-### 1. Install the Skill
+### Marketplace (Recommended)
+
+Add the [Netresearch marketplace](https://github.com/netresearch/claude-code-marketplace) once, then browse and install skills:
 
 ```bash
-# Via Netresearch marketplace
-/install-plugin netresearch/matrix-skill
-
-# Or manually
-/install-plugin https://github.com/netresearch/matrix-skill
+# Claude Code
+/plugin marketplace add netresearch/claude-code-marketplace
 ```
 
-### 2. Let the Agent Configure It
+### npx ([skills.sh](https://skills.sh))
 
-Just ask:
-> "Set up the Matrix skill for me"
+Install with any [Agent Skills](https://agentskills.io)-compatible agent:
 
-The agent will guide you through:
-- Your Matrix homeserver URL
-- Your Matrix user ID
-- Your Matrix password (for E2EE device, used once, not stored)
-- Optional bot prefix (e.g., 🤖)
+```bash
+npx skills add https://github.com/netresearch/matrix-skill --skill matrix-communication
+```
 
-### 3. Done!
+### Download Release
 
-Start using it:
-> "Send 'Hello!' to #general:matrix.org"
+Download the [latest release](https://github.com/netresearch/matrix-skill/releases/latest) and extract to your agent's skills directory.
 
+### Git Clone
+
+```bash
+git clone https://github.com/netresearch/matrix-skill.git
+```
+
+### Composer (PHP Projects)
+
+```bash
+composer require netresearch/matrix-skill
+```
+
+Requires [netresearch/composer-agent-skill-plugin](https://github.com/netresearch/composer-agent-skill-plugin).
 ## Prerequisites
 
 **For E2EE support** (most Matrix rooms), install libolm:
