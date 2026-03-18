@@ -1,0 +1,45 @@
+{
+  "skill_name": "matrix-communication",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "send-message-to-room",
+      "prompt": "Send a message to the dev room on Matrix saying 'Deployment complete for v2.3.0'.",
+      "expected_output": "Uses the matrix-send-e2ee.py script with room name and message text.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-send-e2ee.py (E2EE preferred over non-E2EE)",
+        "Uses uv run to execute the script",
+        "Passes room name as first argument",
+        "Passes message text as second argument",
+        "Does not use the non-E2EE matrix-send.py fallback without reason"
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "list-matrix-rooms",
+      "prompt": "List my Matrix rooms so I can see which ones I'm joined to.",
+      "expected_output": "Uses the matrix-rooms.py script to list joined rooms.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-rooms.py script",
+        "Uses uv run to execute the script",
+        "Does not attempt to call Matrix API directly",
+        "Presents room names and IDs from the output"
+      ]
+    },
+    {
+      "id": 3,
+      "eval_name": "read-recent-messages",
+      "prompt": "Read the last 5 messages from the agent-work Matrix room.",
+      "expected_output": "Uses matrix-read-e2ee.py with room name and --limit flag.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-read-e2ee.py (E2EE preferred)",
+        "Uses uv run to execute the script",
+        "Passes 'agent-work' as room identifier",
+        "Uses --limit 5 flag to restrict message count"
+      ]
+    }
+  ]
+}

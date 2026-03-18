@@ -1,19 +1,18 @@
 ---
 name: matrix-communication
-description: "Use when sending messages to Matrix rooms, interacting with Matrix chat, or automating team notifications via Matrix protocol."
+description: "ALWAYS use for ANY Matrix chat operation — sending messages, reading rooms, reacting, thread replies, E2EE messaging, or team notifications via Matrix protocol. Activate on #room:server references or Matrix URLs."
+license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
+compatibility: "Requires python3, uv. Matrix homeserver access."
+metadata:
+  author: Netresearch DTT GmbH
+  version: "1.15.8"
+  repository: https://github.com/netresearch/matrix-skill
+allowed-tools: Bash(python3:*) Bash(uv:*) Read Write
 ---
 
 # Matrix Communication
 
 Send messages to Matrix chat rooms on behalf of users.
-
-## When to Use
-
-Automatically activate when you encounter:
-- Room references: `#room:server`, `!roomid:server`
-- Chat requests: "send to matrix", "post in chat", "notify the team"
-- Matrix URLs: `https://matrix.*/`, `https://element.*/`
-- Setup requests: "configure matrix", "set up matrix skill"
 
 ## Quick Reference
 
