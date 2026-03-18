@@ -1,6 +1,6 @@
 ---
 name: matrix-communication
-description: "ALWAYS use for ANY Matrix chat operation — sending messages, reading rooms, reacting, thread replies, E2EE messaging, or team notifications via Matrix protocol. Activate on #room:server references or Matrix URLs."
+description: "Use when working with ANY Matrix chat operation — sending messages, reading rooms, reacting, thread replies, E2EE messaging, or team notifications via Matrix protocol. Activate on #room:server references or Matrix URLs."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires python3, uv. Matrix homeserver access."
 metadata:
