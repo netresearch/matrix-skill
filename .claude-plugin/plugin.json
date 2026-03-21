@@ -1,24 +1,24 @@
 {
-    "name": "matrix-communication",
-    "version": "1.15.8",
-    "description": "Agentic Skill for Matrix chat communication. Send messages to Matrix rooms on behalf of users via access token authentication. Works with any Matrix homeserver.",
-    "author": {
-        "name": "Netresearch DTT GmbH",
-        "url": "https://www.netresearch.de"
-    },
-    "repository": "https://github.com/netresearch/matrix-skill",
-    "license": "(MIT AND CC-BY-SA-4.0)",
-    "keywords": [
-        "agentic-skill",
-        "matrix",
-        "chat",
-        "communication",
-        "element"
-    ],
-    "skills": [
-        "./skills/matrix-communication"
-    ],
-    "commands": [
-        "./commands/work-update.md"
-    ]
+  "name": "matrix-communication",
+  "version": "1.16.0",
+  "description": "Agentic Skill for Matrix chat communication. Send messages to Matrix rooms on behalf of users via access token authentication. Works with any Matrix homeserver.",
+  "author": {
+    "name": "Netresearch DTT GmbH",
+    "url": "https://www.netresearch.de"
+  },
+  "repository": "https://github.com/netresearch/matrix-skill",
+  "license": "(MIT AND CC-BY-SA-4.0)",
+  "keywords": [
+    "agentic-skill",
+    "matrix",
+    "chat",
+    "communication",
+    "element"
+  ],
+  "skills": [
+    "./skills/matrix-communication"
+  ],
+  "commands": [
+    "./commands/work-update.md"
+  ]
 }
