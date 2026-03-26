@@ -23,13 +23,10 @@ import sys
 import os
 import time
 
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _lib import load_config, get_store_path, load_credentials, find_room_by_name  # noqa: E402
+from _lib import load_config, get_store_path, load_credentials, find_room_by_name
 
-from nio import (  # noqa: E402
+from nio import (
     AsyncClient,
     AsyncClientConfig,
     MegolmEvent,
@@ -39,6 +36,9 @@ from nio import (  # noqa: E402
     RoomKeyEvent,
     UnknownToDeviceEvent,
 )
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 
 class KeyFetcher:

@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
 """React to a Matrix message with an emoji.
 
 Usage:
@@ -39,6 +43,9 @@ from _lib import (
     find_room_by_name,
     clean_message,
 )
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 
 def send_reaction(config: dict, room_id: str, event_id: str, emoji: str) -> dict:

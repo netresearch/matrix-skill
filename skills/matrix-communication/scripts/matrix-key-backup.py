@@ -31,6 +31,9 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from nio import AsyncClient, AsyncClientConfig
 import aiohttp
 
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 
 # Base58 alphabet for recovery key
 BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"

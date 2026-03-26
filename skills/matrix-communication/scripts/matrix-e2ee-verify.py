@@ -84,6 +84,9 @@ except ImportError as e:
     print(f"  python3 {script_dir}/matrix-doctor.py --install", file=sys.stderr)
     sys.exit(1)
 
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 
 class VerificationHandler:
     def __init__(self, client, debug=False):

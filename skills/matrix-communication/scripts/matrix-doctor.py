@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
 """Matrix Skill health check and dependency installer.
 
 Checks all dependencies and configuration, installs missing packages,
@@ -20,6 +24,9 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 
 def check_command_exists(cmd: str) -> bool:

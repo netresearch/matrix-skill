@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
 """Edit an existing message in a Matrix room.
 
 Usage:
@@ -36,6 +40,9 @@ from _lib import (
     add_bot_prefix,
     clean_message,
 )
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 
 def edit_message(config: dict, room_id: str, event_id: str, new_message: str) -> dict:
