@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
 """Send a message to a Matrix room.
 
 Usage:
@@ -55,6 +59,9 @@ from _lib import (
     add_bot_prefix,
     clean_message,
 )
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 
 def send_message(

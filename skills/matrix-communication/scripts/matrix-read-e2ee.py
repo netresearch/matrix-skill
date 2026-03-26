@@ -24,7 +24,7 @@ Options:
     --debug              Show debug information
     --help               Show this help
 
-Note: First run may be slow (~5-10s) for initial sync and key setup.
+Note: First run takes ~2-5s for initial sync and key setup.
       With --request-keys, wait for other devices to respond (may take 10-30s).
 """
 
@@ -40,7 +40,7 @@ from _lib import (
     load_config,
     get_store_path,
     load_credentials,
-    find_room_by_name,
+    find_room_in_nio_client,
     format_timestamp,
     clean_message,
     prefer_ipv4,
@@ -83,6 +83,9 @@ except ImportError as e:
     print("Or run the health check to diagnose and fix:", file=sys.stderr)
     print(f"  python3 {script_dir}/matrix-doctor.py --install", file=sys.stderr)
     sys.exit(1)
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 
 def process_event(event, debug=False) -> tuple[dict | None, bool]:
@@ -194,23 +197,34 @@ async def read_messages_e2ee(
                 print("Uploading device keys...", file=sys.stderr)
             await client.keys_upload()
 
-        # Resolve room
+        # Sync first (timeout=0 = no long-poll), then resolve room from client.rooms
+        if debug:
+            print("Syncing...", file=sys.stderr)
+
+        await client.sync(timeout=0, full_state=True)
+
+        # Resolve room: alias via server, name via client.rooms (post-sync)
         room_id = room
         if room.startswith("#"):
             response = await client.room_resolve_alias(room)
             if isinstance(response, RoomResolveAliasResponse):
                 room_id = response.room_id
                 if debug:
-                    print(f"Resolved {room} -> {room_id}", file=sys.stderr)
+                    print(f"Resolved alias {room} -> {room_id}", file=sys.stderr)
             else:
                 return [{"error": f"Could not resolve room alias: {response}"}]
-
-        if debug:
-            print("Syncing...", file=sys.stderr)
-
-        sync_filter = {"room": {"rooms": [room_id], "timeline": {"limit": limit}}}
-
-        await client.sync(timeout=30000, full_state=True, sync_filter=sync_filter)
+        elif not room.startswith("!"):
+            found = find_room_in_nio_client(client.rooms, room)
+            if found:
+                room_id = found
+                if debug:
+                    print(f"Found room by name: {room} -> {room_id}", file=sys.stderr)
+            else:
+                return [
+                    {
+                        "error": f"Could not find room '{room}'. Use 'matrix-rooms.py' to list rooms."
+                    }
+                ]
 
         if debug:
             print(f"Sync complete. Rooms: {len(client.rooms)}", file=sys.stderr)
@@ -342,26 +356,9 @@ def main():
 
     config = load_config(require_user_id=True)
 
-    # Clean and resolve room
+    # Room name resolution happens post-sync inside the async function
     room_input = clean_message(args.room)
     room = room_input
-
-    if not room_input.startswith("!") and not room_input.startswith("#"):
-        # Room name lookup (before async)
-        found_id, matches = find_room_by_name(config, room_input)
-        if found_id:
-            room = found_id
-        else:
-            error_msg = f"Could not find room '{room_input}'"
-            if matches:
-                error_msg += ". Multiple matches found:\n"
-                for m in matches:
-                    alias_str = f" ({m['alias']})" if m.get("alias") else ""
-                    error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
-            else:
-                error_msg += ". Use 'matrix-rooms.py' to list available rooms."
-            print(f"Error: {error_msg}", file=sys.stderr)
-            sys.exit(1)
 
     messages = asyncio.run(
         read_messages_e2ee(

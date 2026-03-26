@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
 """Read recent messages from a Matrix room.
 
 Note: Only reads unencrypted messages. E2EE messages will show as "[encrypted]".
@@ -32,6 +36,9 @@ from _lib import (
     format_timestamp,
     clean_message,
 )
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 
 def read_messages(config: dict, room_id: str, limit: int = 10) -> list:

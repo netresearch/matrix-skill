@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
 """List joined Matrix rooms.
 
 Usage:
@@ -34,6 +38,9 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import load_config, list_joined_rooms, find_room_by_name
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 
 def main():

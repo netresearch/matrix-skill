@@ -31,8 +31,8 @@ Options:
     --debug           Show debug information
     --help            Show this help
 
-Note: First run may be slow (~5-10s) for initial sync and key setup.
-      Subsequent runs use cached keys and are faster.
+Note: First run takes ~2-5s for initial sync and key setup.
+      Subsequent runs use cached keys (~2-3s).
 
 Examples:
     # Send by room name (easiest)
@@ -57,7 +57,7 @@ from _lib import (
     load_config,
     get_store_path,
     load_credentials,
-    find_room_by_name,
+    find_room_in_nio_client,
     markdown_to_html,
     add_bot_prefix,
     clean_message,
@@ -98,6 +98,9 @@ except ImportError as e:
     print("Or run the health check to diagnose and fix:", file=sys.stderr)
     print(f"  python3 {script_dir}/matrix-doctor.py --install", file=sys.stderr)
     sys.exit(1)
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 
 async def send_message_e2ee(
@@ -199,22 +202,11 @@ async def send_message_e2ee(
                 if debug:
                     print(f"Keys upload response: {keys_response}", file=sys.stderr)
 
-        # Resolve room alias if needed
-        room_id = room
-        if room.startswith("#"):
-            response = await client.room_resolve_alias(room)
-            if isinstance(response, RoomResolveAliasResponse):
-                room_id = response.room_id
-                if debug:
-                    print(f"Resolved {room} -> {room_id}", file=sys.stderr)
-            else:
-                return {"error": f"Could not resolve room alias: {response}"}
-
-        # Sync to get device keys (required for E2EE)
+        # Sync first to populate client.rooms (timeout=0 = no long-poll).
         if debug:
-            print("Syncing to fetch device keys...", file=sys.stderr)
+            print("Syncing (timeout=0, full_state=True)...", file=sys.stderr)
 
-        sync_response = await client.sync(timeout=30000, full_state=True)
+        sync_response = await client.sync(timeout=0, full_state=True)
         if (
             hasattr(sync_response, "transport_response")
             and sync_response.transport_response.status != 200
@@ -223,6 +215,28 @@ async def send_message_e2ee(
 
         if debug:
             print(f"Sync complete. Rooms: {len(client.rooms)}", file=sys.stderr)
+
+        # Resolve room: alias via server, name via client.rooms (post-sync)
+        room_id = room
+        if room.startswith("#"):
+            response = await client.room_resolve_alias(room)
+            if isinstance(response, RoomResolveAliasResponse):
+                room_id = response.room_id
+                if debug:
+                    print(f"Resolved alias {room} -> {room_id}", file=sys.stderr)
+            else:
+                return {"error": f"Could not resolve room alias: {response}"}
+        elif not room.startswith("!"):
+            # Plain name — resolve from synced rooms (no HTTP calls)
+            found = find_room_in_nio_client(client.rooms, room)
+            if found:
+                room_id = found
+                if debug:
+                    print(f"Found room by name: {room} -> {room_id}", file=sys.stderr)
+            else:
+                return {
+                    "error": f"Could not find room '{room}'. Use 'matrix-rooms.py' to list available rooms."
+                }
 
         # Get room object and check encryption
         room_obj = client.rooms.get(room_id)
@@ -368,53 +382,21 @@ def main():
     message = clean_message(args.message)
     room_input = clean_message(args.room)
 
-    # Resolve room to room ID before async operations
+    # Room resolution: IDs and aliases are passed through directly.
+    # Plain names are resolved AFTER sync (in the async function) using
+    # client.rooms, which avoids 193 HTTP calls from find_room_by_name().
     room = room_input
     if room_input.startswith("!"):
-        # Direct room ID - use as-is
         if args.debug:
             print(f"Using room ID directly: {room_input}", file=sys.stderr)
-    elif room_input.startswith("#"):
-        # Room alias - will be resolved in async function
-        # But try name lookup as backup if alias doesn't contain server
-        if ":" not in room_input:
-            # Missing server part, treat as name
-            alias_name = room_input.lstrip("#")
-            if args.debug:
-                print(
-                    f"Alias missing server, trying name lookup for '{alias_name}'",
-                    file=sys.stderr,
-                )
-            found_id, matches = find_room_by_name(config, alias_name)
-            if found_id:
-                room = found_id
-                if args.debug:
-                    print(f"Found room by name: {room}", file=sys.stderr)
-            # If not found, keep original - let async function try alias resolution
-    else:
-        # Plain name - look up by name
+    elif room_input.startswith("#") and ":" not in room_input:
+        # Bare alias without server part — treat as name for post-sync lookup
+        room = room_input.lstrip("#")
         if args.debug:
-            print(f"Looking up room by name: '{room_input}'", file=sys.stderr)
-
-        found_id, matches = find_room_by_name(config, room_input)
-        if found_id:
-            room = found_id
-            if args.debug:
-                print(f"Found room: {room}", file=sys.stderr)
-        else:
-            error_msg = f"Could not find room '{room_input}'"
-            if matches:
-                error_msg += ". Multiple matches found:\n"
-                for m in matches:
-                    alias_str = f" ({m['alias']})" if m.get("alias") else ""
-                    error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
-            else:
-                error_msg += ". Use 'matrix-rooms.py' to list available rooms."
-            if args.json:
-                print(json.dumps({"error": error_msg}))
-            else:
-                print(f"Error: {error_msg}", file=sys.stderr)
-            sys.exit(1)
+            print(
+                f"Treating '{room_input}' as room name for post-sync lookup",
+                file=sys.stderr,
+            )
 
     # Add bot prefix if configured (unless --no-prefix or emote)
     if not args.no_prefix and not args.emote and config.get("bot_prefix"):

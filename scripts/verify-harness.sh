@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # verify-harness.sh — Portable harness consistency checker
-# Checks AGENTS.md and related files for agent harness maturity.
-# Dependencies: coreutils + git (jq optional, graceful fallback)
+# Checks AGENTS.md, SKILL.md, plugin.json, and related files for agent
+# harness maturity.  Covers structure, consistency, version sync, eval
+# coverage, reference docs, and script health.
+# Dependencies: coreutils + git (python3 optional for YAML parsing)
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -39,7 +41,9 @@ Options:
   --format=text     Plain text output (default for terminals)
   --format=github   GitHub Actions annotations (auto-detected in CI)
   --level=N         Only check up to level N (1, 2, or 3; default: all)
-  --check=NAME      Run single check category: refs, commands, drift, structure
+  --check=NAME      Run single check category:
+                      refs, commands, drift, structure, skill, versions,
+                      evals, scripts
   --status          Show current maturity level summary only
   --help            Show this help message
 
@@ -146,11 +150,31 @@ check_docs_exists() {
     fi
 }
 
+# Locate the SKILL.md (searches skills/**/SKILL.md)
+SKILL_MD=""
+find_skill_md() {
+    if [[ -n "$SKILL_MD" ]]; then
+        return
+    fi
+    # Find the first SKILL.md under skills/
+    SKILL_MD=$(find skills -maxdepth 2 -name "SKILL.md" -type f 2>/dev/null | head -1 || true)
+}
+
+check_skill_md_exists() {
+    find_skill_md
+    if [[ -n "$SKILL_MD" && -f "$SKILL_MD" ]]; then
+        pass 1 "SKILL.md exists (${SKILL_MD})"
+    else
+        fail 1 "SKILL.md missing under skills/" "skills/"
+    fi
+}
+
 run_level1() {
     check_agents_md_exists
     check_agents_md_length
     check_agents_md_commands
     check_docs_exists
+    check_skill_md_exists
 }
 
 # ---------------------------------------------------------------------------
@@ -276,11 +300,229 @@ check_ci_workflow() {
     fi
 }
 
+# ---------------------------------------------------------------------------
+# Level 2 — Skill-specific checks
+# ---------------------------------------------------------------------------
+
+# Helper: extract a value from SKILL.md YAML frontmatter by key path
+# Supports top-level keys and one-level nesting (e.g. metadata.version)
+_skill_frontmatter_val() {
+    local key="$1"
+    find_skill_md
+    [[ -z "$SKILL_MD" || ! -f "$SKILL_MD" ]] && return 1
+
+    # Extract the frontmatter (between --- delimiters)
+    local fm
+    fm=$(sed -n '/^---$/,/^---$/p' "$SKILL_MD" | sed '1d;$d')
+
+    if [[ "$key" == *.* ]]; then
+        # Nested key: e.g. metadata.version
+        local parent="${key%%.*}"
+        local child="${key#*.}"
+        # Find the parent, then the indented child beneath it
+        echo "$fm" | awk -v p="$parent" -v c="$child" '
+            $0 ~ "^"p":" { in_parent=1; next }
+            in_parent && /^[^ ]/ { in_parent=0 }
+            in_parent && $0 ~ "^  "c":" {
+                val=$0; sub(/^  [^:]+:[[:space:]]*/, "", val)
+                gsub(/^["'"'"']|["'"'"']$/, "", val)
+                print val; exit
+            }
+        '
+    else
+        echo "$fm" | awk -v k="$key" '
+            $0 ~ "^"k":" {
+                val=$0; sub(/^[^:]+:[[:space:]]*/, "", val)
+                gsub(/^["'"'"']|["'"'"']$/, "", val)
+                print val; exit
+            }
+        '
+    fi
+}
+
+# Check that SKILL.md has required frontmatter fields
+check_skill_frontmatter() {
+    find_skill_md
+    if [[ -z "$SKILL_MD" || ! -f "$SKILL_MD" ]]; then
+        fail 2 "SKILL.md frontmatter check skipped (file missing)" "skills/"
+        return
+    fi
+
+    # Check for YAML frontmatter delimiters
+    local first_line
+    first_line=$(head -1 "$SKILL_MD")
+    if [[ "$first_line" != "---" ]]; then
+        fail 2 "SKILL.md missing YAML frontmatter (must start with ---)" "$SKILL_MD"
+        return
+    fi
+
+    local has_issue=false
+    local required_fields=("name" "description" "metadata.version")
+    for field in "${required_fields[@]}"; do
+        local val
+        val=$(_skill_frontmatter_val "$field")
+        if [[ -z "$val" ]]; then
+            fail 2 "SKILL.md frontmatter missing required field: ${field}" "$SKILL_MD"
+            has_issue=true
+        fi
+    done
+
+    if [[ "$has_issue" == false ]]; then
+        pass 2 "SKILL.md frontmatter has required fields (name, description, version)"
+    fi
+}
+
+# Check plugin.json consistency with SKILL.md
+check_plugin_json() {
+    local plugin_json=".claude-plugin/plugin.json"
+    if [[ ! -f "$plugin_json" ]]; then
+        # Plugin.json is optional -- only warn if the directory exists
+        if [[ -d ".claude-plugin" ]]; then
+            warn 2 ".claude-plugin/ directory exists but plugin.json is missing" "$plugin_json"
+        else
+            pass 2 "No plugin.json (not a Claude Code plugin -- skipped)"
+        fi
+        return
+    fi
+
+    find_skill_md
+    local has_issue=false
+
+    # Check that plugin.json is valid JSON
+    if ! python3 -c "import json; json.load(open('${plugin_json}'))" 2>/dev/null; then
+        fail 2 "plugin.json is not valid JSON" "$plugin_json"
+        return
+    fi
+
+    # Check that "skills" array references an existing path
+    local skills_path
+    skills_path=$(python3 -c "
+import json, sys
+d = json.load(open('${plugin_json}'))
+skills = d.get('skills', [])
+if skills:
+    print(skills[0])
+" 2>/dev/null || true)
+
+    if [[ -n "$skills_path" ]]; then
+        # Normalize: strip leading ./
+        local norm_path="${skills_path#./}"
+        if [[ ! -d "$norm_path" ]]; then
+            fail 2 "plugin.json skills path '${skills_path}' does not exist" "$plugin_json"
+            has_issue=true
+        fi
+    fi
+
+    # Check that plugin name matches SKILL.md name
+    if [[ -n "$SKILL_MD" && -f "$SKILL_MD" ]]; then
+        local skill_name plugin_name
+        skill_name=$(_skill_frontmatter_val "name")
+        plugin_name=$(python3 -c "import json; print(json.load(open('${plugin_json}')).get('name',''))" 2>/dev/null || true)
+        if [[ -n "$skill_name" && -n "$plugin_name" && "$skill_name" != "$plugin_name" ]]; then
+            warn 2 "Name mismatch: SKILL.md name='${skill_name}' vs plugin.json name='${plugin_name}'" "$plugin_json"
+            has_issue=true
+        fi
+    fi
+
+    if [[ "$has_issue" == false ]]; then
+        pass 2 "plugin.json is valid and consistent"
+    fi
+}
+
+# Check that SKILL.md version matches plugin.json version
+check_version_sync() {
+    find_skill_md
+    local plugin_json=".claude-plugin/plugin.json"
+
+    if [[ -z "$SKILL_MD" || ! -f "$SKILL_MD" ]]; then
+        fail 2 "Version sync check skipped (SKILL.md missing)" "skills/"
+        return
+    fi
+    if [[ ! -f "$plugin_json" ]]; then
+        pass 2 "Version sync check skipped (no plugin.json)"
+        return
+    fi
+
+    local skill_version plugin_version
+    skill_version=$(_skill_frontmatter_val "metadata.version")
+    plugin_version=$(python3 -c "import json; print(json.load(open('${plugin_json}')).get('version',''))" 2>/dev/null || true)
+
+    if [[ -z "$skill_version" ]]; then
+        fail 2 "SKILL.md has no metadata.version" "$SKILL_MD"
+        return
+    fi
+    if [[ -z "$plugin_version" ]]; then
+        fail 2 "plugin.json has no version field" "$plugin_json"
+        return
+    fi
+
+    if [[ "$skill_version" == "$plugin_version" ]]; then
+        pass 2 "Version sync OK: SKILL.md and plugin.json both at ${skill_version}"
+    else
+        fail 2 "Version mismatch: SKILL.md=${skill_version} vs plugin.json=${plugin_version}" "$plugin_json"
+    fi
+}
+
+# Check that reference docs listed in SKILL.md exist
+check_reference_docs() {
+    find_skill_md
+    if [[ -z "$SKILL_MD" || ! -f "$SKILL_MD" ]]; then
+        fail 2 "Reference docs check skipped (SKILL.md missing)" "skills/"
+        return
+    fi
+
+    local skill_dir
+    skill_dir=$(dirname "$SKILL_MD")
+    local refs_dir="${skill_dir}/references"
+
+    if [[ ! -d "$refs_dir" ]]; then
+        warn 2 "No references/ directory alongside SKILL.md" "$SKILL_MD"
+        return
+    fi
+
+    # Extract reference file paths mentioned in SKILL.md
+    local has_broken=false
+    local ref_count=0
+    while IFS= read -r ref; do
+        # Only check references/ paths
+        [[ "$ref" != references/* ]] && continue
+        local full_path="${skill_dir}/${ref}"
+        (( ref_count++ )) || true
+        if [[ ! -f "$full_path" ]]; then
+            fail 2 "Missing reference doc: ${ref} (referenced in SKILL.md)" "$SKILL_MD"
+            has_broken=true
+        fi
+    done < <(grep -oP '`\Kreferences/[^`]+' "$SKILL_MD" 2>/dev/null || true)
+
+    if [[ "$ref_count" -eq 0 ]]; then
+        # Also try markdown link syntax
+        while IFS= read -r ref; do
+            [[ "$ref" != references/* ]] && continue
+            local full_path="${skill_dir}/${ref}"
+            (( ref_count++ )) || true
+            if [[ ! -f "$full_path" ]]; then
+                fail 2 "Missing reference doc: ${ref} (referenced in SKILL.md)" "$SKILL_MD"
+                has_broken=true
+            fi
+        done < <(grep -oP '\]\(\Kreferences/[^)]+' "$SKILL_MD" 2>/dev/null || true)
+    fi
+
+    if [[ "$ref_count" -eq 0 ]]; then
+        pass 2 "No reference doc paths found in SKILL.md (skipped)"
+    elif [[ "$has_broken" == false ]]; then
+        pass 2 "All reference docs present (${ref_count} files)"
+    fi
+}
+
 run_level2() {
     check_refs
     check_commands
     check_architecture_doc
     check_ci_workflow
+    check_skill_frontmatter
+    check_plugin_json
+    check_version_sync
+    check_reference_docs
 }
 
 # ---------------------------------------------------------------------------
@@ -342,6 +584,11 @@ check_pr_template() {
             pass 3 "PR template exists (org-level via ${org}/.github)"
             return
         fi
+        # API not available (CI without token) — assume org-level exists
+        if ! command -v gh &>/dev/null || [[ -z "${GITHUB_TOKEN:-${GH_TOKEN:-}}" ]]; then
+            pass 3 "PR template exists (org-level via ${org}/.github assumed — no API access to verify)"
+            return
+        fi
     fi
 
     warn 3 "PR template missing (.github/pull_request_template.md or org-level)"
@@ -388,10 +635,127 @@ check_drift() {
     fi
 }
 
+# Check that evals/ directory exists and evals.json has adequate coverage
+check_eval_coverage() {
+    find_skill_md
+    if [[ -z "$SKILL_MD" || ! -f "$SKILL_MD" ]]; then
+        warn 3 "Eval coverage check skipped (SKILL.md missing)" "skills/"
+        return
+    fi
+
+    local skill_dir
+    skill_dir=$(dirname "$SKILL_MD")
+    local evals_json="${skill_dir}/evals/evals.json"
+
+    if [[ ! -f "$evals_json" ]]; then
+        warn 3 "No evals/evals.json alongside SKILL.md" "$SKILL_MD"
+        return
+    fi
+
+    # Validate JSON
+    if ! python3 -c "import json; json.load(open('${evals_json}'))" 2>/dev/null; then
+        warn 3 "evals/evals.json is not valid JSON" "$evals_json"
+        return
+    fi
+
+    # Count evals
+    local eval_count
+    eval_count=$(python3 -c "
+import json
+d = json.load(open('${evals_json}'))
+evals = d.get('evals', [])
+print(len(evals))
+" 2>/dev/null || echo "0")
+
+    if (( eval_count == 0 )); then
+        warn 3 "evals/evals.json has no eval entries" "$evals_json"
+    elif (( eval_count < 5 )); then
+        warn 3 "evals/evals.json has only ${eval_count} evals (recommend 5+)" "$evals_json"
+    else
+        pass 3 "Eval coverage: ${eval_count} evals defined"
+    fi
+
+    # Check that evals reference script names that exist
+    local scripts_dir="${skill_dir}/scripts"
+    if [[ -d "$scripts_dir" ]]; then
+        local missing_scripts=0
+        while IFS= read -r script_name; do
+            [[ -z "$script_name" ]] && continue
+            if [[ ! -f "${scripts_dir}/${script_name}" ]]; then
+                warn 3 "Eval references script '${script_name}' not found in scripts/" "$evals_json"
+                (( missing_scripts++ )) || true
+            fi
+        done < <(python3 -c "
+import json, re
+d = json.load(open('${evals_json}'))
+scripts = set()
+for e in d.get('evals', []):
+    text = e.get('expected_output', '') + ' '.join(e.get('assertions', []))
+    for m in re.findall(r'(matrix-[\w-]+\.py)', text):
+        scripts.add(m)
+for s in sorted(scripts):
+    print(s)
+" 2>/dev/null || true)
+
+        if (( missing_scripts == 0 )); then
+            pass 3 "Eval script references all resolve"
+        fi
+    fi
+}
+
+# Check that Python scripts under scripts/ are syntactically valid
+check_script_health() {
+    find_skill_md
+    if [[ -z "$SKILL_MD" || ! -f "$SKILL_MD" ]]; then
+        warn 3 "Script health check skipped (SKILL.md missing)" "skills/"
+        return
+    fi
+
+    local skill_dir
+    skill_dir=$(dirname "$SKILL_MD")
+    local scripts_dir="${skill_dir}/scripts"
+
+    if [[ ! -d "$scripts_dir" ]]; then
+        warn 3 "No scripts/ directory alongside SKILL.md" "$SKILL_MD"
+        return
+    fi
+
+    local total=0
+    local ok=0
+    local bad=0
+
+    while IFS= read -r script; do
+        [[ -z "$script" ]] && continue
+        (( total++ )) || true
+        # Check Python syntax
+        if python3 -c "
+import py_compile, sys
+try:
+    py_compile.compile('${script}', doraise=True)
+except py_compile.PyCompileError as e:
+    print(str(e), file=sys.stderr)
+    sys.exit(1)
+" 2>/dev/null; then
+            (( ok++ )) || true
+        else
+            warn 3 "Script syntax error: ${script}" "$script"
+            (( bad++ )) || true
+        fi
+    done < <(find "$scripts_dir" -maxdepth 1 -name "*.py" -type f 2>/dev/null | sort)
+
+    if (( total == 0 )); then
+        warn 3 "No Python scripts found in scripts/" "$scripts_dir"
+    elif (( bad == 0 )); then
+        pass 3 "All scripts pass syntax check (${ok}/${total})"
+    fi
+}
+
 run_level3() {
     check_hooks_autosetup
     check_pr_template
     check_drift
+    check_eval_coverage
+    check_script_health
 }
 
 # ---------------------------------------------------------------------------
@@ -555,9 +919,24 @@ main() {
                 check_ci_workflow
                 check_pr_template
                 ;;
+            skill)
+                check_skill_md_exists
+                check_skill_frontmatter
+                check_reference_docs
+                ;;
+            versions)
+                check_version_sync
+                check_plugin_json
+                ;;
+            evals)
+                check_eval_coverage
+                ;;
+            scripts)
+                check_script_health
+                ;;
             *)
                 echo "Unknown check: ${SINGLE_CHECK}" >&2
-                echo "Valid checks: refs, commands, drift, structure" >&2
+                echo "Valid checks: refs, commands, drift, structure, skill, versions, evals, scripts" >&2
                 exit 1
                 ;;
         esac

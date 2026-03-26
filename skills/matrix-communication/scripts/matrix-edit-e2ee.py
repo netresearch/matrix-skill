@@ -34,7 +34,7 @@ from _lib import (
     load_config,
     get_store_path,
     load_credentials,
-    find_room_by_name,
+    find_room_in_nio_client,
     markdown_to_html,
     add_bot_prefix,
     clean_message,
@@ -75,6 +75,9 @@ except ImportError as e:
     print("Or run the health check to diagnose and fix:", file=sys.stderr)
     print(f"  python3 {script_dir}/matrix-doctor.py --install", file=sys.stderr)
     sys.exit(1)
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 
 async def edit_message_e2ee(
@@ -121,6 +124,9 @@ async def edit_message_e2ee(
         if client.should_upload_keys:
             await client.keys_upload()
 
+        # Sync first, then resolve room from client.rooms
+        await client.sync(timeout=0, full_state=True)
+
         room_id = room
         if room.startswith("#"):
             response = await client.room_resolve_alias(room)
@@ -128,8 +134,14 @@ async def edit_message_e2ee(
                 room_id = response.room_id
             else:
                 return {"error": f"Could not resolve room alias: {response}"}
-
-        await client.sync(timeout=30000, full_state=True)
+        elif not room.startswith("!"):
+            found = find_room_in_nio_client(client.rooms, room)
+            if found:
+                room_id = found
+            else:
+                return {
+                    "error": f"Could not find room '{room}'. Use 'matrix-rooms.py' to list rooms."
+                }
 
         room_obj = client.rooms.get(room_id)
         if room_obj and room_obj.encrypted and client.olm:
@@ -205,28 +217,8 @@ def main():
     if not args.no_prefix and config.get("bot_prefix"):
         message = add_bot_prefix(message, config["bot_prefix"])
 
-    # Resolve room name if needed
+    # Room name resolution happens post-sync inside the async function
     room = room_input
-    if not room_input.startswith("!") and not room_input.startswith("#"):
-        found_id, matches = find_room_by_name(config, room_input)
-        if found_id:
-            room = found_id
-            if args.debug:
-                print(f"Found room: {room}", file=sys.stderr)
-        else:
-            error_msg = f"Could not find room '{room_input}'"
-            if matches:
-                error_msg += ". Multiple matches found:\n"
-                for m in matches:
-                    alias_str = f" ({m['alias']})" if m.get("alias") else ""
-                    error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
-            else:
-                error_msg += ". Use 'matrix-rooms.py' to list available rooms."
-            if args.json:
-                print(json.dumps({"error": error_msg}))
-            else:
-                print(f"Error: {error_msg}", file=sys.stderr)
-            sys.exit(1)
 
     result = asyncio.run(
         edit_message_e2ee(config, room, args.event_id, message, args.debug)

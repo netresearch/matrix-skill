@@ -78,6 +78,9 @@ except ImportError as e:
     print(f"  python3 {script_dir}/matrix-doctor.py --install", file=sys.stderr)
     sys.exit(1)
 
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 
 async def setup_device(config: dict, password: str) -> dict:
     """Create a new E2EE device using password login."""

@@ -1,70 +1,103 @@
 # Matrix Skill
 
-Agent skill for Matrix chat communication: send/read/edit messages, E2EE support, reactions, threads, and room management.
+AI agent skill for Matrix chat communication: send/read/edit messages, E2EE encryption, reactions, threads, and room management. Packaged as a Claude Code plugin following the [Agentic Skills specification](https://agentskills.io).
 
 ## Repo Structure
 
 ```
-├── skills/matrix-communication/
-│   ├── SKILL.md                    # Skill metadata and instructions
-│   ├── evals/                      # Skill evaluations
-│   ├── references/                 # Detailed reference docs (see below)
-│   └── scripts/                    # Matrix operation scripts
-│       ├── matrix-send-e2ee.py     # Send encrypted messages (primary)
-│       ├── matrix-read-e2ee.py     # Read/decrypt messages
-│       ├── matrix-edit-e2ee.py     # Edit messages (E2EE)
-│       ├── matrix-send.py          # Send (non-E2EE fallback)
-│       ├── matrix-read.py          # Read (non-E2EE fallback)
-│       ├── matrix-edit.py          # Edit (non-E2EE fallback)
-│       ├── matrix-react.py         # React to messages
-│       ├── matrix-redact.py        # Delete messages
-│       ├── matrix-rooms.py         # List rooms
-│       ├── matrix-resolve.py       # Resolve room aliases
-│       ├── matrix-e2ee-setup.py    # E2EE device setup
-│       ├── matrix-e2ee-verify.py   # Device verification (SAS)
-│       ├── matrix-fetch-keys.py    # Fetch E2EE keys
-│       ├── matrix-key-backup.py    # Key backup/restore
-│       ├── matrix-doctor.py        # Health check / auto-install
-│       └── _lib/                   # Shared library code
-├── .claude-plugin/
-│   └── plugin.json                 # Claude Code plugin manifest
-├── commands/
-│   └── work-update.md              # Work update command template
-├── Build/
-│   └── Scripts/                    # Build/validation scripts
-├── scripts/
-│   └── verify-harness.sh           # Harness consistency checker
-├── .github/workflows/              # CI workflows (lint, release, auto-merge)
-├── docs/                           # Architecture and planning docs
-├── composer.json                   # Composer package manifest
-└── README.md
+skills/matrix-communication/
+  SKILL.md              # Skill entry point -- agent reads this first
+  scripts/              # Python scripts for each Matrix operation
+    _lib/               # Shared library (config, http, rooms, formatting, e2ee, utils)
+    matrix-*-e2ee.py    # E2EE variants (send, read, edit) -- ALWAYS prefer these
+    matrix-*.py         # Non-E2EE fallbacks + standalone tools (react, redact, rooms, resolve)
+    matrix-doctor.py    # Health check / dependency installer
+  references/           # Detailed guides (setup, e2ee, messaging, api)
+  evals/                # Skill evaluation definitions
+commands/work-update.md # /work-update slash command template
+.claude-plugin/plugin.json  # Claude Code plugin manifest
+docs/ARCHITECTURE.md    # System architecture overview
+Build/Scripts/          # CI validation scripts (version checks)
+scripts/verify-harness.sh   # Harness maturity checker
+.github/workflows/      # CI: lint, release, harness-verify, auto-merge-deps
 ```
 
 ## Commands
 
-No build system scripts defined in composer.json. Basic operations:
+All scripts live in `skills/matrix-communication/scripts/`. Use `uv run` unless noted.
 
-- `uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "message"` -- send E2EE message
-- `uv run skills/matrix-communication/scripts/matrix-rooms.py` -- list joined rooms
-- `uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM` -- read messages
-- `python3 skills/matrix-communication/scripts/matrix-doctor.py --install` -- health check
-- `bash scripts/verify-harness.sh --status` -- check harness maturity level
+```bash
+# Send (always prefer E2EE)
+set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "message"
+set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "text" --thread '$rootEventId'
+set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "text" --reply '$eventId'
+set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "acting" --emote
+set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "text" --no-prefix
+
+# Read
+uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 10
+uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 20 --json
+
+# Edit / Delete
+set +H && uv run skills/matrix-communication/scripts/matrix-edit-e2ee.py ROOM '$eventId' "new text"
+uv run skills/matrix-communication/scripts/matrix-redact.py ROOM '$eventId' "reason"
+
+# React
+uv run skills/matrix-communication/scripts/matrix-react.py ROOM '$eventId' "✅"
+
+# Rooms
+uv run skills/matrix-communication/scripts/matrix-rooms.py
+uv run skills/matrix-communication/scripts/matrix-rooms.py --search ops
+uv run skills/matrix-communication/scripts/matrix-resolve.py "#room:server"
+
+# E2EE management
+uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py           # Initial device setup
+uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py --status  # Check setup status
+uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 180  # SAS verification
+uv run skills/matrix-communication/scripts/matrix-fetch-keys.py ROOM --sync-time 60  # Fetch missing keys
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "EsTj ..." --import-keys  # Restore backup
+
+# Health check (uses python3 directly, not uv run)
+python3 skills/matrix-communication/scripts/matrix-doctor.py --install
+
+# Harness verification
+bash scripts/verify-harness.sh --status
+```
 
 ## Rules
 
-- Always prefer E2EE scripts (`*-e2ee.py`) over non-E2EE fallbacks
-- Room identifiers: use alias (`#room:server`), room ID (`!abc:server`), or short name
-- First E2EE run takes ~5-10s for key sync; subsequent runs are faster
-- Requires `python3`, `uv`, and Matrix homeserver access
-- For E2EE: requires `libolm-dev` system package
-- Messages sent appear as the user (not a bot) via access token authentication
-- Use `--emote` for /me-style messages, `--thread $eventId` for thread replies
+**E2EE first**: Always use `*-e2ee.py` scripts. Only fall back to non-E2EE if the room is confirmed unencrypted.
+
+**Room identifiers**: Scripts accept three formats -- short name (`agent-work`), room alias (`#room:server`), or room ID (`!abc:server`). Use `matrix-rooms.py` to discover available rooms.
+
+**Config**: Located at `~/.config/matrix/config.json`. Required fields: `homeserver`, `user_id`. Optional: `access_token` (for non-E2EE scripts), `bot_prefix`.
+
+**Running scripts**: Use `uv run` for all scripts except `matrix-doctor.py` which uses `python3` directly (it bootstraps dependencies).
+
+**Bash `!` handling**: Always prepend `set +H &&` before commands containing `!` in messages. Bash history expansion corrupts exclamation marks otherwise.
+
+**Passwords with special chars**: Pass via env var, not CLI arg: `MATRIX_PASSWORD="p@ss!" uv run ...`
+
+**Key backup**: Always include `--import-keys` flag when restoring. Without it, keys are displayed but not saved to the local store.
+
+**Device verification**: Use Element Desktop or Element Android to verify the agent's device. Element X has incompatible verification flows.
+
+**Line buffering**: Scripts use `line_buffering=True` for non-interactive (piped) contexts. Output appears in real time.
+
+**First E2EE run**: Takes ~2-5 seconds for initial key sync. Subsequent runs are faster.
+
+**Dependencies**: Requires `python3`, `uv`, Matrix homeserver access. E2EE scripts additionally need `libolm-dev` (apt) / `libolm-devel` (dnf) / `libolm` (brew).
+
+## Testing
+
+Use the `#test` room (or a room named `test`) for all testing. Never test in production rooms. Send a message and verify it appears in Element to confirm E2EE works end-to-end.
 
 ## References
 
-- [SKILL.md](skills/matrix-communication/SKILL.md) -- core skill definition
-- [API Reference](skills/matrix-communication/references/api-reference.md)
-- [E2EE Guide](skills/matrix-communication/references/e2ee-guide.md)
-- [Messaging Guide](skills/matrix-communication/references/messaging-guide.md)
-- [Setup Guide](skills/matrix-communication/references/setup-guide.md)
-- [Architecture](docs/ARCHITECTURE.md)
+- [SKILL.md](skills/matrix-communication/SKILL.md) -- skill definition and quick reference
+- [Setup Guide](skills/matrix-communication/references/setup-guide.md) -- initial configuration walkthrough
+- [E2EE Guide](skills/matrix-communication/references/e2ee-guide.md) -- encryption, key recovery, verification
+- [Messaging Guide](skills/matrix-communication/references/messaging-guide.md) -- formatting, reactions, threads
+- [API Reference](skills/matrix-communication/references/api-reference.md) -- Matrix API endpoints
+- [Architecture](docs/ARCHITECTURE.md) -- system design and distribution
+- [Source](https://github.com/netresearch/matrix-skill)

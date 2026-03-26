@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
 """Redact (delete) a message from a Matrix room.
 
 Usage:
@@ -33,6 +37,9 @@ from _lib import (
     find_room_by_name,
     clean_message,
 )
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 
 def redact_message(
