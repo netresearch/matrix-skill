@@ -24,6 +24,7 @@ from _lib.rooms import (
     get_room_info,
     list_joined_rooms,
     find_room_by_name,
+    find_room_in_nio_client,
 )
 
 # Formatting
@@ -60,6 +61,7 @@ __all__ = [
     "get_room_info",
     "list_joined_rooms",
     "find_room_by_name",
+    "find_room_in_nio_client",
     # Formatting
     "shorten_service_urls",
     "markdown_to_html",

@@ -145,3 +145,54 @@ def find_room_by_name(config: dict, search_term: str) -> tuple[str | None, list]
         return matches[0]["room_id"], matches
 
     return None, matches
+
+
+def find_room_in_nio_client(client_rooms: dict, search_term: str) -> str | None:
+    """Find a room by name in a matrix-nio client.rooms dict (post-sync).
+
+    This avoids the N+1 HTTP calls of find_room_by_name() by using
+    room data already loaded by client.sync().
+
+    Args:
+        client_rooms: dict from AsyncClient.rooms (room_id -> MatrixRoom)
+        search_term: Room name, alias, or ID to match
+
+    Returns:
+        room_id if found, None otherwise
+    """
+    search_lower = search_term.lower()
+
+    # Exact alias match
+    for room_id, room in client_rooms.items():
+        if room.canonical_alias and room.canonical_alias.lower() == search_lower:
+            return room_id
+
+    # Alias name match (without server part)
+    for room_id, room in client_rooms.items():
+        if room.canonical_alias:
+            alias_name = room.canonical_alias.split(":")[0].lstrip("#")
+            if alias_name.lower() == search_lower:
+                return room_id
+
+    # Exact display name match
+    exact_matches = [
+        room_id
+        for room_id, room in client_rooms.items()
+        if room.display_name and room.display_name.lower() == search_lower
+    ]
+    if len(exact_matches) == 1:
+        return exact_matches[0]
+    if len(exact_matches) > 1:
+        return None  # Ambiguous exact match
+
+    # Partial name match
+    partial_matches = [
+        room_id
+        for room_id, room in client_rooms.items()
+        if search_lower in (room.display_name or "").lower()
+        or search_lower in (room.canonical_alias or "").lower()
+    ]
+    if len(partial_matches) == 1:
+        return partial_matches[0]
+
+    return None

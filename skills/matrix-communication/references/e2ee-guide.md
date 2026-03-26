@@ -40,7 +40,7 @@ uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py --status
 ## E2EE Script Usage
 
 ```bash
-# First run after setup is slow (~5-10s) - syncs keys
+# First run after setup syncs keys (~2-5s)
 uv run skills/matrix-communication/scripts/matrix-send-e2ee.py '#encrypted-room:server' 'Secret message'
 
 # Subsequent runs faster (uses cached keys)
@@ -113,7 +113,7 @@ uv run skills/matrix-communication/scripts/matrix-read-e2ee.py '#room:server' --
 uv run skills/matrix-communication/scripts/matrix-read-e2ee.py '#room:server' --json
 ```
 
-**First run is slow** (~5-10s) — the client needs to sync keys with the server.
+**First run** (~2-5s) — the client syncs keys with the server.
 
 ### Understanding `[Unable to decrypt]`
 
@@ -198,7 +198,7 @@ uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 180
 
 ## Limitations
 
-- **First sync**: Initial run is slow (~5-10s) due to key exchange
+- **First sync**: Initial run ~2-5s for key exchange; subsequent runs ~2-3s
 - **Device trust**: Auto-trusts devices (TOFU model)
 - **Setup required**: First use requires user's Matrix password (one-time only)
 - **Verification**: Cross-signing/room-based verification not fully supported by matrix-nio
