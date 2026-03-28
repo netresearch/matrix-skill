@@ -13,7 +13,7 @@ Usage:
 """
 
 # Config
-from _lib.config import load_config
+from _lib.config import get_config_path, load_config
 
 # HTTP API
 from _lib.http import matrix_request
@@ -42,6 +42,9 @@ from _lib.utils import (
     suppress_nio_logging,
 )
 
+# Dependency checking
+from _lib.deps import check_e2ee_dependencies
+
 # E2EE (only used by E2EE scripts, but still stdlib-only)
 from _lib.e2ee import (
     get_store_path,
@@ -53,6 +56,7 @@ from _lib.e2ee import (
 
 __all__ = [
     # Config
+    "get_config_path",
     "load_config",
     # HTTP
     "matrix_request",
@@ -71,6 +75,8 @@ __all__ = [
     "format_timestamp",
     "prefer_ipv4",
     "suppress_nio_logging",
+    # Deps
+    "check_e2ee_dependencies",
     # E2EE
     "get_store_path",
     "get_credentials_path",

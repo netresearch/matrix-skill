@@ -20,6 +20,10 @@
     "notification",
     "nio"
   ],
+  "support": {
+    "issues": "https://github.com/netresearch/matrix-skill/issues",
+    "source": "https://github.com/netresearch/matrix-skill"
+  },
   "skills": [
     "./skills/matrix-communication"
   ],

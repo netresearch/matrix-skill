@@ -4,8 +4,18 @@ All functions use ONLY stdlib.
 """
 
 import json
+import os
 import sys
 from pathlib import Path
+
+
+def get_config_path() -> Path:
+    """Get the Matrix configuration file path.
+
+    Returns ~/.config/matrix/config.json (respects XDG_CONFIG_HOME if set).
+    """
+    xdg_config = os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+    return Path(xdg_config) / "matrix" / "config.json"
 
 
 def load_config(require_user_id: bool = False) -> dict:
@@ -19,7 +29,7 @@ def load_config(require_user_id: bool = False) -> dict:
 
     Exits with error if config not found or missing required fields.
     """
-    config_path = Path.home() / ".config" / "matrix" / "config.json"
+    config_path = get_config_path()
     if not config_path.exists():
         print(f"Error: Config file not found: {config_path}", file=sys.stderr)
         print("Create it with:", file=sys.stderr)

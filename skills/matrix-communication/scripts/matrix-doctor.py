@@ -20,10 +20,17 @@ Options:
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+# Add script directory to path for _lib imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _lib.config import get_config_path
+from _lib.e2ee import get_store_path
 
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
@@ -64,15 +71,6 @@ def run_pip_command(pip_cmd: str, args: list[str]) -> tuple[bool, str]:
         return False, "Command timed out"
     except Exception as e:
         return False, str(e)
-
-
-def check_python_package(package: str) -> bool:
-    """Check if a Python package is importable."""
-    try:
-        __import__(package)
-        return True
-    except ImportError:
-        return False
 
 
 def check_matrix_nio_e2ee() -> tuple[bool, str]:
@@ -119,7 +117,7 @@ def check_libolm() -> tuple[bool, str]:
 
 def check_config() -> tuple[bool, str, dict]:
     """Check Matrix configuration file."""
-    config_path = Path.home() / ".config" / "matrix" / "config.json"
+    config_path = get_config_path()
     if not config_path.exists():
         return False, f"Config not found at {config_path}", {}
 
@@ -145,7 +143,7 @@ def check_config() -> tuple[bool, str, dict]:
 
 def check_e2ee_setup() -> tuple[bool, str]:
     """Check E2EE device setup status."""
-    store_dir = Path.home() / ".local" / "share" / "matrix-skill" / "store"
+    store_dir = get_store_path()
     creds_file = store_dir / "credentials.json"
 
     if not store_dir.exists():
