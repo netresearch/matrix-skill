@@ -5,7 +5,7 @@ license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires python3, uv. Matrix homeserver access."
 metadata:
   author: Netresearch DTT GmbH
-  version: "1.17.0"
+  version: "1.17.1"
   repository: https://github.com/netresearch/matrix-skill
 allowed-tools: Bash(python3:*) Bash(uv:*) Read Write
 ---
