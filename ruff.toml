@@ -1,0 +1,3 @@
+[lint.per-file-ignores]
+# E402: nio imports must come after check_e2ee_dependencies() call
+"skills/matrix-communication/scripts/matrix-*e2ee*.py" = ["E402"]

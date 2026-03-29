@@ -38,7 +38,5 @@ def check_e2ee_dependencies() -> None:
 
         print("", file=sys.stderr)
         print("Or run the health check to diagnose and fix:", file=sys.stderr)
-        print(
-            f"  python3 {script_dir}/matrix-doctor.py --install", file=sys.stderr
-        )
+        print(f"  python3 {script_dir}/matrix-doctor.py --install", file=sys.stderr)
         sys.exit(1)
