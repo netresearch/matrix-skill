@@ -1,24 +1,24 @@
 ---
 name: matrix-communication
-description: "Use when needing to communicate via Matrix chat, notify teams, or manage E2EE encryption. Triggers on #room:server references, Matrix URLs, room names, and chat requests."
+description: "Use when communicating via Matrix chat, notifying teams, or managing E2EE. Triggers on #room:server references, Matrix URLs, and chat requests."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires python3, uv. Matrix homeserver access."
 metadata:
   author: Netresearch DTT GmbH
-  version: "1.17.2"
+  version: "1.18.0"
   repository: https://github.com/netresearch/matrix-skill
 allowed-tools: Bash(python3:*) Bash(uv:*) Read Write
 ---
 
 # Matrix Communication
 
-Send and read messages in Matrix rooms via E2EE scripts. Always use `*-e2ee.py` scripts.
+Send and read messages in Matrix rooms. **Always use `*-e2ee.py` scripts.**
 
-**Bash `!` handling:** Prepend `set +H &&` before commands containing `!`.
+**Bash `!` rule:** Prepend `set +H &&` when arguments contain `!`
 
 ## Quick Reference
 
-ROOM accepts: name (`test`), ID (`!abc:server`), or alias (`#room:server`).
+ROOM: name (`test`), ID (`!abc:server`), or alias (`#room:server`).
 
 ```bash
 # Send (E2EE)
@@ -31,6 +31,7 @@ uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "reply" --re
 # Read (E2EE)
 uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 10
 uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 20 --json
+uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 10 --request-keys
 
 # Edit / Delete / React
 uv run skills/matrix-communication/scripts/matrix-edit-e2ee.py ROOM '$eventId' "new text"
@@ -44,6 +45,8 @@ uv run skills/matrix-communication/scripts/matrix-resolve.py "#room:server"
 
 # E2EE management
 uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py --status
+MATRIX_PASSWORD="pass" uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py
+uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 180
 uv run skills/matrix-communication/scripts/matrix-fetch-keys.py ROOM --sync-time 60
 uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "EsTj ..." --import-keys
 
@@ -65,7 +68,7 @@ Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-e2ee-setup.py`, `matrix-e
 
 ## Config
 
-`~/.config/matrix/config.json` — required: `homeserver`, `user_id`. Optional: `access_token`, `bot_prefix`.
+`~/.config/matrix/config.json` — required: `homeserver`, `user_id`. Optional: `access_token`, `bot_prefix`
 
 ## Error Handling
 
@@ -88,6 +91,7 @@ Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-e2ee-setup.py`, `matrix-e
 - **Skipping `--import-keys`** — key backup shows but doesn't save keys without it
 - **Using Element X** for verification — use Element Desktop or Android
 - **Not running `matrix-doctor.py --install`** first — dependency errors
+- **Hardcoding passwords** — use `MATRIX_PASSWORD` env var for special characters
 
 ## References
 
@@ -95,4 +99,4 @@ Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-e2ee-setup.py`, `matrix-e
 - `references/e2ee-guide.md` — E2EE, key recovery, verification
 - `references/messaging-guide.md` — formatting, reactions, patterns
 - `references/api-reference.md` — Matrix API endpoints
-- Source: [netresearch/matrix-skill](https://github.com/netresearch/matrix-skill)
+- [netresearch/matrix-skill](https://github.com/netresearch/matrix-skill)

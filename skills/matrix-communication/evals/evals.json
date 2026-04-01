@@ -3,74 +3,32 @@
   "evals": [
     {
       "id": 1,
-      "eval_name": "send-message-to-room",
+      "eval_name": "send-basic-message",
       "prompt": "Send a message to the dev room on Matrix saying 'Deployment complete for v2.3.0'.",
-      "expected_output": "Uses the matrix-send-e2ee.py script with room name and message text.",
+      "expected_output": "Uses matrix-send-e2ee.py with room name and message text.",
       "files": [],
       "assertions": [
         "Uses matrix-send-e2ee.py (E2EE preferred over non-E2EE)",
         "Uses uv run to execute the script",
-        "Passes room name as first argument",
-        "Passes message text as second argument",
-        "Does not use the non-E2EE matrix-send.py fallback without reason"
+        "Passes 'dev' as room identifier",
+        "Passes message text as second argument"
       ]
     },
     {
       "id": 2,
-      "eval_name": "list-matrix-rooms",
-      "prompt": "List my Matrix rooms so I can see which ones I'm joined to.",
-      "expected_output": "Uses the matrix-rooms.py script to list joined rooms.",
+      "eval_name": "send-with-exclamation",
+      "prompt": "Send 'Deploy complete! All tests passed!' to the ops room.",
+      "expected_output": "Handles bash history expansion by using set +H before the command.",
       "files": [],
       "assertions": [
-        "Uses matrix-rooms.py script",
-        "Uses uv run to execute the script",
-        "Does not attempt to call Matrix API directly",
-        "Presents room names and IDs from the output"
+        "Uses matrix-send-e2ee.py (E2EE preferred)",
+        "Prepends set +H && before the command",
+        "Does not let bash history expansion corrupt the message"
       ]
     },
     {
       "id": 3,
-      "eval_name": "read-recent-messages",
-      "prompt": "Read the last 5 messages from the agent-work Matrix room.",
-      "expected_output": "Uses matrix-read-e2ee.py with room name and --limit flag.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-read-e2ee.py (E2EE preferred)",
-        "Uses uv run to execute the script",
-        "Passes 'agent-work' as room identifier",
-        "Uses --limit 5 flag to restrict message count"
-      ]
-    },
-    {
-      "id": 4,
-      "eval_name": "react-to-message",
-      "prompt": "React to the message with event ID $abc123 in the ops room with a checkmark emoji.",
-      "expected_output": "Uses matrix-react.py with room name, event ID, and emoji.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-react.py script",
-        "Uses uv run to execute the script",
-        "Passes 'ops' as room identifier",
-        "Passes '$abc123' as event ID argument",
-        "Passes checkmark emoji or 'checkmark' as reaction"
-      ]
-    },
-    {
-      "id": 5,
-      "eval_name": "thread-reply",
-      "prompt": "Reply in the thread started by event $root456 in the dev room with 'Tests passing, ready for review'.",
-      "expected_output": "Uses matrix-send-e2ee.py with --thread flag and root event ID.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-send-e2ee.py (E2EE preferred)",
-        "Uses --thread flag with '$root456' as the root event ID",
-        "Passes 'dev' as room identifier",
-        "Passes message text as argument"
-      ]
-    },
-    {
-      "id": 6,
-      "eval_name": "send-emote-message",
+      "eval_name": "send-emote",
       "prompt": "Send an emote message to the ops room saying 'is deploying to production'.",
       "expected_output": "Uses matrix-send-e2ee.py with --emote flag.",
       "files": [],
@@ -82,136 +40,31 @@
       ]
     },
     {
-      "id": 7,
-      "eval_name": "edit-sent-message",
-      "prompt": "Edit the message $evt789 in the general room to say 'Corrected: deploy at 3pm not 2pm'.",
-      "expected_output": "Uses matrix-edit-e2ee.py with room, event ID, and new text.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-edit-e2ee.py (E2EE preferred over matrix-edit.py)",
-        "Uses uv run to execute the script",
-        "Passes room identifier as first argument",
-        "Passes event ID '$evt789' as second argument",
-        "Passes corrected message text as third argument"
-      ]
-    },
-    {
-      "id": 8,
-      "eval_name": "delete-message",
-      "prompt": "Delete the message $evt999 from the dev room because it was sent by mistake.",
-      "expected_output": "Uses matrix-redact.py with room, event ID, and reason.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-redact.py script",
-        "Uses uv run to execute the script",
-        "Passes room identifier",
-        "Passes event ID '$evt999'",
-        "Optionally passes a reason string"
-      ]
-    },
-    {
-      "id": 9,
-      "eval_name": "resolve-room-alias",
-      "prompt": "What is the room ID for #general:matrix.example.com?",
-      "expected_output": "Uses matrix-resolve.py to resolve the alias to a room ID.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-resolve.py script",
-        "Uses uv run to execute the script",
-        "Passes '#general:matrix.example.com' as argument"
-      ]
-    },
-    {
-      "id": 10,
-      "eval_name": "send-with-room-alias",
-      "prompt": "Send 'Hello everyone' to the room #team:matrix.org.",
-      "expected_output": "Uses matrix-send-e2ee.py with full room alias.",
+      "id": 4,
+      "eval_name": "send-no-prefix",
+      "prompt": "Send a plain message to the team room without the bot prefix: 'Meeting moved to 3pm'.",
+      "expected_output": "Uses matrix-send-e2ee.py with --no-prefix flag.",
       "files": [],
       "assertions": [
         "Uses matrix-send-e2ee.py (E2EE preferred)",
-        "Passes '#team:matrix.org' as room argument (quoted)",
+        "Uses --no-prefix flag",
+        "Passes room identifier and message"
+      ]
+    },
+    {
+      "id": 5,
+      "eval_name": "send-to-room-alias",
+      "prompt": "Send 'Hello everyone' to the room #team:matrix.org.",
+      "expected_output": "Uses matrix-send-e2ee.py with full room alias as ROOM argument.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-send-e2ee.py (E2EE preferred)",
+        "Passes '#team:matrix.org' as room argument",
         "Passes 'Hello everyone' as message"
       ]
     },
     {
-      "id": 11,
-      "eval_name": "read-messages-json",
-      "prompt": "Read the last 20 messages from the ops room as JSON so I can analyze them programmatically.",
-      "expected_output": "Uses matrix-read-e2ee.py with --json and --limit flags.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-read-e2ee.py (E2EE preferred)",
-        "Uses --json flag for structured output",
-        "Uses --limit 20 flag",
-        "Passes 'ops' as room identifier"
-      ]
-    },
-    {
-      "id": 12,
-      "eval_name": "health-check",
-      "prompt": "Check if my Matrix skill dependencies are properly installed.",
-      "expected_output": "Uses matrix-doctor.py to check dependencies.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-doctor.py script",
-        "Uses python3 (not uv run) to execute",
-        "Optionally uses --install flag to auto-fix issues"
-      ]
-    },
-    {
-      "id": 13,
-      "eval_name": "reply-to-specific-message",
-      "prompt": "Reply to the message $msg123 in the dev room saying 'Agreed, let's proceed with that approach'.",
-      "expected_output": "Uses matrix-send-e2ee.py with --reply flag.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-send-e2ee.py (E2EE preferred)",
-        "Uses --reply flag with '$msg123' as the event ID",
-        "Passes 'dev' as room identifier",
-        "Passes reply message text as argument"
-      ]
-    },
-    {
-      "id": 14,
-      "eval_name": "fetch-missing-keys",
-      "prompt": "I'm seeing '[Unable to decrypt]' for some messages in the IT room. Can you try to fetch the missing keys?",
-      "expected_output": "Uses matrix-fetch-keys.py to request keys from other devices.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-fetch-keys.py script",
-        "Uses uv run to execute the script",
-        "Passes 'IT' as room identifier",
-        "Uses --sync-time flag with reasonable timeout (e.g., 60)"
-      ]
-    },
-    {
-      "id": 15,
-      "eval_name": "restore-key-backup",
-      "prompt": "I have a recovery key 'EsTj qRGp YB4C abcd'. Restore my key backup so I can read old messages.",
-      "expected_output": "Uses matrix-key-backup.py with --recovery-key and --import-keys flags.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-key-backup.py script",
-        "Uses uv run to execute the script",
-        "Uses --recovery-key flag with the provided key",
-        "Uses --import-keys flag to actually import keys into local store",
-        "Does not forget --import-keys (common mistake)"
-      ]
-    },
-    {
-      "id": 16,
-      "eval_name": "send-message-with-exclamation",
-      "prompt": "Send 'Deploy complete! All tests passed!' to the ops room.",
-      "expected_output": "Handles bash history expansion by using set +H or proper quoting.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-send-e2ee.py (E2EE preferred)",
-        "Handles the '!' character properly (set +H, single quotes, or proper escaping)",
-        "Does not let bash history expansion corrupt the message"
-      ]
-    },
-    {
-      "id": 17,
+      "id": 6,
       "eval_name": "send-formatted-message",
       "prompt": "Send a deployment notification to the ops room: bold 'Deployed' header, version 1.5.0, with a Jira link to PROJ-456.",
       "expected_output": "Uses matrix-send-e2ee.py with markdown-formatted message.",
@@ -220,140 +73,237 @@
         "Uses matrix-send-e2ee.py (E2EE preferred)",
         "Uses markdown bold for 'Deployed'",
         "Includes version information",
-        "Includes Jira URL (auto-shortened by Matrix clients)"
+        "Includes Jira URL"
+      ]
+    },
+    {
+      "id": 7,
+      "eval_name": "thread-reply",
+      "prompt": "Reply in the thread started by event $root456 in the dev room with 'Tests passing, ready for review'.",
+      "expected_output": "Uses matrix-send-e2ee.py with --thread flag and root event ID.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-send-e2ee.py (E2EE preferred)",
+        "Uses --thread flag with '$root456'",
+        "Passes 'dev' as room identifier",
+        "Passes message text as argument"
+      ]
+    },
+    {
+      "id": 8,
+      "eval_name": "direct-reply",
+      "prompt": "Reply to the message $msg123 in the dev room saying 'Agreed, let's proceed with that approach'.",
+      "expected_output": "Uses matrix-send-e2ee.py with --reply flag.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-send-e2ee.py (E2EE preferred)",
+        "Uses --reply flag (not --thread) with '$msg123'",
+        "Passes 'dev' as room identifier"
+      ]
+    },
+    {
+      "id": 9,
+      "eval_name": "read-recent-messages",
+      "prompt": "Read the last 5 messages from the agent-work Matrix room.",
+      "expected_output": "Uses matrix-read-e2ee.py with room name and --limit flag.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-read-e2ee.py (E2EE preferred)",
+        "Passes 'agent-work' as room identifier",
+        "Uses --limit 5 flag"
+      ]
+    },
+    {
+      "id": 10,
+      "eval_name": "read-messages-json",
+      "prompt": "Read the last 20 messages from the ops room as JSON so I can analyze them.",
+      "expected_output": "Uses matrix-read-e2ee.py with --json and --limit flags.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-read-e2ee.py (E2EE preferred)",
+        "Uses --json flag for structured output",
+        "Uses --limit 20 flag"
+      ]
+    },
+    {
+      "id": 11,
+      "eval_name": "read-with-request-keys",
+      "prompt": "Read the last 10 messages from the dev room and try to recover any undecryptable messages.",
+      "expected_output": "Uses matrix-read-e2ee.py with --request-keys flag.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-read-e2ee.py with --request-keys flag",
+        "Uses --limit 10 flag"
+      ]
+    },
+    {
+      "id": 12,
+      "eval_name": "edit-message",
+      "prompt": "Edit the message $evt789 in the general room to say 'Corrected: deploy at 3pm not 2pm'.",
+      "expected_output": "Uses matrix-edit-e2ee.py with room, event ID, and new text.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-edit-e2ee.py (E2EE preferred over matrix-edit.py)",
+        "Passes room identifier as first argument",
+        "Passes event ID '$evt789' as second argument",
+        "Passes corrected text as third argument"
+      ]
+    },
+    {
+      "id": 13,
+      "eval_name": "delete-message",
+      "prompt": "Delete the message $evt999 from the dev room because it was sent by mistake.",
+      "expected_output": "Uses matrix-redact.py with room, event ID, and reason.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-redact.py script",
+        "Passes room identifier",
+        "Passes event ID '$evt999'",
+        "Optionally passes a reason string"
+      ]
+    },
+    {
+      "id": 14,
+      "eval_name": "react-to-message",
+      "prompt": "React to the message with event ID $abc123 in the ops room with a checkmark emoji.",
+      "expected_output": "Uses matrix-react.py with room name, event ID, and emoji.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-react.py script",
+        "Passes 'ops' as room identifier",
+        "Passes '$abc123' as event ID",
+        "Passes checkmark emoji as reaction"
+      ]
+    },
+    {
+      "id": 15,
+      "eval_name": "list-rooms",
+      "prompt": "List my Matrix rooms so I can see which ones I'm joined to.",
+      "expected_output": "Uses matrix-rooms.py to list joined rooms.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-rooms.py script",
+        "Uses uv run to execute",
+        "Does not call Matrix API directly"
+      ]
+    },
+    {
+      "id": 16,
+      "eval_name": "search-rooms",
+      "prompt": "Search my Matrix rooms for any room with 'ops' in the name.",
+      "expected_output": "Uses matrix-rooms.py with --search flag.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-rooms.py with --search flag",
+        "Passes 'ops' as search term"
+      ]
+    },
+    {
+      "id": 17,
+      "eval_name": "resolve-room-alias",
+      "prompt": "What is the room ID for #general:matrix.example.com?",
+      "expected_output": "Uses matrix-resolve.py to resolve the alias.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-resolve.py script",
+        "Passes '#general:matrix.example.com' as argument"
       ]
     },
     {
       "id": 18,
-      "eval_name": "check-e2ee-setup-status",
-      "prompt": "Check if my E2EE device is properly set up for Matrix.",
-      "expected_output": "Uses matrix-e2ee-setup.py with --status flag.",
+      "eval_name": "health-check",
+      "prompt": "Check if my Matrix skill dependencies are properly installed.",
+      "expected_output": "Uses matrix-doctor.py with python3 (not uv run).",
       "files": [],
       "assertions": [
-        "Uses matrix-e2ee-setup.py script with --status flag",
-        "Uses uv run to execute the script",
-        "Does not attempt to create a new device (only checks status)"
+        "Uses matrix-doctor.py script",
+        "Uses python3 (not uv run) to execute",
+        "Optionally uses --install flag"
       ]
     },
     {
       "id": 19,
-      "eval_name": "send-no-prefix",
-      "prompt": "Send a plain message to the team room without the bot prefix: 'Meeting moved to 3pm'.",
-      "expected_output": "Uses matrix-send-e2ee.py with --no-prefix flag.",
+      "eval_name": "e2ee-setup-status",
+      "prompt": "Check if my E2EE device is properly set up for Matrix.",
+      "expected_output": "Uses matrix-e2ee-setup.py with --status flag.",
       "files": [],
       "assertions": [
-        "Uses matrix-send-e2ee.py (E2EE preferred)",
-        "Uses --no-prefix flag to suppress bot_prefix",
-        "Passes room identifier and message"
+        "Uses matrix-e2ee-setup.py with --status flag",
+        "Uses uv run to execute",
+        "Does not create a new device (only checks status)"
       ]
     },
     {
       "id": 20,
-      "eval_name": "multi-step-workflow",
-      "prompt": "Send 'Starting server maintenance' to the ops room, then capture the event ID to add a checkmark reaction when done.",
-      "expected_output": "Sends message, captures event ID, then uses matrix-react.py.",
+      "eval_name": "e2ee-setup-new",
+      "prompt": "I need to set up Matrix E2EE for the first time. My password has special characters.",
+      "expected_output": "Uses MATRIX_PASSWORD env var with matrix-e2ee-setup.py.",
       "files": [],
       "assertions": [
-        "Uses matrix-send-e2ee.py for the initial message",
-        "Captures the event ID from the send output",
-        "Uses matrix-react.py with the captured event ID for the reaction",
-        "Uses 'ops' as room identifier in both commands"
+        "Uses matrix-e2ee-setup.py script",
+        "Uses MATRIX_PASSWORD environment variable (not command-line arg)",
+        "References setup-guide.md or explains env var avoids shell escaping"
       ]
     },
     {
       "id": 21,
-      "eval_name": "error-recovery-forbidden",
-      "prompt": "I tried to send a message to the ops room but got M_FORBIDDEN. What should I do?",
-      "expected_output": "Suggests joining the room in Element first and references the error handling table.",
+      "eval_name": "device-verification",
+      "prompt": "I need to verify my Matrix E2EE device with Element Desktop.",
+      "expected_output": "Uses matrix-e2ee-verify.py with --timeout flag.",
       "files": [],
       "assertions": [
-        "Suggests joining the room in Element first",
-        "Does not retry the same command blindly",
-        "References the error handling table"
+        "Uses matrix-e2ee-verify.py script",
+        "Uses --timeout flag with reasonable value",
+        "Mentions Element Desktop (not Element X)",
+        "References e2ee-guide.md for details"
       ]
     },
     {
       "id": 22,
-      "eval_name": "error-recovery-decrypt",
-      "prompt": "I'm reading messages in the dev room and most show '[Unable to decrypt]'. How do I fix this?",
-      "expected_output": "Suggests matrix-key-backup.py or matrix-fetch-keys.py for key recovery.",
+      "eval_name": "restore-key-backup",
+      "prompt": "I have a recovery key 'EsTj qRGp YB4C abcd'. Restore my key backup so I can read old messages.",
+      "expected_output": "Uses matrix-key-backup.py with --recovery-key and --import-keys.",
       "files": [],
       "assertions": [
-        "Suggests matrix-key-backup.py with --recovery-key and --import-keys, or matrix-fetch-keys.py",
-        "Does not suggest non-E2EE fallback as primary solution"
+        "Uses matrix-key-backup.py script",
+        "Uses --recovery-key flag with the provided key",
+        "Uses --import-keys flag (must not forget this)",
+        "Does not omit --import-keys"
       ]
     },
     {
       "id": 23,
-      "eval_name": "setup-e2ee-from-scratch",
-      "prompt": "I need to set up Matrix E2EE for the first time. My user ID is @agent:example.com.",
-      "expected_output": "References setup-guide.md or runs matrix-e2ee-setup.py with proper env var usage.",
+      "eval_name": "fetch-missing-keys",
+      "prompt": "I'm seeing '[Unable to decrypt]' for some messages in the IT room. Can you try fetching the missing keys?",
+      "expected_output": "Uses matrix-fetch-keys.py to request keys from other devices.",
       "files": [],
       "assertions": [
-        "References setup-guide.md or runs matrix-e2ee-setup.py",
-        "Uses MATRIX_PASSWORD env var for password",
-        "Does not hardcode password in command line"
+        "Uses matrix-fetch-keys.py script",
+        "Passes 'IT' as room identifier",
+        "Uses --sync-time flag with reasonable timeout"
       ]
     },
     {
       "id": 24,
-      "eval_name": "read-and-analyze-reactions",
-      "prompt": "Read the last 50 messages from the ops room as JSON and tell me which messages have reactions.",
-      "expected_output": "Uses matrix-read-e2ee.py with --json and --limit 50, filters for m.reaction events.",
+      "eval_name": "error-recovery-forbidden",
+      "prompt": "I tried to send a message to the ops room but got M_FORBIDDEN. What should I do?",
+      "expected_output": "Advises joining the room in Element first.",
       "files": [],
       "assertions": [
-        "Uses matrix-read-e2ee.py with --json and --limit 50",
-        "Mentions filtering for m.reaction events",
-        "References messaging-guide.md for reaction structure"
+        "Suggests joining the room in Element first",
+        "Does not retry the same command blindly",
+        "References error handling guidance"
       ]
     },
     {
       "id": 25,
-      "eval_name": "e2ee-send-performance",
-      "prompt": "Send 'Performance test' to the test room using E2EE and note how long it takes.",
-      "expected_output": "E2EE send completes in a few seconds on subsequent runs.",
+      "eval_name": "error-recovery-decrypt",
+      "prompt": "I'm reading messages in the dev room and most show '[Unable to decrypt]'. How do I fix this?",
+      "expected_output": "Suggests key backup restore or key fetching, not non-E2EE fallback.",
       "files": [],
       "assertions": [
-        "Uses matrix-send-e2ee.py (E2EE preferred)",
-        "Message is sent successfully",
-        "Does not take more than 10 seconds on subsequent runs (cached keys)"
-      ]
-    },
-    {
-      "id": 26,
-      "eval_name": "search-rooms-by-name",
-      "prompt": "Search my Matrix rooms for any room with 'ops' in the name.",
-      "expected_output": "Uses matrix-rooms.py with --search flag to filter rooms by name.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-rooms.py with --search flag",
-        "Passes 'ops' as search term",
-        "Uses uv run to execute the script"
-      ]
-    },
-    {
-      "id": 27,
-      "eval_name": "read-with-request-keys",
-      "prompt": "Read the last 10 messages from the dev room and try to recover any undecryptable messages by requesting keys.",
-      "expected_output": "Uses matrix-read-e2ee.py with --request-keys flag to attempt key recovery for undecryptable messages.",
-      "files": [],
-      "assertions": [
-        "Uses matrix-read-e2ee.py with --request-keys flag",
-        "Uses --limit 10 flag",
-        "Uses matrix-read-e2ee.py (E2EE preferred)"
-      ]
-    },
-    {
-      "id": 28,
-      "eval_name": "device-verification-flow",
-      "prompt": "I need to verify my Matrix E2EE device with Element Desktop. How do I start the verification?",
-      "expected_output": "References the matrix-e2ee-verify.py script with appropriate timeout and points to e2ee-guide.md for detailed instructions.",
-      "files": [],
-      "assertions": [
-        "References matrix-e2ee-verify.py script",
-        "Uses --timeout flag with reasonable value (e.g., 180)",
-        "Mentions Element Desktop (not Element X)",
-        "References e2ee-guide.md for detailed instructions"
+        "Suggests matrix-key-backup.py with --recovery-key and --import-keys, or matrix-fetch-keys.py",
+        "Does not suggest non-E2EE fallback as primary solution"
       ]
     }
   ]
