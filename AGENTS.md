@@ -19,7 +19,7 @@ commands/work-update.md # /work-update slash command template
 docs/ARCHITECTURE.md    # System architecture overview
 Build/Scripts/          # CI validation scripts (version checks)
 scripts/verify-harness.sh   # Harness maturity checker
-.github/workflows/      # CI: lint, release, harness-verify, auto-merge-deps
+.github/workflows/      # CI: lint, release, harness-verify, auto-merge-deps, eval-validate
 ```
 
 ## Commands
