@@ -12,7 +12,7 @@ allowed-tools: Bash(python3:*) Bash(uv:*) Read Write
 
 # Matrix Communication
 
-Send and read messages in Matrix rooms. **Always use `*-e2ee.py` scripts.**
+Matrix rooms: send, read, download media. **Always use `*-e2ee.py` scripts.**
 
 **Bash `!` rule:** Prepend `set +H &&` when arguments contain `!`
 
@@ -28,10 +28,12 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "is deploying" --emo
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "reply" --thread '$rootEventId'
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "reply" --reply '$eventId'
 
-# Read (E2EE)
+# Read (E2EE) — JSON includes media URL/info for m.image/m.file/m.video/m.audio
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 10
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 20 --json
-uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 10 --request-keys
+
+# Download media (E2EE) — decrypts and saves by event ID
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-download-e2ee.py ROOM '$eventId' --output /tmp
 
 # Edit / Delete / React
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-edit-e2ee.py ROOM '$eventId' "new text"
@@ -61,6 +63,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 | Send | `matrix-send-e2ee.py` | `matrix-send.py` |
 | Read | `matrix-read-e2ee.py` | `matrix-read.py` |
 | Edit | `matrix-edit-e2ee.py` | `matrix-edit.py` |
+| Download | `matrix-download-e2ee.py` | — |
 | React | `matrix-react.py` | (same) |
 | Delete | `matrix-redact.py` | (same) |
 
@@ -68,7 +71,7 @@ Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-e2ee-setup.py`, `matrix-e
 
 ## Config
 
-`~/.config/matrix/config.json` — required: `homeserver`, `user_id`. Optional: `access_token`, `bot_prefix`
+`~/.config/matrix/config.json` — required: `homeserver`, `user_id`. Optional: `access_token`
 
 ## Error Handling
 
@@ -86,17 +89,16 @@ Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-e2ee-setup.py`, `matrix-e
 
 ## Common Mistakes
 
-- **Using non-E2EE scripts** for encrypted rooms — always default to `*-e2ee.py`
-- **Forgetting `set +H`** — `!` in messages/passwords gets mangled by bash
-- **Skipping `--import-keys`** — key backup shows but doesn't save keys without it
+- **Using non-E2EE scripts** for encrypted rooms — always use `*-e2ee.py`
+- **Forgetting `set +H`** — `!` in messages gets mangled by bash
+- **Skipping `--import-keys`** — key backup doesn't save without it
 - **Using Element X** for verification — use Element Desktop or Android
-- **Not running `matrix-doctor.py --install`** first — dependency errors
-- **Hardcoding passwords** — use `MATRIX_PASSWORD` env var for special characters
+- **Hardcoding passwords** — use `MATRIX_PASSWORD` env var
 
 ## References
 
-- `references/setup-guide.md` — setup walkthrough
+- `references/setup-guide.md` — setup
 - `references/e2ee-guide.md` — E2EE, key recovery, verification
-- `references/messaging-guide.md` — formatting, reactions, patterns
-- `references/api-reference.md` — Matrix API endpoints
+- `references/messaging-guide.md` — formatting, reactions
+- `references/api-reference.md` — Matrix API
 - [netresearch/matrix-skill](https://github.com/netresearch/matrix-skill)

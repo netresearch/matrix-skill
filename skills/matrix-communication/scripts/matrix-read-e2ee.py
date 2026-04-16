@@ -103,14 +103,27 @@ def process_event(event, debug=False) -> tuple[dict | None, bool]:
         }, True
     elif hasattr(event, "source") and event.source.get("type") == "m.room.message":
         content = event.source.get("content", {})
-        return {
+        msg = {
             "sender": event.sender,
             "body": content.get("body", ""),
             "msgtype": content.get("msgtype", "m.text"),
             "timestamp": event.server_timestamp,
             "event_id": event.event_id,
             "encrypted": True,
-        }, False
+        }
+        # Include media fields when present (m.image, m.file, m.video, m.audio)
+        # Only expose mxc URL, not E2EE decryption keys (use download script for that)
+        if "file" in content:
+            msg["url"] = content["file"].get("url", "")
+        elif "url" in content:
+            msg["url"] = content["url"]
+        if "info" in content:
+            msg["info"] = {
+                k: v
+                for k, v in content["info"].items()
+                if k in ("mimetype", "size", "w", "h")
+            }
+        return msg, False
 
     return None, False
 
