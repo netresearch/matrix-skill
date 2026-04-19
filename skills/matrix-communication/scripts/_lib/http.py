@@ -6,8 +6,20 @@ All functions use ONLY stdlib.
 import contextlib
 import json
 import socket
+import urllib.parse
 import urllib.request
 import urllib.error
+
+
+_ALLOWED_SCHEMES = frozenset({"http", "https"})
+
+
+def _require_http_scheme(url: str) -> None:
+    scheme = urllib.parse.urlparse(url).scheme
+    if scheme not in _ALLOWED_SCHEMES:
+        raise ValueError(
+            f"Refusing to fetch URL with scheme {scheme!r}; only http/https allowed"
+        )
 
 
 @contextlib.contextmanager
@@ -30,9 +42,15 @@ def _prefer_ipv4():
         socket.getaddrinfo = original
 
 
-def _do_request(req) -> dict:
-    """Execute a request and return parsed JSON response."""
-    with urllib.request.urlopen(req) as response:
+def _do_request(req: urllib.request.Request) -> dict:
+    """Execute a request and return parsed JSON response.
+
+    The caller must have validated the URL scheme via
+    ``_require_http_scheme`` before constructing ``req``.
+    """
+    _require_http_scheme(req.full_url)
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+    with urllib.request.urlopen(req) as response:  # noqa: S310 — scheme validated above
         return json.loads(response.read().decode())
 
 
@@ -62,6 +80,7 @@ def matrix_request(config: dict, method: str, endpoint: str, data: dict = None) 
         Response dict, or dict with 'error' key on failure
     """
     url = f"{config['homeserver']}/_matrix/client/v3{endpoint}"
+    _require_http_scheme(url)
     headers = {
         "Authorization": f"Bearer {config['access_token']}",
         "Content-Type": "application/json",
