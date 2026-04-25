@@ -18,6 +18,17 @@ import urllib.parse
 import urllib.request
 
 
+_ALLOWED_SCHEMES = frozenset({"http", "https"})
+
+
+def _require_http_scheme(url: str) -> None:
+    scheme = urllib.parse.urlparse(url).scheme
+    if scheme not in _ALLOWED_SCHEMES:
+        raise ValueError(
+            f"Refusing to fetch URL with scheme {scheme!r}; only http/https allowed"
+        )
+
+
 @contextlib.contextmanager
 def _prefer_ipv4():
     """Temporarily prefer IPv4 in DNS resolution (WSL2 workaround)."""
@@ -34,8 +45,15 @@ def _prefer_ipv4():
         socket.getaddrinfo = original
 
 
-def _do_request(req) -> dict:
-    with urllib.request.urlopen(req) as response:
+def _do_request(req: urllib.request.Request) -> dict:
+    """Execute a request and return parsed JSON response.
+
+    The caller must have validated the URL scheme via
+    ``_require_http_scheme`` before constructing ``req``.
+    """
+    _require_http_scheme(req.full_url)
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+    with urllib.request.urlopen(req) as response:  # noqa: S310 — scheme validated above
         body = response.read().decode()
         if not body:
             return {}
@@ -56,6 +74,7 @@ def _parse_http_error(e: urllib.error.HTTPError) -> dict:
 
 
 def _request(url: str, method: str, token: str, data: dict | None) -> dict:
+    _require_http_scheme(url)
     headers = {"Authorization": f"Bearer {token}"}
     body = None
     if data is not None:
