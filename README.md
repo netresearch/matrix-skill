@@ -1,14 +1,17 @@
 # Matrix Skill
 
-An Agentic Skill for Matrix chat communication, distributed as a Claude Code plugin.
+Agentic Skills for Matrix, distributed as a Claude Code plugin. Two skills ship in this repo:
 
-## Overview
+| Skill | Purpose | API surface |
+|-------|---------|-------------|
+| [**matrix-communication**](skills/matrix-communication/) | Send / read / edit / react in chat rooms on behalf of a regular user, with full E2EE support | Matrix Client-Server API |
+| [**matrix-administration**](skills/matrix-administration/) | Operate a Synapse homeserver — snapshot rooms, rate room health, render a Graphviz map, force-join, promote, harden, deactivate, search history | Synapse Admin API |
 
-This skill enables AI coding agents to send messages to Matrix chat rooms on behalf of users. Messages are sent using the user's own access token, so they appear as coming from the user. Works with any Matrix homeserver.
+The two skills are independent — you can install the plugin and use either or both. They share the same config file (`~/.config/matrix/config.json`).
 
 **What is an Agentic Skill?** Platform-agnostic instructions and tools that AI coding agents can use. This skill is packaged as a Claude Code plugin but follows the open [Agentic Skills specification](https://github.com/anthropics/agentic-skills).
 
-## Features
+## matrix-communication — Features
 
 - **Send messages** to any joined Matrix room
 - **Rich formatting** - bold, italic, code, strikethrough, spoilers, lists, blockquotes
@@ -138,30 +141,79 @@ uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 120
 # Then start verification from Element: Settings → Security → Sessions
 ```
 
+## matrix-administration — Features
+
+Synapse homeserver administration via the [Synapse Admin API](https://element-hq.github.io/synapse/latest/usage/administration/admin_api/index.html). **Stdlib-only Python** (no E2EE deps required). Works against any Synapse 1.x server.
+
+- Paginated room snapshot (`synapse-fetch-rooms.py` → `rooms.json`)
+- Health rating with EN+DE phrasing — public, unencrypted, orphaned-from-spaces
+- Colour-coded Graphviz SVG of the entire room/space tree
+- Force-join, promote-admin, link-room-to-space
+- One-shot hardening pipeline: add to space + restrict joins + enable encryption + restore power levels
+- **Destructive** user deactivation with optional GDPR `--erase`
+- Inspection: list user's admin/membership rooms, replay join/leave timelines, search unencrypted history, find biggest rooms by DB size
+
+Quick start:
+
+```bash
+# Snapshot all rooms (the admin token comes from ~/.config/matrix/config.json)
+python3 skills/matrix-administration/scripts/synapse-fetch-rooms.py
+
+# Rate them in German, treating !home:example.com as our home space
+python3 skills/matrix-administration/scripts/synapse-rate-rooms.py \
+    --language de --space '!home:example.com'
+
+# Render a Graphviz SVG (requires the `dot` binary)
+python3 skills/matrix-administration/scripts/synapse-graph.py --space '!home:example.com'
+```
+
+Full reference and safety guide live in [`skills/matrix-administration/`](skills/matrix-administration/).
+
 ## Structure
 
 ```
 matrix-skill/
 ├── .claude-plugin/
-│   └── plugin.json              # Plugin manifest
+│   └── plugin.json              # Plugin manifest (lists both skills)
 ├── skills/
-│   └── matrix-communication/
-│       ├── SKILL.md             # Skill instructions
+│   ├── matrix-communication/    # Client-Server API, E2EE chat
+│   │   ├── SKILL.md
+│   │   ├── scripts/
+│   │   │   ├── matrix-send-e2ee.py      # Send (E2EE) — USE THIS
+│   │   │   ├── matrix-read-e2ee.py      # Read (E2EE) — USE THIS
+│   │   │   ├── matrix-edit-e2ee.py      # Edit (E2EE) — USE THIS
+│   │   │   ├── matrix-send.py           # Send (non-E2EE fallback)
+│   │   │   ├── matrix-read.py           # Read (non-E2EE fallback)
+│   │   │   ├── matrix-edit.py           # Edit (non-E2EE fallback)
+│   │   │   ├── matrix-react.py          # React to messages
+│   │   │   ├── matrix-redact.py         # Delete messages
+│   │   │   ├── matrix-rooms.py          # List rooms
+│   │   │   ├── matrix-resolve.py        # Resolve aliases
+│   │   │   ├── matrix-e2ee-setup.py     # E2EE setup
+│   │   │   └── matrix-e2ee-verify.py    # Device verification
+│   │   └── references/
+│   └── matrix-administration/   # Synapse Admin API, server ops
+│       ├── SKILL.md
 │       ├── scripts/
-│       │   ├── matrix-send-e2ee.py      # Send (E2EE) - USE THIS
-│       │   ├── matrix-read-e2ee.py      # Read (E2EE) - USE THIS
-│       │   ├── matrix-edit-e2ee.py      # Edit (E2EE) - USE THIS
-│       │   ├── matrix-send.py           # Send (non-E2EE fallback)
-│       │   ├── matrix-read.py           # Read (non-E2EE fallback)
-│       │   ├── matrix-edit.py           # Edit (non-E2EE fallback)
-│       │   ├── matrix-react.py          # React to messages
-│       │   ├── matrix-redact.py         # Delete messages
-│       │   ├── matrix-rooms.py          # List rooms
-│       │   ├── matrix-resolve.py        # Resolve aliases
-│       │   ├── matrix-e2ee-setup.py     # E2EE setup
-│       │   └── matrix-e2ee-verify.py    # Device verification
+│       │   ├── _lib/                    # stdlib-only shared helpers
+│       │   ├── synapse-fetch-rooms.py
+│       │   ├── synapse-rate-rooms.py
+│       │   ├── synapse-graph.py
+│       │   ├── synapse-biggest-rooms.py
+│       │   ├── synapse-join-room.py
+│       │   ├── synapse-make-admin.py
+│       │   ├── synapse-add-to-space.py
+│       │   ├── synapse-migrate-room.py
+│       │   ├── synapse-deactivate-user.py
+│       │   ├── synapse-user-admin-rooms.py
+│       │   ├── synapse-user-rooms.py
+│       │   ├── synapse-room-member-flow.py
+│       │   └── synapse-search.py
 │       └── references/
-│           └── api-reference.md
+│           ├── synapse-admin-api.md
+│           ├── room-health-checks.md
+│           ├── room-graph-pipeline.md
+│           └── safety-guide.md
 ├── LICENSE-MIT           # Code license (MIT)
 ├── LICENSE-CC-BY-SA-4.0  # Content license (CC-BY-SA-4.0)
 └── README.md

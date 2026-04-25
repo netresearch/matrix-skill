@@ -1,28 +1,30 @@
 # Matrix Skill
 
-AI agent skill for Matrix chat communication: send/read/edit messages, E2EE encryption, reactions, threads, and room management. Packaged as a Claude Code plugin following the [Agentic Skills specification](https://agentskills.io).
+AI agent plugin shipping two Matrix skills:
+
+- **matrix-communication** — send / read / edit / react in chat rooms as a regular user, with full E2EE support (uses `python-matrix-nio` via `uv`).
+- **matrix-administration** — Synapse homeserver operations: snapshot rooms, rate health, render Graphviz map, force-join, promote, harden, deactivate, search history (stdlib-only).
+
+Packaged as a Claude Code plugin following the [Agentic Skills specification](https://agentskills.io).
 
 ## Repo Structure
 
 ```
-skills/matrix-communication/
-  SKILL.md              # Skill entry point -- agent reads this first
-  scripts/              # Python scripts for each Matrix operation
-    _lib/               # Shared library (config, http, rooms, formatting, e2ee, utils)
-    matrix-*-e2ee.py    # E2EE variants (send, read, edit) -- ALWAYS prefer these
-    matrix-*.py         # Non-E2EE fallbacks + standalone tools (react, redact, rooms, resolve)
-    matrix-doctor.py    # Health check / dependency installer
-  references/           # Detailed guides (setup, e2ee, messaging, api)
-  evals/                # Skill evaluation definitions
-commands/work-update.md # /work-update slash command template
-.claude-plugin/plugin.json  # Claude Code plugin manifest
-docs/ARCHITECTURE.md    # System architecture overview
-Build/Scripts/          # CI validation scripts (version checks)
+skills/matrix-communication/   # Client-Server API, E2EE chat (uses python-matrix-nio via uv)
+  SKILL.md, scripts/{_lib, matrix-*-e2ee.py, matrix-*.py, matrix-doctor.py}, references/, evals/
+
+skills/matrix-administration/  # Synapse Admin API, server ops (stdlib-only Python)
+  SKILL.md, scripts/{_lib, synapse-*.py}, references/, evals/
+
+commands/work-update.md   # /work-update slash command template
+.claude-plugin/plugin.json   # Plugin manifest — lists both skills
+docs/ARCHITECTURE.md
+Build/Scripts/   # CI validation
 scripts/verify-harness.sh   # Harness maturity checker
-.github/workflows/      # CI: lint, release, harness-verify, auto-merge-deps, eval-validate
+.github/workflows/   # lint, release, harness-verify, auto-merge-deps, eval-validate
 ```
 
-## Commands
+## Commands — matrix-communication
 
 All scripts live in `skills/matrix-communication/scripts/`. Use `uv run` unless noted.
 
@@ -64,7 +66,29 @@ python3 skills/matrix-communication/scripts/matrix-doctor.py --install
 bash scripts/verify-harness.sh --status
 ```
 
-## Rules
+## Commands — matrix-administration
+
+Stdlib-only Python; run via `python3`. See [`skills/matrix-administration/SKILL.md`](skills/matrix-administration/SKILL.md) for the full quick reference. Most-used:
+
+```bash
+S=skills/matrix-administration/scripts
+python3 $S/synapse-fetch-rooms.py                       # snapshot → rooms.json
+python3 $S/synapse-rate-rooms.py --space '!home:srv'    # health checks
+python3 $S/synapse-graph.py --space '!home:srv'         # → rooms.svg
+python3 $S/synapse-deactivate-user.py '@user:srv'       # DESTRUCTIVE
+python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # harden
+```
+
+## Rules — matrix-administration
+
+- **Admin token required**: All `synapse-*` scripts read `~/.config/matrix/config.json` and need `admin_token` (preferred) or `access_token` of a Synapse server-admin.
+- **No homeserver-specific defaults baked in**: pass `--space` / `--server` on the CLI or set `home_space_ids` / `room_filter` / `default_space_id` in the config.
+- **Surface destructive ops** before running: `synapse-deactivate-user.py` (irreversible) and `synapse-migrate-room.py` (encryption is one-way). Never silently pass `--yes`.
+- **Local vs live**: `synapse-rate-rooms.py`, `synapse-graph.py`, `synapse-user-*-rooms.py` read `rooms.json` — re-run `synapse-fetch-rooms.py` if stale.
+- **Never commit** `rooms.json` / `rooms.dot` / `rooms.svg` — they expose every indexed room.
+- **E2EE search caveat**: `synapse-search.py` only sees plaintext; tell the user that empty results ≠ no messages.
+
+## Rules — matrix-communication
 
 **E2EE first**: Always use `*-e2ee.py` scripts. Only fall back to non-E2EE if the room is confirmed unencrypted.
 
@@ -94,10 +118,20 @@ Use the `#test` room (or a room named `test`) for all testing. Never test in pro
 
 ## References
 
-- [SKILL.md](skills/matrix-communication/SKILL.md) -- skill definition and quick reference
-- [Setup Guide](skills/matrix-communication/references/setup-guide.md) -- initial configuration walkthrough
-- [E2EE Guide](skills/matrix-communication/references/e2ee-guide.md) -- encryption, key recovery, verification
-- [Messaging Guide](skills/matrix-communication/references/messaging-guide.md) -- formatting, reactions, threads
-- [API Reference](skills/matrix-communication/references/api-reference.md) -- Matrix API endpoints
-- [Architecture](docs/ARCHITECTURE.md) -- system design and distribution
+### matrix-communication
+- [SKILL.md](skills/matrix-communication/SKILL.md) — skill definition and quick reference
+- [Setup Guide](skills/matrix-communication/references/setup-guide.md)
+- [E2EE Guide](skills/matrix-communication/references/e2ee-guide.md)
+- [Messaging Guide](skills/matrix-communication/references/messaging-guide.md)
+- [API Reference](skills/matrix-communication/references/api-reference.md)
+
+### matrix-administration
+- [SKILL.md](skills/matrix-administration/SKILL.md) — skill definition and quick reference
+- [Synapse Admin API endpoints](skills/matrix-administration/references/synapse-admin-api.md)
+- [Room health checks](skills/matrix-administration/references/room-health-checks.md)
+- [Room graph pipeline](skills/matrix-administration/references/room-graph-pipeline.md)
+- [Safety guide](skills/matrix-administration/references/safety-guide.md)
+
+### Repo
+- [Architecture](docs/ARCHITECTURE.md) — system design and distribution
 - [Source](https://github.com/netresearch/matrix-skill)
