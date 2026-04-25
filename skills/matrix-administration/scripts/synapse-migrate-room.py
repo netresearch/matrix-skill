@@ -58,9 +58,7 @@ def _put_state(
     state_key: str,
     body: dict,
 ) -> dict:
-    endpoint = (
-        f"/rooms/{quote(room_id)}/state/{quote(event_type)}/{quote(state_key)}"
-    )
+    endpoint = f"/rooms/{quote(room_id)}/state/{quote(event_type)}/{quote(state_key)}"
     return client_request(config, "PUT", endpoint, body)
 
 
@@ -195,9 +193,7 @@ def main() -> int:
                 "",
                 {
                     "join_rule": "restricted",
-                    "allow": [
-                        {"type": "m.room_membership", "room_id": space_id}
-                    ],
+                    "allow": [{"type": "m.room_membership", "room_id": space_id}],
                 },
             )
             if "error" in res:

@@ -51,7 +51,9 @@ def main() -> int:
     print(f"{'room_id'.ljust(width_id)}  {'size'.rjust(width_size)}  name")
     for row in rows:
         name = row["name"] or "-"
-        print(f"{row['room_id'].ljust(width_id)}  {row['size'].rjust(width_size)}  {name}")
+        print(
+            f"{row['room_id'].ljust(width_id)}  {row['size'].rjust(width_size)}  {name}"
+        )
     return 0
 
 

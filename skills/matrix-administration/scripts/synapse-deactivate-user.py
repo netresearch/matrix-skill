@@ -52,7 +52,11 @@ def main() -> int:
 
     if not args.yes:
         if sys.stdin.isatty():
-            print(bold(red(f"⚠ About to deactivate {args.user_id}. This cannot be undone.")))
+            print(
+                bold(
+                    red(f"⚠ About to deactivate {args.user_id}. This cannot be undone.")
+                )
+            )
             try:
                 answer = input("Type 'YES' to continue: ").strip()
             except EOFError:

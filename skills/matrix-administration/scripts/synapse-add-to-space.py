@@ -60,9 +60,7 @@ def main() -> int:
         via = [host] if host else []
 
     body = {"via": via, "suggested": args.suggested}
-    endpoint = (
-        f"/rooms/{quote(space_id)}/state/m.space.child/{quote(args.room_id)}"
-    )
+    endpoint = f"/rooms/{quote(space_id)}/state/m.space.child/{quote(args.room_id)}"
     result = client_request(config, "PUT", endpoint, body)
     print(json.dumps(result, indent=2))
     return 0 if "error" not in result else 1

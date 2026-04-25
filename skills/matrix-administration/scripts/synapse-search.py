@@ -60,7 +60,9 @@ def main() -> int:
             return 1
 
         events = (
-            result.get("search_categories", {}).get("room_events", {}).get("results", [])
+            result.get("search_categories", {})
+            .get("room_events", {})
+            .get("results", [])
         )
         for entry in events:
             ev = entry.get("result") or {}

@@ -45,7 +45,9 @@ def main() -> int:
             continue
         if r.permissions.get(user_id, 0) == 100:
             others = [
-                uid for uid, lvl in r.permissions.items() if uid != user_id and lvl == 100
+                uid
+                for uid, lvl in r.permissions.items()
+                if uid != user_id and lvl == 100
             ]
             matches.append((r, others))
 
