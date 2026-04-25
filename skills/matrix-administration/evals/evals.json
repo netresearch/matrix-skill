@@ -82,6 +82,41 @@
         "Invokes synapse-search.py",
         "Warns that empty results do not mean no messages if the room is encrypted"
       ]
+    },
+    {
+      "id": 8,
+      "eval_name": "biggest-rooms-default",
+      "prompt": "What are the 5 biggest rooms on the homeserver by DB size?",
+      "expected_output": "Runs synapse-biggest-rooms.py with -n 5.",
+      "files": [],
+      "assertions": [
+        "Invokes synapse-biggest-rooms.py",
+        "Passes -n 5 (or --limit 5)",
+        "Does not require a snapshot — calls the live admin API"
+      ]
+    },
+    {
+      "id": 9,
+      "eval_name": "member-flow-with-server-filter",
+      "prompt": "Show the join/leave timeline of !ops:example.com and highlight users from example.com.",
+      "expected_output": "Runs synapse-room-member-flow.py with the room ID and --server :example.com.",
+      "files": [],
+      "assertions": [
+        "Invokes synapse-room-member-flow.py",
+        "Passes --server :example.com (or relies on room_filter from config)"
+      ]
+    },
+    {
+      "id": 10,
+      "eval_name": "add-room-to-space",
+      "prompt": "Link !room:example.com into !home:example.com as a child.",
+      "expected_output": "Runs synapse-add-to-space.py with both IDs (or relies on default_space_id from config).",
+      "files": [],
+      "assertions": [
+        "Invokes synapse-add-to-space.py",
+        "Passes the room ID first, then the space ID",
+        "Does not enable encryption or change join rules — that's the migrate script's job"
+      ]
     }
   ]
 }
