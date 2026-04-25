@@ -5,7 +5,7 @@ license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires python3 (stdlib only). Optional: graphviz `dot` for SVG rendering. Synapse 1.x homeserver with admin API enabled."
 metadata:
   author: Netresearch DTT GmbH
-  version: "1.0.0"
+  version: "1.20.1"
   repository: https://github.com/netresearch/matrix-skill
 allowed-tools: Bash(python3:*) Bash(uv:*) Bash(dot:*) Read Write
 ---
