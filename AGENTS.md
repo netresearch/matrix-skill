@@ -1,4 +1,15 @@
+<!-- Managed by agent: keep sections and order; edit content, not structure. Last updated: 2026-04-26 -->
+
 # Matrix Skill
+
+**Precedence:** the **closest `AGENTS.md` / `SKILL.md`** to the files you're changing wins. Each skill under `skills/` has its own `SKILL.md` that is authoritative for that skill — read it first.
+
+## Index of scoped AGENTS.md
+
+The skills below each ship their own `SKILL.md` (read it before editing any file in that directory):
+
+- [`skills/matrix-communication/SKILL.md`](skills/matrix-communication/SKILL.md) — chat operations (Client-Server API, E2EE)
+- [`skills/matrix-administration/SKILL.md`](skills/matrix-administration/SKILL.md) — homeserver operations (Synapse Admin API)
 
 AI agent plugin shipping two Matrix skills:
 

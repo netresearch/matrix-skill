@@ -1,8 +1,8 @@
 ---
 name: matrix-administration
-description: "Use when administering a Synapse Matrix homeserver — snapshot rooms, rate room health, render a Graphviz map, force-join users, promote admins, harden rooms (add-to-space + restrict + encrypt), deactivate users, search unencrypted history, find biggest rooms by DB size. Requires a Synapse server-admin access token."
+description: "Use this skill for ANY Synapse / Matrix homeserver administration task — listing or snapshotting all rooms on a server, rating room health (public, unencrypted, orphaned-from-spaces), rendering a Graphviz map of the room/space tree, force-joining users, promoting users to room admin, hardening rooms (add-to-space + restrict joins + enable encryption), deactivating Matrix users (also for GDPR erasure), finding biggest rooms by DB size, listing where a user is a room admin or member, replaying join/leave timelines, or searching unencrypted history. ALWAYS trigger when the user mentions Synapse Admin API, '/_synapse/admin', server-wide room operations, Matrix user offboarding, or anything that needs a homeserver-admin access token — even when they don't explicitly say 'admin API'. Companion to matrix-communication (which handles regular chat as a user)."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
-compatibility: "Requires python3 (stdlib only). Optional: graphviz `dot` for SVG rendering. Synapse 1.x homeserver with admin API enabled."
+compatibility: "Requires python3 (stdlib only) and a Matrix access token belonging to a Synapse server-admin user. Optional: graphviz `dot` binary for SVG rendering. Synapse 1.x homeserver with admin API enabled."
 metadata:
   author: Netresearch DTT GmbH
   version: "1.20.1"
@@ -85,14 +85,18 @@ Env fallbacks: `MATRIX_USER_ID`, `MATRIX_SPACE_ID`, `LANGUAGE=en|de`, `NO_COLOR`
 
 ## Safety
 
-These scripts hold an admin token. See [`references/safety-guide.md`](references/safety-guide.md).
+These scripts hold an admin token. Read [`references/safety-guide.md`](references/safety-guide.md) before any destructive operation.
 
-- **`synapse-deactivate-user.py`** is irreversible.
-- **`synapse-migrate-room.py`** enables encryption (cannot be undone) and switches public rooms to `restricted` (users outside the parent space lose discoverability).
-- **`synapse-search.py`** cannot read E2EE messages — empty results ≠ no messages.
-- `rooms.json` exposes user IDs; never commit it.
+- **`synapse-deactivate-user.py`** is irreversible without a database operation.
+- **`synapse-migrate-room.py`** enables encryption (cannot be undone) and switches public rooms to `restricted` (users outside the parent space lose discoverability). Power-level changes are restored on exit, including on Ctrl-C.
+- **`synapse-make-admin.py`** raises a user to power-level 100 permanently — call it deliberately, not as a workaround for a missing invite.
+- **`synapse-search.py`** cannot read end-to-end-encrypted messages. Empty results ≠ no messages — say so when you report findings.
+- `rooms.json` exposes user IDs and power levels for every indexed room; never commit it.
 
 ## References
 
-- [`references/synapse-admin-api.md`](references/synapse-admin-api.md), [`references/room-health-checks.md`](references/room-health-checks.md), [`references/room-graph-pipeline.md`](references/room-graph-pipeline.md), [`references/safety-guide.md`](references/safety-guide.md)
+- [`references/synapse-admin-api.md`](references/synapse-admin-api.md) — every endpoint used and where to find upstream docs
+- [`references/room-health-checks.md`](references/room-health-checks.md) — rating rules and remediation
+- [`references/room-graph-pipeline.md`](references/room-graph-pipeline.md) — periodic SVG dashboard recipe (Docker)
+- [`references/safety-guide.md`](references/safety-guide.md) — pre-flight checklist for destructive operations
 - Source: [netresearch/matrix-skill](https://github.com/netresearch/matrix-skill)
