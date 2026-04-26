@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -25,7 +26,7 @@ from _lib import bold, client_request, gray, green, load_config, quote, red
 
 
 def _get_event(config: dict, room_id: str, sender: str, event_id: str) -> dict | None:
-    filt = '{"senders":["%s"]}' % sender
+    filt = json.dumps({"senders": [sender]})
     endpoint = (
         f"/rooms/{quote(room_id)}/context/{quote(event_id)}"
         f"?limit=1&filter={quote(filt)}"

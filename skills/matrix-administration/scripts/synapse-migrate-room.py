@@ -12,7 +12,9 @@ Multi-step operation:
    restricted joins (>9), switch ``m.room.join_rules`` to ``restricted`` so
    only members of the parent space can join.
 5. Enable Megolm encryption (``m.room.encryption``) if not already enabled.
-6. If we promoted the user in step 3, restore their original power level.
+6. Restore the user's original power level — runs in a ``finally`` block
+   and on SIGINT/SIGTERM, so a crash or Ctrl-C does not leave the user
+   with elevated permissions.
 
 WARNING: enabling encryption is irreversible.  Restricted joins remove
 discoverability for users outside the space.
@@ -28,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -64,6 +67,30 @@ def _put_state(
 
 def _join(config: dict, room_id: str) -> dict:
     return client_request(config, "POST", f"/rooms/{quote(room_id)}/join", {})
+
+
+def _restore_power_level(
+    config: dict,
+    room_id: str,
+    user_id: str,
+    pl_content: dict,
+    previous_level: int,
+) -> None:
+    """Set ``user_id`` back to ``previous_level`` in the room's power-level
+    state event.  Best-effort: errors are reported but never raised.
+    """
+    if not pl_content:
+        return
+    print(bold(yellow(f"⚠ Restoring {user_id} to power level {previous_level}")))
+    users = dict(pl_content.get("users") or {})
+    users[user_id] = previous_level
+    new_pl = dict(pl_content)
+    new_pl["users"] = users
+    res = _put_state(config, room_id, "m.room.power_levels", "", new_pl)
+    if "error" in res:
+        print(red(f"✗ Failed to restore power level: {res['error']}"), file=sys.stderr)
+    else:
+        print(bold(green("✓ Power levels restored")))
 
 
 def main() -> int:
@@ -128,7 +155,7 @@ def main() -> int:
     else:
         print(bold(green("✓ Joined")))
 
-    # Inspect target room.
+    # Inspect target room (needed for power-level snapshot before any change).
     room_info = admin_request(config, "GET", f"/v1/rooms/{args.room_id}")
     if "error" in room_info:
         print(red(f"✗ {room_info['error']}"), file=sys.stderr)
@@ -143,6 +170,7 @@ def main() -> int:
     users_default = pl_content.get("users_default", 0)
 
     previous_level = users.get(user_id)
+    promoted = False
     if previous_level is None:
         previous_level = users_default
         print(
@@ -159,6 +187,7 @@ def main() -> int:
             f"/v1/rooms/{args.room_id}/make_room_admin",
             {"user_id": user_id},
         )
+        promoted = True
     elif previous_level == 100:
         print(bold(green("✓ User already has maximum power level")))
     else:
@@ -175,72 +204,81 @@ def main() -> int:
             f"/v1/rooms/{args.room_id}/make_room_admin",
             {"user_id": user_id},
         )
+        promoted = True
 
-    # 3. Restrict joins if currently public.
-    join_rules = (room_info.get("join_rules") or "").lower()
+    # Install a SIGINT/SIGTERM handler so Ctrl-C still restores the power
+    # level before exiting.
+    def _signal_handler(signum, _frame):
+        if promoted:
+            _restore_power_level(
+                config, args.room_id, user_id, pl_content, previous_level
+            )
+        sys.exit(128 + signum)
+
+    if promoted:
+        signal.signal(signal.SIGINT, _signal_handler)
+        signal.signal(signal.SIGTERM, _signal_handler)
+
     try:
-        version = int(room_info.get("version") or 0)
-    except (TypeError, ValueError):
-        version = 0
+        # 3. Restrict joins if currently public.
+        join_rules = (room_info.get("join_rules") or "").lower()
+        try:
+            version = int(room_info.get("version") or 0)
+        except (TypeError, ValueError):
+            version = 0
 
-    if join_rules == "public":
-        if version > 9:
-            print(bold(yellow("⚠ Setting join rules to restricted")))
+        if join_rules == "public":
+            if version > 9:
+                print(bold(yellow("⚠ Setting join rules to restricted")))
+                res = _put_state(
+                    config,
+                    args.room_id,
+                    "m.room.join_rules",
+                    "",
+                    {
+                        "join_rule": "restricted",
+                        "allow": [{"type": "m.room_membership", "room_id": space_id}],
+                    },
+                )
+                if "error" in res:
+                    print(red(f"✗ Failed: {res['error']}"), file=sys.stderr)
+                else:
+                    print(bold(green("✓ Join rules set to restricted")))
+            else:
+                print(
+                    bold(
+                        red(
+                            f"✗ Room version {version} is too low for restricted joins; "
+                            "skipping"
+                        )
+                    )
+                )
+        else:
+            print(bold(green("✓ Join rules already restricted (or not public)")))
+
+        # 4. Encrypt if not already.
+        if not room_info.get("encryption"):
+            print(bold(yellow("⚠ Enabling encryption")))
             res = _put_state(
                 config,
                 args.room_id,
-                "m.room.join_rules",
+                "m.room.encryption",
                 "",
-                {
-                    "join_rule": "restricted",
-                    "allow": [{"type": "m.room_membership", "room_id": space_id}],
-                },
+                {"algorithm": "m.megolm.v1.aes-sha2"},
             )
             if "error" in res:
                 print(red(f"✗ Failed: {res['error']}"), file=sys.stderr)
             else:
-                print(bold(green("✓ Join rules set to restricted")))
+                print(bold(green("✓ Encryption enabled")))
         else:
-            print(
-                bold(
-                    red(
-                        f"✗ Room version {version} is too low for restricted joins; "
-                        "skipping"
-                    )
-                )
+            print(bold(green("✓ Encryption already enabled")))
+    finally:
+        # 5. Always restore the previous power level if we promoted the user,
+        # even on exception.
+        if promoted:
+            _restore_power_level(
+                config, args.room_id, user_id, pl_content, previous_level
             )
-    else:
-        print(bold(green("✓ Join rules already restricted (or not public)")))
-
-    # 4. Encrypt if not already.
-    if not room_info.get("encryption"):
-        print(bold(yellow("⚠ Enabling encryption")))
-        res = _put_state(
-            config,
-            args.room_id,
-            "m.room.encryption",
-            "",
-            {"algorithm": "m.megolm.v1.aes-sha2"},
-        )
-        if "error" in res:
-            print(red(f"✗ Failed: {res['error']}"), file=sys.stderr)
-        else:
-            print(bold(green("✓ Encryption enabled")))
-    else:
-        print(bold(green("✓ Encryption already enabled")))
-
-    # 5. Restore previous power level if we changed it.
-    if pl_content and users.get(user_id) != 100:
-        print(bold(yellow(f"⚠ Restoring {user_id} to power level {previous_level}")))
-        new_users = dict(users)
-        new_users[user_id] = previous_level
-        new_pl = dict(pl_content)
-        new_pl["users"] = new_users
-        res = _put_state(config, args.room_id, "m.room.power_levels", "", new_pl)
-        if "error" in res:
-            print(red(f"✗ Failed: {res['error']}"), file=sys.stderr)
-        else:
-            print(bold(green("✓ Power levels restored")))
 
     return 0
 

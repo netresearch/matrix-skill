@@ -45,15 +45,19 @@ def _prefer_ipv4():
         socket.getaddrinfo = original
 
 
+_DEFAULT_TIMEOUT = 60
+
+
 def _do_request(req: urllib.request.Request) -> dict:
     """Execute a request and return parsed JSON response.
 
     The caller must have validated the URL scheme via
-    ``_require_http_scheme`` before constructing ``req``.
+    ``_require_http_scheme`` before constructing ``req``.  A 60-second
+    timeout is applied so a hung server does not freeze the script.
     """
     _require_http_scheme(req.full_url)
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-    with urllib.request.urlopen(req) as response:  # noqa: S310 — scheme validated above
+    with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT) as response:  # noqa: S310 — scheme validated above
         body = response.read().decode()
         if not body:
             return {}

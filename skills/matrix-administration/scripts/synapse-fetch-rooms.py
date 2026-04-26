@@ -23,7 +23,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import admin_request, load_config
+from _lib import admin_request, load_config, quote
 
 
 def main() -> int:
@@ -46,7 +46,9 @@ def main() -> int:
     rooms: list[dict] = []
 
     while True:
-        result = admin_request(config, "GET", f"/v1/rooms?from={from_token}&sort")
+        result = admin_request(
+            config, "GET", f"/v1/rooms?from={quote(str(from_token))}&sort"
+        )
         if "error" in result:
             print(f"Error fetching rooms: {result['error']}", file=sys.stderr)
             return 1
