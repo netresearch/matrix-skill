@@ -1,0 +1,122 @@
+{
+  "skill_name": "matrix-administration",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "snapshot-rooms",
+      "prompt": "Snapshot every room on the configured Synapse homeserver into rooms.json.",
+      "expected_output": "Runs synapse-fetch-rooms.py.",
+      "files": [],
+      "assertions": [
+        "Invokes synapse-fetch-rooms.py via python3",
+        "Does not pass --server unless the user specified a server suffix",
+        "Does not commit or print the resulting rooms.json"
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "rate-rooms-de",
+      "prompt": "Rate the rooms in rooms.json with German output, treating !home:example.com as our home space.",
+      "expected_output": "Runs synapse-rate-rooms.py with --language de --space '!home:example.com'.",
+      "files": [],
+      "assertions": [
+        "Invokes synapse-rate-rooms.py",
+        "Passes --language de (or sets LANGUAGE=de)",
+        "Passes --space '!home:example.com'"
+      ]
+    },
+    {
+      "id": 3,
+      "eval_name": "render-graph",
+      "prompt": "Render an SVG of the room tree.",
+      "expected_output": "Runs synapse-graph.py and uses any home_space_ids from the config or asks the user.",
+      "files": [],
+      "assertions": [
+        "Invokes synapse-graph.py",
+        "Surfaces that graphviz `dot` is required for the SVG step (or uses --no-svg)"
+      ]
+    },
+    {
+      "id": 4,
+      "eval_name": "deactivate-user-confirm",
+      "prompt": "Deactivate @leaver:example.com.",
+      "expected_output": "Confirms before running synapse-deactivate-user.py because the operation is irreversible.",
+      "files": [],
+      "assertions": [
+        "Surfaces that the operation is irreversible",
+        "Does NOT silently pass --yes",
+        "Asks the user about --erase (GDPR removal of messages)"
+      ]
+    },
+    {
+      "id": 5,
+      "eval_name": "harden-room",
+      "prompt": "Make !room:example.com private, add it to !home:example.com, and enable encryption. Use @admin:example.com as the operator.",
+      "expected_output": "Runs synapse-migrate-room.py with all three IDs.",
+      "files": [],
+      "assertions": [
+        "Invokes synapse-migrate-room.py",
+        "Passes the room, user and space IDs in the correct order",
+        "Surfaces that enabling encryption is irreversible"
+      ]
+    },
+    {
+      "id": 6,
+      "eval_name": "audit-single-admin-rooms",
+      "prompt": "Find rooms where @alice:example.com is the only admin.",
+      "expected_output": "Uses rooms.json + synapse-user-admin-rooms.py to filter rooms with no other admins.",
+      "files": [],
+      "assertions": [
+        "Snapshots first if rooms.json is missing/stale",
+        "Invokes synapse-user-admin-rooms.py",
+        "Highlights rooms with '(no other admins)'"
+      ]
+    },
+    {
+      "id": 7,
+      "eval_name": "search-encrypted-warning",
+      "prompt": "Search !devops:example.com for messages from @bot:example.com containing 'deploy'.",
+      "expected_output": "Runs synapse-search.py and warns that E2EE messages are invisible.",
+      "files": [],
+      "assertions": [
+        "Invokes synapse-search.py",
+        "Warns that empty results do not mean no messages if the room is encrypted"
+      ]
+    },
+    {
+      "id": 8,
+      "eval_name": "biggest-rooms-default",
+      "prompt": "What are the 5 biggest rooms on the homeserver by DB size?",
+      "expected_output": "Runs synapse-biggest-rooms.py with -n 5.",
+      "files": [],
+      "assertions": [
+        "Invokes synapse-biggest-rooms.py",
+        "Passes -n 5 (or --limit 5)",
+        "Does not require a snapshot — calls the live admin API"
+      ]
+    },
+    {
+      "id": 9,
+      "eval_name": "member-flow-with-server-filter",
+      "prompt": "Show the join/leave timeline of !ops:example.com and highlight users from example.com.",
+      "expected_output": "Runs synapse-room-member-flow.py with the room ID and --server :example.com.",
+      "files": [],
+      "assertions": [
+        "Invokes synapse-room-member-flow.py",
+        "Passes --server :example.com (or relies on room_filter from config)"
+      ]
+    },
+    {
+      "id": 10,
+      "eval_name": "add-room-to-space",
+      "prompt": "Link !room:example.com into !home:example.com as a child.",
+      "expected_output": "Runs synapse-add-to-space.py with both IDs (or relies on default_space_id from config).",
+      "files": [],
+      "assertions": [
+        "Invokes synapse-add-to-space.py",
+        "Passes the room ID first, then the space ID",
+        "Does not enable encryption or change join rules — that's the migrate script's job"
+      ]
+    }
+  ]
+}

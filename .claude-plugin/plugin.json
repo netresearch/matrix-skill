@@ -1,7 +1,7 @@
 {
   "name": "matrix-communication",
   "version": "1.20.1",
-  "description": "Agentic Skill for Matrix chat communication. Send messages to Matrix rooms on behalf of users via access token authentication. Works with any Matrix homeserver.",
+  "description": "Agentic Skills for Matrix: client-side chat (matrix-communication) and Synapse homeserver administration (matrix-administration). Works with any Matrix/Synapse homeserver.",
   "author": {
     "name": "Netresearch DTT GmbH",
     "url": "https://www.netresearch.de"
@@ -11,8 +11,10 @@
   "keywords": [
     "agentic-skill",
     "matrix",
+    "synapse",
     "chat",
     "communication",
+    "administration",
     "element",
     "e2ee",
     "encryption",
@@ -25,7 +27,8 @@
     "source": "https://github.com/netresearch/matrix-skill"
   },
   "skills": [
-    "./skills/matrix-communication"
+    "./skills/matrix-communication",
+    "./skills/matrix-administration"
   ],
   "commands": [
     "./commands/work-update.md"
