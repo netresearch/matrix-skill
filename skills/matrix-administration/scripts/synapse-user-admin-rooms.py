@@ -59,12 +59,14 @@ def main() -> int:
 
     max_name = max(len(r.name) for r, _ in matches)
     for r, others in matches:
-        name = bold(yellow(r.name)).ljust(max_name + 10)
+        # Pad the plain name first; colour codes don't count toward width.
+        padding = " " * (max_name - len(r.name))
+        name = bold(yellow(r.name)) + padding
         if others:
             label = green(f"({len(others)} other admins)")
         else:
             label = red("(no other admins)")
-        print(f"{name} {label}")
+        print(f"{name}  {label}")
     return 0
 
 

@@ -74,16 +74,29 @@ def _restore_power_level(
     room_id: str,
     user_id: str,
     pl_content: dict,
-    previous_level: int,
+    previous_level: int | None,
 ) -> None:
-    """Set ``user_id`` back to ``previous_level`` in the room's power-level
-    state event.  Best-effort: errors are reported but never raised.
+    """Restore ``user_id``'s entry in the room's ``m.room.power_levels``.
+
+    If ``previous_level`` is ``None`` the user originally had no explicit
+    entry and ``users[user_id]`` is removed (so the user falls back to
+    ``users_default``).  Otherwise the entry is set to ``previous_level``.
+
+    Best-effort: errors are reported but never raised.
     """
     if not pl_content:
         return
-    print(bold(yellow(f"⚠ Restoring {user_id} to power level {previous_level}")))
     users = dict(pl_content.get("users") or {})
-    users[user_id] = previous_level
+    if previous_level is None:
+        if user_id not in users:
+            return
+        print(bold(yellow(f"⚠ Removing explicit PL entry for {user_id}")))
+        users.pop(user_id, None)
+    else:
+        if users.get(user_id) == previous_level:
+            return
+        print(bold(yellow(f"⚠ Restoring {user_id} to power level {previous_level}")))
+        users[user_id] = previous_level
     new_pl = dict(pl_content)
     new_pl["users"] = users
     res = _put_state(config, room_id, "m.room.power_levels", "", new_pl)
@@ -169,10 +182,24 @@ def main() -> int:
     users = dict(pl_content.get("users") or {})
     users_default = pl_content.get("users_default", 0)
 
-    previous_level = users.get(user_id)
+    # `previous_level` retains its `None` if the user had no explicit entry.
+    previous_level: int | None = users.get(user_id)
+    had_explicit_entry = user_id in users
     promoted = False
-    if previous_level is None:
-        previous_level = users_default
+
+    def _try_promote() -> bool:
+        res = admin_request(
+            config,
+            "POST",
+            f"/v1/rooms/{args.room_id}/make_room_admin",
+            {"user_id": user_id},
+        )
+        if "error" in res:
+            print(red(f"✗ Promote failed: {res['error']}"), file=sys.stderr)
+            return False
+        return True
+
+    if not had_explicit_entry:
         print(
             bold(
                 yellow(
@@ -181,13 +208,7 @@ def main() -> int:
                 )
             )
         )
-        admin_request(
-            config,
-            "POST",
-            f"/v1/rooms/{args.room_id}/make_room_admin",
-            {"user_id": user_id},
-        )
-        promoted = True
+        promoted = _try_promote()
     elif previous_level == 100:
         print(bold(green("✓ User already has maximum power level")))
     else:
@@ -198,13 +219,16 @@ def main() -> int:
                 )
             )
         )
-        admin_request(
-            config,
-            "POST",
-            f"/v1/rooms/{args.room_id}/make_room_admin",
-            {"user_id": user_id},
+        promoted = _try_promote()
+
+    if not promoted and not had_explicit_entry and previous_level is None:
+        # We never managed to elevate; subsequent state writes will likely
+        # fail.  Bail out cleanly without touching power levels.
+        print(
+            red("✗ Could not elevate user; skipping the rest of the pipeline."),
+            file=sys.stderr,
         )
-        promoted = True
+        return 1
 
     # Install a SIGINT/SIGTERM handler so Ctrl-C still restores the power
     # level before exiting.

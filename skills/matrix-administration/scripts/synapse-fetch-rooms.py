@@ -46,8 +46,15 @@ def main() -> int:
     rooms: list[dict] = []
 
     while True:
+        # `order_by=name` is a documented Synapse query parameter; the
+        # original tool used a bare `&sort` flag that produced an
+        # empty-valued query parameter (parsed inconsistently by some
+        # proxies).  See:
+        # https://element-hq.github.io/synapse/latest/admin_api/rooms.html
         result = admin_request(
-            config, "GET", f"/v1/rooms?from={quote(str(from_token))}&sort"
+            config,
+            "GET",
+            f"/v1/rooms?from={quote(str(from_token))}&order_by=name",
         )
         if "error" in result:
             print(f"Error fetching rooms: {result['error']}", file=sys.stderr)

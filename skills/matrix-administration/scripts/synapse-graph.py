@@ -49,7 +49,21 @@ _COLORS = {
 
 
 def _enc(value: str) -> str:
-    return (value or "").replace('"', '\\"')
+    """Escape a string for use inside a Graphviz DOT double-quoted literal.
+
+    DOT treats backslash + character as an escape sequence (``\\n``,
+    ``\\l``, ``\\r``, ``\\"``).  We escape backslashes first, then quotes,
+    then newlines/CR — order matters so the backslash escape doesn't
+    double-escape itself.
+    """
+    if value is None:
+        return ""
+    return (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+    )
 
 
 def _join_policy_text(r: Room, rooms: dict[str, Room]) -> str:

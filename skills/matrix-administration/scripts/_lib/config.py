@@ -19,12 +19,24 @@ Stdlib only.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 
+def get_config_path() -> Path:
+    """Return the Matrix configuration file path.
+
+    Respects ``XDG_CONFIG_HOME`` and falls back to ``~/.config``.  Same
+    resolution as the matrix-communication skill so a single config file
+    is shared by both.
+    """
+    xdg_config = os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
+    return Path(xdg_config) / "matrix" / "config.json"
+
+
 def load_config(require_admin: bool = True) -> dict:
-    """Load Matrix config from ``~/.config/matrix/config.json``.
+    """Load Matrix config from ``$XDG_CONFIG_HOME/matrix/config.json``.
 
     Args:
         require_admin: If True (the default), require an admin token to be
@@ -35,7 +47,7 @@ def load_config(require_admin: bool = True) -> dict:
 
     Exits with a helpful message if the config is missing or incomplete.
     """
-    config_path = Path.home() / ".config" / "matrix" / "config.json"
+    config_path = get_config_path()
     if not config_path.exists():
         print(f"Error: Config file not found: {config_path}", file=sys.stderr)
         print("Create it with at least:", file=sys.stderr)
