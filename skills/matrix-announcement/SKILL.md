@@ -19,7 +19,7 @@ Content guidance for Matrix announcements; `matrix-communication` does the sendi
 1. **One headline, one purpose.** A Matrix message is a tweet, not a blog post.
 2. **Send `formatted_body` with the HTML subset.** `body` stays as plaintext fallback. Never send only Markdown — clients are not required to parse it.
 3. **Lists beat paragraphs.** If you're tempted to write "and also …", start a `<ul>`.
-4. **Code in `<pre><code>` blocks.** Commands, paths, version strings, IDs — every one of them.
+4. **Wrap code.** Inline `<code>` for commands, paths, version strings, IDs, env vars — every one of them. Multi-line snippets in `<pre><code class="language-…">`.
 5. **Layout > words → render an HTML card to PNG.** Comparisons, dashboards, multi-row tables die in `formatted_body`.
 
 ## Type tags (pick one — never stack)

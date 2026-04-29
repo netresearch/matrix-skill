@@ -13,12 +13,19 @@ For these: **design an HTML card → render to PNG headlessly → upload to the 
 
 ## The recipe
 
+`--window-size` must match the chosen template's design dimensions and the `info.w`/`info.h` you send in the `m.image` event below — otherwise the screenshot is cropped or letterboxed and the metadata lies. The shipped templates are:
+
+- `release-card.html` → `1200,630`
+- `weekly-digest.html` → `1200,1500`
+- `comparison.html` → `1200,900`
+
 ```bash
-# 1. Render
+# 1. Render — substitute the template's WIDTH,HEIGHT for the --window-size
+W=1200; H=630   # release-card.html dimensions
 chromium --headless=new \
   --disable-gpu \
   --hide-scrollbars \
-  --window-size=1200,630 \
+  --window-size=$W,$H \
   --screenshot=card.png \
   --default-background-color=00000000 \
   "file://$(pwd)/card.html"
@@ -43,8 +50,8 @@ curl -s -X PUT \
     \"url\": \"$MXC\",
     \"info\": {
       \"mimetype\": \"image/png\",
-      \"w\": 1200,
-      \"h\": 630,
+      \"w\": $W,
+      \"h\": $H,
       \"size\": $SIZE
     }
   }" \
