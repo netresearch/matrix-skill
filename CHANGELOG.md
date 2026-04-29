@@ -25,7 +25,7 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 - `matrix-send-e2ee.py` and `matrix-send.py`: `--emote` and `--notice` are now grouped via `argparse.add_mutually_exclusive_group`. The `send_message_e2ee()` and `send_message()` functions gained a `notice: bool = False` keyword parameter.
 - `matrix-communication` quick-reference, `messaging-guide.md`, and the root `AGENTS.md` cheat-sheet updated to document `--notice`.
-- `matrix-announcement/references/image-cards.md`: corrected guidance — `m.notice` is text-only; for an image announcement, send the card as `m.image` and a follow-up `m.text` via `--notice` rather than trying to flag the image event.
+- `matrix-announcement/references/image-cards.md`: corrected guidance — `m.notice` is text-only; for an image announcement, send the card as `m.image` and a follow-up notice-flavour text message (msgtype `m.notice`, sent via `matrix-send-e2ee.py … --notice`) rather than trying to flag the image event itself as `m.notice`.
 
 ## [1.21.1] - 2026-04-29
 
@@ -37,7 +37,7 @@ Quality overhaul of `matrix-administration`: 95% faster E2EE operations, 28 eval
 
 ## [1.20.1] - 2026-04-22
 
-Security patch: URL scheme validation before `urllib.urlopen` in `matrix-administration`.
+Security patch: URL scheme validation before `urllib.request.urlopen` in `matrix-administration`.
 
 ## [1.20.0] - 2026-04-16
 
