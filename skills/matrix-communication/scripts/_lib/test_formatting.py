@@ -1,7 +1,12 @@
 """Tests for `_lib.formatting` markdown→HTML conversion.
 
-Run with: `python3 -m unittest skills.matrix-communication.scripts._lib.test_formatting`
-or invoke this file directly: `python3 test_formatting.py`.
+The skill directory contains a hyphen (`matrix-communication`) so it is
+not importable as a Python package; run the file directly or use unittest
+discovery:
+
+    python3 skills/matrix-communication/scripts/_lib/test_formatting.py
+    python3 -m unittest discover \\
+        -s skills/matrix-communication/scripts/_lib -p 'test_formatting.py'
 
 Stdlib only.
 """
@@ -36,9 +41,7 @@ class ShortenServiceUrlsTests(unittest.TestCase):
         confused the link parser and leaked literal `)` into the rendered
         message.
         """
-        src = (
-            "[mytext](https://gitlab.example.com/grp/proj/-/merge_requests/7) — note"
-        )
+        src = "[mytext](https://gitlab.example.com/grp/proj/-/merge_requests/7) — note"
         out = shorten_service_urls(src)
         self.assertEqual(out, src)
 
@@ -66,6 +69,14 @@ class ShortenServiceUrlsTests(unittest.TestCase):
         self.assertIn(
             "[grp/proj#12](https://gitlab.example.com/grp/proj/-/issues/12)", out
         )
+
+    def test_forged_placeholder_does_not_raise(self):
+        """A user-supplied `\\x00MDLINK<n>\\x00` sequence must not crash the
+        restore step with IndexError. Unknown placeholders are left as-is."""
+        # No real markdown link in the input, but a forged placeholder is.
+        src = "literal placeholder \x00MDLINK99\x00 should pass through"
+        out = shorten_service_urls(src)
+        self.assertIn("\x00MDLINK99\x00", out)
 
 
 class MarkdownToHtmlListTests(unittest.TestCase):
@@ -152,9 +163,7 @@ class MarkdownToHtmlLinkTests(unittest.TestCase):
     def test_pre_wrapped_jira_link_renders_clean_anchor(self):
         src = "[NRS-1](https://jira.example.com/browse/NRS-1)"
         html = markdown_to_html(src)
-        self.assertIn(
-            '<a href="https://jira.example.com/browse/NRS-1">NRS-1</a>', html
-        )
+        self.assertIn('<a href="https://jira.example.com/browse/NRS-1">NRS-1</a>', html)
         self.assertNotIn("</a>)", html)
 
     def test_bullet_list_with_pre_wrapped_links(self):
@@ -176,9 +185,7 @@ class MarkdownToHtmlLinkTests(unittest.TestCase):
             "proj#7</a>",
             html,
         )
-        self.assertIn(
-            '<a href="https://jira.example.com/browse/NRS-1">NRS-1</a>', html
-        )
+        self.assertIn('<a href="https://jira.example.com/browse/NRS-1">NRS-1</a>', html)
         # No nested `[…](…)` artefacts (the symptom of broken re-wrapping)
         self.assertNotIn("[", html)
         self.assertNotIn("](", html)

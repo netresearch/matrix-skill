@@ -57,8 +57,16 @@ def shorten_service_urls(text: str) -> str:
         text,
     )
 
-    # Restore protected markdown links
-    text = re.sub(r"\x00MDLINK(\d+)\x00", lambda m: protected[int(m.group(1))], text)
+    # Restore protected markdown links. Bounds-check the index so a forged
+    # placeholder in user input can't raise IndexError — unknown placeholders
+    # are left as-is.
+    def _restore(match: "re.Match[str]") -> str:
+        idx = int(match.group(1))
+        if 0 <= idx < len(protected):
+            return protected[idx]
+        return match.group(0)
+
+    text = re.sub(r"\x00MDLINK(\d+)\x00", _restore, text)
 
     return text
 
