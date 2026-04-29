@@ -873,12 +873,17 @@ jira-attachment.py add PROJ-123 /tmp/image.png</code></pre>
 
 <script>
   // Populate templates with example data, then scale them down to fit the column.
+  // Build the substituted HTML in a local string and assign innerHTML once —
+  // assigning per-key would re-parse and re-serialize the DOM each iteration.
+  // split/join is also safer than String.prototype.replace with a string
+  // argument, which interprets `$&`, `$1`, etc. in the replacement.
   function paint(iframe, fills) {
     if (!iframe.contentDocument) return;
-    Object.entries(fills).forEach(([k, v]) => {
-      iframe.contentDocument.body.innerHTML = iframe.contentDocument.body.innerHTML
-        .replace(new RegExp('\\{\\{' + k + '\\}\\}', 'g'), v);
-    });
+    let html = iframe.contentDocument.body.innerHTML;
+    for (const [k, v] of Object.entries(fills)) {
+      html = html.split('{{' + k + '}}').join(v);
+    }
+    iframe.contentDocument.body.innerHTML = html;
   }
 
   function fitFrame(iframe, designWidth, designHeight) {

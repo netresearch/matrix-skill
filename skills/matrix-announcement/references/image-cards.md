@@ -31,7 +31,9 @@ MXC=$(curl -s -X POST \
   "$HOMESERVER/_matrix/media/v3/upload?filename=card.png" \
   | jq -r .content_uri)
 
-# 3. Send m.image
+# 3. Send m.image (file size via wc -c so it works on both Linux and macOS;
+#    `stat -c%s` is GNU-only, `stat -f%z` is BSD-only — wc -c < FILE is portable)
+SIZE=$(wc -c < card.png | tr -d ' ')
 curl -s -X PUT \
   -H "Authorization: Bearer $MATRIX_TOKEN" \
   -H "Content-Type: application/json" \
@@ -43,13 +45,16 @@ curl -s -X PUT \
       \"mimetype\": \"image/png\",
       \"w\": 1200,
       \"h\": 630,
-      \"size\": $(stat -c%s card.png)
+      \"size\": $SIZE
     }
   }" \
   "$HOMESERVER/_matrix/client/v3/rooms/$ROOM/send/m.room.message/$(uuidgen)"
 
-# 4. Follow with the text/links nobody can copy from an image
-python3 ~/.claude/skills/matrix-communication/scripts/matrix-send-e2ee.py "$ROOM" \
+# 4. Follow with the text/links nobody can copy from an image.
+#    ${CLAUDE_SKILL_DIR} is substituted by Claude Code to the active skill's
+#    directory; the matrix-communication scripts live one directory up.
+#    Do NOT quote it — it is a literal substitution, not a shell variable.
+uv run ${CLAUDE_SKILL_DIR}/../matrix-communication/scripts/matrix-send-e2ee.py "$ROOM" \
   '**Install:** `/install-plugin https://github.com/netresearch/github-release-skill`'
 ```
 
