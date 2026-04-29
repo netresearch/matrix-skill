@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Weekly digest card</title>
+<style>
+  :root {
+    --ink: #0e1116;
+    --ink-soft: #44505d;
+    --ink-faint: #7d8896;
+    --paper: #fafaf7;
+    --line: #e3e1d8;
+    --accent: #b85c1d;
+    --new: #2f6f3e;
+    --feat: #1d5a8a;
+    --patch: #7d8896;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1200px; height: 1500px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: ui-sans-serif, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .frame {
+    margin: 32px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 56px 64px 64px;
+  }
+  .head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 24px; margin-bottom: 36px;
+  }
+  .head h1 {
+    font-size: 48px; letter-spacing: -0.02em; margin: 0;
+    font-weight: 600;
+  }
+  .head .range {
+    font-family: ui-monospace, "JetBrains Mono", monospace;
+    font-size: 14px; color: var(--ink-faint);
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .lede {
+    font-size: 20px; line-height: 1.45;
+    color: var(--ink-soft); margin: 0 0 40px; max-width: 880px;
+  }
+  section { margin-bottom: 36px; }
+  section h2 {
+    font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-faint); margin: 0 0 16px; font-weight: 600;
+    padding-bottom: 8px; border-bottom: 1px dashed var(--line);
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 110px 240px 1fr 90px;
+    gap: 24px;
+    padding: 12px 0;
+    align-items: baseline;
+    border-bottom: 1px solid var(--line);
+    font-size: 17px;
+  }
+  .row:last-child { border-bottom: 0; }
+  .pill {
+    font-family: ui-monospace, "JetBrains Mono", monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 8px; border-radius: 4px;
+    border: 1px solid currentColor;
+    display: inline-block;
+    width: fit-content;
+  }
+  .pill.new { color: var(--new); }
+  .pill.feat { color: var(--feat); }
+  .pill.patch { color: var(--patch); }
+  .name {
+    font-family: ui-monospace, "JetBrains Mono", monospace;
+    font-size: 16px; color: var(--ink);
+  }
+  .what { color: var(--ink-soft); line-height: 1.4; }
+  .ver {
+    font-family: ui-monospace, "JetBrains Mono", monospace;
+    font-size: 14px; color: var(--ink-faint); text-align: right;
+  }
+  .footer {
+    margin-top: 40px; padding-top: 24px;
+    border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between;
+    font-family: ui-monospace, "JetBrains Mono", monospace;
+    font-size: 13px; color: var(--ink-faint);
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="head">
+      <h1>Skill ecosystem update</h1>
+      <div class="range">Week of {{WEEK_START}} → {{WEEK_END}}</div>
+    </div>
+
+    <p class="lede">{{LEDE}}</p>
+
+    <section>
+      <h2>New skills published</h2>
+      <div class="row">
+        <span class="pill new">new</span>
+        <span class="name">{{NEW_NAME_1}}</span>
+        <span class="what">{{NEW_DESC_1}}</span>
+        <span class="ver">v{{NEW_VER_1}}</span>
+      </div>
+      <div class="row">
+        <span class="pill new">new</span>
+        <span class="name">{{NEW_NAME_2}}</span>
+        <span class="what">{{NEW_DESC_2}}</span>
+        <span class="ver">v{{NEW_VER_2}}</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Feature releases</h2>
+      <div class="row">
+        <span class="pill feat">feat</span>
+        <span class="name">{{FEAT_NAME_1}}</span>
+        <span class="what">{{FEAT_DESC_1}}</span>
+        <span class="ver">v{{FEAT_VER_1}}</span>
+      </div>
+      <div class="row">
+        <span class="pill feat">feat</span>
+        <span class="name">{{FEAT_NAME_2}}</span>
+        <span class="what">{{FEAT_DESC_2}}</span>
+        <span class="ver">v{{FEAT_VER_2}}</span>
+      </div>
+      <div class="row">
+        <span class="pill feat">feat</span>
+        <span class="name">{{FEAT_NAME_3}}</span>
+        <span class="what">{{FEAT_DESC_3}}</span>
+        <span class="ver">v{{FEAT_VER_3}}</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Patches</h2>
+      <div class="row">
+        <span class="pill patch">patch</span>
+        <span class="name">{{PATCH_NAME_1}}</span>
+        <span class="what">{{PATCH_DESC_1}}</span>
+        <span class="ver">v{{PATCH_VER_1}}</span>
+      </div>
+      <div class="row">
+        <span class="pill patch">patch</span>
+        <span class="name">{{PATCH_NAME_2}}</span>
+        <span class="what">{{PATCH_DESC_2}}</span>
+        <span class="ver">v{{PATCH_VER_2}}</span>
+      </div>
+      <div class="row">
+        <span class="pill patch">patch</span>
+        <span class="name">{{PATCH_NAME_3}}</span>
+        <span class="what">{{PATCH_DESC_3}}</span>
+        <span class="ver">v{{PATCH_VER_3}}</span>
+      </div>
+    </section>
+
+    <div class="footer">
+      <span>{{TOTAL_REPOS}} repos · {{TOTAL_RELEASES}} releases</span>
+      <span><b style="color:var(--ink)">{{ORG}}</b> · matrix digest</span>
+    </div>
+  </div>
+</body>
+</html>

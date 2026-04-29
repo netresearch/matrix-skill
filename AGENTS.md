@@ -10,11 +10,13 @@ The skills below each ship their own `SKILL.md` (read it before editing any file
 
 - [`skills/matrix-communication/SKILL.md`](skills/matrix-communication/SKILL.md) — chat operations (Client-Server API, E2EE)
 - [`skills/matrix-administration/SKILL.md`](skills/matrix-administration/SKILL.md) — homeserver operations (Synapse Admin API)
+- [`skills/matrix-announcement/SKILL.md`](skills/matrix-announcement/SKILL.md) — content guidance for structured Matrix announcements
 
-AI agent plugin shipping two Matrix skills:
+AI agent plugin shipping three Matrix skills:
 
 - **matrix-communication** — send / read / edit / react in chat rooms as a regular user, with full E2EE support (uses `python-matrix-nio` via `uv`).
 - **matrix-administration** — Synapse homeserver operations: snapshot rooms, rate health, render Graphviz map, force-join, promote, harden, deactivate, search history (stdlib-only).
+- **matrix-announcement** — content guidance for composing scannable, structured Matrix announcements (release notes, digests, heads-ups, postmortems). Defines the HTML subset, type-tag system, glyph rules, and when to render an HTML card to PNG. No scripts — pairs with `matrix-communication` for delivery.
 
 Packaged as a Claude Code plugin following the [Agentic Skills specification](https://agentskills.io).
 
@@ -27,8 +29,13 @@ skills/matrix-communication/   # Client-Server API, E2EE chat (uses python-matri
 skills/matrix-administration/  # Synapse Admin API, server ops (stdlib-only Python)
   SKILL.md, scripts/{_lib, synapse-*.py}, references/, evals/
 
+skills/matrix-announcement/    # Content guidance for structured announcements (no scripts)
+  SKILL.md, references/{html-subset,structure,glyphs,image-cards,threading,anti-patterns,text-templates}.md
+  references/templates/{release-card,weekly-digest,comparison}.html
+  references/gallery.html, evals/
+
 commands/work-update.md   # /work-update slash command template
-.claude-plugin/plugin.json   # Plugin manifest — lists both skills
+.claude-plugin/plugin.json   # Plugin manifest — lists all three skills
 docs/ARCHITECTURE.md
 Build/Scripts/   # CI validation
 scripts/verify-harness.sh   # Harness maturity checker
@@ -37,43 +44,32 @@ scripts/verify-harness.sh   # Harness maturity checker
 
 ## Commands — matrix-communication
 
-All scripts live in `skills/matrix-communication/scripts/`. Use `uv run` unless noted.
+All scripts live in `skills/matrix-communication/scripts/`. Use `uv run` unless noted. `set +H` disables history expansion so `!` in messages survives.
 
 ```bash
-# Send (always prefer E2EE)
-set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "message"
-set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "text" --thread '$rootEventId'
-set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "text" --reply '$eventId'
-set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "acting" --emote
-set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py ROOM "text" --no-prefix
+C=skills/matrix-communication/scripts
 
-# Read
-uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 10
-uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 20 --json
+# Send (always prefer E2EE) — plain | --thread | --reply | --emote | --no-prefix
+set +H && uv run $C/matrix-send-e2ee.py ROOM "message"
 
-# Edit / Delete
-set +H && uv run skills/matrix-communication/scripts/matrix-edit-e2ee.py ROOM '$eventId' "new text"
-uv run skills/matrix-communication/scripts/matrix-redact.py ROOM '$eventId' "reason"
+# Read / Edit / React / Redact
+uv run $C/matrix-read-e2ee.py ROOM --limit 10 [--json]
+set +H && uv run $C/matrix-edit-e2ee.py ROOM '$eventId' "new text"
+uv run $C/matrix-react.py ROOM '$eventId' "✅"
+uv run $C/matrix-redact.py ROOM '$eventId' "reason"
 
-# React
-uv run skills/matrix-communication/scripts/matrix-react.py ROOM '$eventId' "✅"
+# Rooms / aliases
+uv run $C/matrix-rooms.py [--search ops]
+uv run $C/matrix-resolve.py "#room:server"
 
-# Rooms
-uv run skills/matrix-communication/scripts/matrix-rooms.py
-uv run skills/matrix-communication/scripts/matrix-rooms.py --search ops
-uv run skills/matrix-communication/scripts/matrix-resolve.py "#room:server"
+# E2EE setup / verify / keys
+uv run $C/matrix-e2ee-setup.py [--status]
+uv run $C/matrix-e2ee-verify.py --timeout 180
+uv run $C/matrix-fetch-keys.py ROOM --sync-time 60
+uv run $C/matrix-key-backup.py --recovery-key "EsTj ..." --import-keys
 
-# E2EE management
-uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py           # Initial device setup
-uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py --status  # Check setup status
-uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 180  # SAS verification
-uv run skills/matrix-communication/scripts/matrix-fetch-keys.py ROOM --sync-time 60  # Fetch missing keys
-uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "EsTj ..." --import-keys  # Restore backup
-
-# Health check (uses python3 directly, not uv run)
-python3 skills/matrix-communication/scripts/matrix-doctor.py --install
-
-# Harness verification
+# Health check (python3, not uv run) + harness verification
+python3 $C/matrix-doctor.py --install
 bash scripts/verify-harness.sh --status
 ```
 
@@ -101,27 +97,17 @@ python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # hard
 
 ## Rules — matrix-communication
 
-**E2EE first**: Always use `*-e2ee.py` scripts. Only fall back to non-E2EE if the room is confirmed unencrypted.
-
-**Room identifiers**: Scripts accept three formats -- short name (`agent-work`), room alias (`#room:server`), or room ID (`!abc:server`). Use `matrix-rooms.py` to discover available rooms.
-
-**Config**: Located at `~/.config/matrix/config.json`. Required fields: `homeserver`, `user_id`. Optional: `access_token` (for non-E2EE scripts), `bot_prefix`.
-
-**Running scripts**: Use `uv run` for all scripts except `matrix-doctor.py` which uses `python3` directly (it bootstraps dependencies).
-
-**Bash `!` handling**: Always prepend `set +H &&` before commands containing `!` in messages. Bash history expansion corrupts exclamation marks otherwise.
-
-**Passwords with special chars**: Pass via env var, not CLI arg: `MATRIX_PASSWORD="p@ss!" uv run ...`
-
-**Key backup**: Always include `--import-keys` flag when restoring. Without it, keys are displayed but not saved to the local store.
-
-**Device verification**: Use Element Desktop or Element Android to verify the agent's device. Element X has incompatible verification flows.
-
-**Line buffering**: Scripts use `line_buffering=True` for non-interactive (piped) contexts. Output appears in real time.
-
-**First E2EE run**: Takes ~2-5 seconds for initial key sync. Subsequent runs are faster.
-
-**Dependencies**: Requires `python3`, `uv`, Matrix homeserver access. E2EE scripts additionally need `libolm-dev` (apt) / `libolm-devel` (dnf) / `libolm` (brew).
+- **E2EE first**: Always use `*-e2ee.py` scripts. Only fall back to non-E2EE if the room is confirmed unencrypted.
+- **Room identifiers**: Scripts accept short name (`agent-work`), room alias (`#room:server`), or room ID (`!abc:server`). Use `matrix-rooms.py` to discover.
+- **Config**: `~/.config/matrix/config.json` — required: `homeserver`, `user_id`; optional: `access_token` (non-E2EE only), `bot_prefix`.
+- **Running scripts**: `uv run` for everything except `matrix-doctor.py` which bootstraps deps via `python3`.
+- **Bash `!` handling**: Prepend `set +H &&` before any command whose arguments contain `!` — history expansion corrupts otherwise.
+- **Passwords with special chars**: Pass via env var, not CLI arg — `MATRIX_PASSWORD="p@ss!" uv run …`.
+- **Key backup**: Always include `--import-keys` when restoring; without it, keys are displayed but not stored.
+- **Device verification**: Use Element Desktop or Element Android — Element X has incompatible verification flows.
+- **Line buffering** is `True` for non-interactive (piped) contexts; output appears in real time.
+- **First E2EE run** takes ~2–5 s for initial key sync; subsequent runs are faster.
+- **Dependencies**: `python3`, `uv`, Matrix homeserver access. E2EE additionally needs `libolm-dev` (apt) / `libolm-devel` (dnf) / `libolm` (brew).
 
 ## Testing
 
@@ -142,6 +128,17 @@ Use the `#test` room (or a room named `test`) for all testing. Never test in pro
 - [Room health checks](skills/matrix-administration/references/room-health-checks.md)
 - [Room graph pipeline](skills/matrix-administration/references/room-graph-pipeline.md)
 - [Safety guide](skills/matrix-administration/references/safety-guide.md)
+
+### matrix-announcement
+- [SKILL.md](skills/matrix-announcement/SKILL.md) — five rules + type-tag table + pre-send checklist
+- [HTML subset](skills/matrix-announcement/references/html-subset.md)
+- [Structure & length budget](skills/matrix-announcement/references/structure.md)
+- [Glyphs](skills/matrix-announcement/references/glyphs.md)
+- [Image cards (HTML→PNG)](skills/matrix-announcement/references/image-cards.md)
+- [Threading, mentions, edits, redactions](skills/matrix-announcement/references/threading.md)
+- [Anti-patterns](skills/matrix-announcement/references/anti-patterns.md)
+- [Text templates](skills/matrix-announcement/references/text-templates.md)
+- [Visual gallery](skills/matrix-announcement/references/gallery.html)
 
 ### Repo
 - [Architecture](docs/ARCHITECTURE.md) — system design and distribution

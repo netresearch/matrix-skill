@@ -1,0 +1,154 @@
+{
+  "skill_name": "matrix-announcement",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "type-tag-required",
+      "prompt": "Announce the v3.12.0 release of jira-skill in #releases:example.com.",
+      "expected_output": "Composes a message that begins with a single type tag (e.g. 'Release: jira-skill v3.12.0') and a leading glyph.",
+      "files": [],
+      "assertions": [
+        "First line includes one of: Release / Patch / Heads-up / Digest / Postmortem / RFC / New skill",
+        "First line includes at most one prefix glyph",
+        "Does NOT use 🚀 or 🎉",
+        "Does NOT begin with 'We're excited to'"
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "lists-not-prose",
+      "prompt": "Compose a release announcement listing four changes: ecosystem detection, version bumps, signed tags, narrative release notes.",
+      "expected_output": "Renders the four items as a <ul>, not as a paragraph with 'and also...'.",
+      "files": [],
+      "assertions": [
+        "Uses <ul> or <ol> with <li> for the four items",
+        "Does NOT pack all four into a single paragraph",
+        "Each list item is a complete bullet, not a fragment"
+      ]
+    },
+    {
+      "id": 3,
+      "eval_name": "code-tag-discipline",
+      "prompt": "Tell the room how to install the github-release-skill plugin and which command it blocks.",
+      "expected_output": "Wraps every command, path, version string, and identifier in <code>.",
+      "files": [],
+      "assertions": [
+        "/install-plugin invocation wrapped in <code>",
+        "Blocked command (gh release create) wrapped in <code>",
+        "Skill name (github-release-skill) wrapped in <code>",
+        "Version strings wrapped in <code>"
+      ]
+    },
+    {
+      "id": 4,
+      "eval_name": "no-raw-urls",
+      "prompt": "Include a link to the repository at https://github.com/netresearch/matrix-skill in the message.",
+      "expected_output": "Wraps the URL in <a href='...'> with destination-as-text (org/repo or similar), not 'click here'.",
+      "files": [],
+      "assertions": [
+        "URL is in href, not in body",
+        "Anchor text is the destination identity, not 'here' or 'click here'",
+        "Plaintext body keeps the raw URL alongside the identifier"
+      ]
+    },
+    {
+      "id": 5,
+      "eval_name": "render-png-for-tabular",
+      "prompt": "Post a weekly digest covering 17 repos with old and new versions for each.",
+      "expected_output": "Renders templates/weekly-digest.html to PNG via headless Chromium and posts m.image, instead of inlining a 17-row table in formatted_body.",
+      "files": [],
+      "assertions": [
+        "Surfaces that >6-row tables don't render well in formatted_body",
+        "Uses chromium --headless=new with --window-size=1200,1500",
+        "Sends m.image with mxc:// URI",
+        "Pairs the image with a plaintext body fallback or a follow-up m.text"
+      ]
+    },
+    {
+      "id": 6,
+      "eval_name": "headsup-for-breaking",
+      "prompt": "Announce that matrix-skill v2.0.0 drops Python 3.8.",
+      "expected_output": "Uses the 'Heads-up' tag with ⚠️ glyph; states migration steps and timeline; does NOT use the 'Release' tag for this.",
+      "files": [],
+      "assertions": [
+        "Type tag is Heads-up, not Release",
+        "Glyph is ⚠️, not 📦 or 🚀",
+        "Includes Migration step",
+        "Includes Timeline / sunset date"
+      ]
+    },
+    {
+      "id": 7,
+      "eval_name": "m-notice-for-bots",
+      "prompt": "Send the release announcement automatically from CI without human review.",
+      "expected_output": "Sets msgtype to m.notice (not m.text) so other bots won't auto-reply, and surfaces that the matrix-communication scripts default to m.text — so a raw API call is required for m.notice.",
+      "files": [],
+      "assertions": [
+        "Surfaces m.notice vs m.text distinction",
+        "Recommends m.notice for the unattended/CI case",
+        "Notes that matrix-send-e2ee.py sends m.text and a direct API call is needed for m.notice"
+      ]
+    },
+    {
+      "id": 8,
+      "eval_name": "thread-long-content",
+      "prompt": "Post the v2.0.0 release announcement plus 14 detailed migration notes.",
+      "expected_output": "Headline + 1-sentence summary as parent; 14 migration notes in a thread via m.relates_to: m.thread.",
+      "files": [],
+      "assertions": [
+        "Parent message stays under 3000 chars",
+        "Detailed notes go into thread replies",
+        "m.relates_to uses rel_type m.thread (not m.replace or no relation)"
+      ]
+    },
+    {
+      "id": 9,
+      "eval_name": "no-mention-storm",
+      "prompt": "Notify the team that they should review PR #42 before Friday.",
+      "expected_output": "Names ONE owner with a reason, not @everyone or a list of five users.",
+      "files": [],
+      "assertions": [
+        "At most one user mentioned",
+        "Mention uses matrix.to URL, not plaintext @name",
+        "Includes m.mentions block",
+        "Does NOT use @room"
+      ]
+    },
+    {
+      "id": 10,
+      "eval_name": "image-pairs-with-text",
+      "prompt": "Post a release-card PNG for github-release-skill v0.2.0.",
+      "expected_output": "Sends m.image AND ensures install command + repo URL are accessible as text — either in the image's body field or as a follow-up m.text.",
+      "files": [],
+      "assertions": [
+        "m.image body is full plaintext fallback OR a follow-up m.text exists",
+        "Install command is selectable as text somewhere",
+        "Does NOT post the image alone with body='release card'"
+      ]
+    },
+    {
+      "id": 11,
+      "eval_name": "first-sentence-is-the-change",
+      "prompt": "Announce that the new automated-assessment-skill checkpoint runner now handles ten edge cases.",
+      "expected_output": "First sentence states the change directly. Second sentence states the consequence. No 'we're excited' / 'we're happy to share'.",
+      "files": [],
+      "assertions": [
+        "First sentence states change in concrete terms",
+        "Does NOT begin with 'We're excited' / 'We're happy' / 'I'm pleased'",
+        "Does NOT use 'blazingly fast', 'amazing', 'magnificent'"
+      ]
+    },
+    {
+      "id": 12,
+      "eval_name": "use-h3-not-h1",
+      "prompt": "Add a section heading 'What's new' to the announcement.",
+      "expected_output": "Renders the heading as <strong>What's new:</strong> on its own line OR as <h3>, NOT <h1> or <h2>.",
+      "files": [],
+      "assertions": [
+        "Section heading uses <strong> or <h3>",
+        "Does NOT use <h1> or <h2>",
+        "First-level title remains the type-tag line, not a heading"
+      ]
+    }
+  ]
+}
