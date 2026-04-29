@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Release card</title>
+<style>
+  :root {
+    --ink: #0e1116;
+    --ink-soft: #44505d;
+    --ink-faint: #7d8896;
+    --paper: #fafaf7;
+    --line: #e3e1d8;
+    --accent: #b85c1d;
+    --good: #2f6f3e;
+    --warn: #8a6a16;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1200px; height: 630px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: ui-sans-serif, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+    overflow: hidden;
+  }
+  .frame {
+    position: absolute; inset: 32px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    padding: 56px 64px;
+    display: flex; flex-direction: column;
+  }
+  .meta {
+    display: flex; align-items: center; gap: 14px;
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 14px; letter-spacing: 0.04em;
+    color: var(--ink-faint); text-transform: uppercase;
+  }
+  .meta .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .meta .sep { color: var(--line); }
+  .tag {
+    display: inline-block;
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 12px; letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    background: var(--paper);
+  }
+  h1 {
+    font-size: 64px; line-height: 1.05; letter-spacing: -0.02em;
+    margin: 28px 0 16px;
+    font-weight: 600;
+    text-wrap: balance;
+  }
+  h1 code {
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 0.78em; background: var(--paper);
+    padding: 2px 10px; border-radius: 6px; border: 1px solid var(--line);
+    vertical-align: 0.08em;
+  }
+  .lede {
+    font-size: 22px; line-height: 1.4; color: var(--ink-soft);
+    margin: 0 0 36px; max-width: 940px; text-wrap: pretty;
+  }
+  .grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 28px 56px;
+    flex: 1;
+  }
+  .col h3 {
+    font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-faint); margin: 0 0 10px; font-weight: 600;
+  }
+  .col ul { margin: 0; padding: 0; list-style: none; }
+  .col li {
+    font-size: 18px; line-height: 1.45;
+    padding: 6px 0 6px 18px; position: relative;
+    color: var(--ink);
+  }
+  .col li::before {
+    content: ""; position: absolute; left: 0; top: 16px;
+    width: 8px; height: 1px; background: var(--accent);
+  }
+  .col li code {
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 0.92em; background: var(--paper);
+    padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line);
+  }
+  .footer {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--line);
+  }
+  .install {
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 16px; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--line);
+    padding: 10px 16px; border-radius: 6px;
+  }
+  .install .prompt { color: var(--ink-faint); user-select: none; }
+  .brand {
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 13px; color: var(--ink-faint);
+    text-align: right;
+  }
+  .brand b { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="meta">
+      <span class="dot"></span>
+      <span>{{TYPE_TAG}}</span>
+      <span class="sep">·</span>
+      <span>{{DATE}}</span>
+      <span class="sep">·</span>
+      <span class="tag">{{ECOSYSTEM}}</span>
+    </div>
+
+    <h1>{{TITLE}} <code>v{{VERSION}}</code></h1>
+
+    <p class="lede">{{LEDE}}</p>
+
+    <div class="grid">
+      <div class="col">
+        <h3>What it does</h3>
+        <ul>
+          <li>{{DOES_1}}</li>
+          <li>{{DOES_2}}</li>
+          <li>{{DOES_3}}</li>
+        </ul>
+      </div>
+      <div class="col">
+        <h3>What it prevents</h3>
+        <ul>
+          <li>{{PREVENTS_1}}</li>
+          <li>{{PREVENTS_2}}</li>
+          <li>{{PREVENTS_3}}</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="install">
+        <span class="prompt">$ </span>/install-plugin {{REPO_URL}}
+      </div>
+      <div class="brand">
+        <b>{{ORG}}</b> · matrix announcement
+      </div>
+    </div>
+  </div>
+</body>
+</html>

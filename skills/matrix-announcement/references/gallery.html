@@ -1,0 +1,991 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Matrix announcement guideline — gallery</title>
+<style>
+  :root {
+    --ink: #0e1116;
+    --ink-soft: #44505d;
+    --ink-faint: #7d8896;
+    --paper: #fafaf7;
+    --line: #e3e1d8;
+    --accent: #b85c1d;
+    --bad: #8a3a2a;
+    --good: #2f6f3e;
+    --code-bg: #f4f2ec;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body {
+    margin: 0;
+    color: var(--ink);
+    font-family: ui-sans-serif, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: 100vh;
+  }
+  nav {
+    position: sticky; top: 0; align-self: start;
+    height: 100vh;
+    padding: 40px 24px 40px 40px;
+    border-right: 1px solid var(--line);
+    background: var(--paper);
+    overflow-y: auto;
+  }
+  nav .brand {
+    font-family: ui-monospace, "JetBrains Mono", monospace;
+    font-size: 12px; letter-spacing: 0.12em;
+    color: var(--ink-faint); text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  nav h1 {
+    font-size: 18px; margin: 0 0 24px;
+    line-height: 1.2; letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+  nav ol { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 6px 0; }
+  nav a {
+    color: var(--ink-soft); text-decoration: none;
+    font-size: 14px;
+    display: block; padding: 4px 0;
+  }
+  nav a:hover { color: var(--accent); }
+  nav .group {
+    font-family: ui-monospace, "JetBrains Mono", monospace;
+    font-size: 11px; letter-spacing: 0.1em;
+    color: var(--ink-faint); text-transform: uppercase;
+    margin: 24px 0 8px;
+  }
+  main {
+    padding: 56px 64px 120px;
+    max-width: 1080px;
+  }
+  h1.page {
+    font-size: 48px; letter-spacing: -0.02em;
+    margin: 0 0 8px; font-weight: 600;
+    text-wrap: balance;
+  }
+  .page-sub {
+    font-size: 20px; color: var(--ink-soft);
+    margin: 0 0 48px; text-wrap: pretty;
+    max-width: 720px;
+  }
+  section { margin: 64px 0; scroll-margin-top: 24px; }
+  section > h2 {
+    font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-faint); margin: 0 0 8px;
+    font-weight: 600;
+  }
+  section > h3 {
+    font-size: 32px; letter-spacing: -0.01em;
+    margin: 0 0 16px; font-weight: 600;
+    text-wrap: balance;
+  }
+  section > p { font-size: 17px; color: var(--ink); max-width: 720px; margin: 0 0 16px; }
+  code, pre {
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+  }
+  p code, li code, td code, th code {
+    background: var(--code-bg);
+    padding: 1px 6px; border-radius: 4px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-size: 13.5px; line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 16px 0; font-size: 15px;
+  }
+  th, td {
+    padding: 10px 14px; text-align: left;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 600;
+  }
+
+  /* Matrix message mock */
+  .room {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 24px 28px;
+    margin: 16px 0;
+  }
+  .msg {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 16px;
+    padding: 12px 0;
+  }
+  .msg + .msg { border-top: 1px dashed var(--line); margin-top: 4px; }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, #d8c9b3 0%, #b85c1d 100%);
+    color: #fff; display: grid; place-items: center;
+    font-weight: 600; font-size: 14px;
+    font-family: ui-monospace, monospace;
+    letter-spacing: 0.04em;
+  }
+  .avatar.bot { background: linear-gradient(135deg, #2f6f3e 0%, #1d5a8a 100%); }
+  .msg-head {
+    display: flex; gap: 12px; align-items: baseline;
+    margin-bottom: 4px;
+  }
+  .msg-head .name { font-weight: 600; color: #6534ad; }
+  .msg-head .name.bot { color: #1d5a8a; }
+  .msg-head .ts {
+    font-size: 12px; color: var(--ink-faint);
+    font-family: ui-monospace, monospace;
+  }
+  .msg-head .badge {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    background: var(--code-bg); color: var(--ink-faint);
+    padding: 1px 6px; border-radius: 3px;
+    border: 1px solid var(--line);
+  }
+  .msg-body { font-size: 15px; line-height: 1.5; color: var(--ink); }
+  .msg-body p { margin: 4px 0; }
+  .msg-body ul { margin: 6px 0; padding-left: 24px; }
+  .msg-body li { margin: 2px 0; }
+  .msg-body pre {
+    margin: 8px 0; font-size: 12.5px;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+  }
+  .msg-body a { color: #1d5a8a; text-decoration: underline; text-underline-offset: 2px; }
+  .msg-body code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+  .msg.notice .msg-body { color: var(--ink-soft); font-style: italic; }
+  .msg.notice .msg-body code,
+  .msg.notice .msg-body pre,
+  .msg.notice .msg-body strong { font-style: normal; }
+
+  /* Bad / good comparison frames */
+  .compare {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin: 16px 0;
+  }
+  .compare > div {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 20px;
+    background: #fff;
+  }
+  .compare .label {
+    font-family: ui-monospace, monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .compare .bad .label { color: var(--bad); }
+  .compare .good .label { color: var(--good); }
+  .compare .bad { background: #fdf6f3; border-color: #e8c8be; }
+  .compare .good { background: #f5f9f5; border-color: #c8d8c8; }
+  .compare pre, .compare .room { background: rgba(255,255,255,0.6); border-color: rgba(0,0,0,0.08); }
+
+  /* Image card preview frames */
+  .card-frame {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 24px 0;
+    background: #fff;
+  }
+  .card-frame .card-meta {
+    padding: 12px 20px;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+    font-family: ui-monospace, monospace;
+    font-size: 12px; color: var(--ink-faint);
+    letter-spacing: 0.04em;
+    display: flex; justify-content: space-between;
+  }
+  .card-frame iframe {
+    border: 0;
+    display: block;
+    background: #fff;
+  }
+
+  /* Allowed-tags grid */
+  .tag-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 16px 0;
+  }
+  .tag-chip {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 5px; padding: 8px 12px;
+    font-family: ui-monospace, monospace;
+    font-size: 13px; color: var(--ink);
+  }
+  .tag-chip.banned {
+    background: #fdf6f3; border-color: #e8c8be;
+    color: var(--bad); text-decoration: line-through;
+  }
+  .tag-chip .note {
+    display: block; font-size: 10px; letter-spacing: 0.04em;
+    color: var(--ink-faint); margin-top: 2px;
+    text-transform: uppercase;
+    font-family: ui-sans-serif, sans-serif;
+    text-decoration: none;
+  }
+
+  /* Glyph table */
+  .glyph-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+    margin: 16px 0;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .glyph-row {
+    display: grid;
+    grid-template-columns: 56px 1fr 1.4fr;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    background: #fff;
+    font-size: 14px;
+  }
+  .glyph-row:nth-last-child(-n+2) { border-bottom: 0; }
+  .glyph-row .g { font-size: 22px; }
+  .glyph-row .name { font-weight: 600; color: var(--ink); }
+  .glyph-row .desc { color: var(--ink-soft); }
+  .glyph-row.banned { background: #fdf6f3; }
+  .glyph-row.banned .g { filter: grayscale(0.7); opacity: 0.6; }
+  .glyph-row.banned .name { color: var(--bad); text-decoration: line-through; }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: #fff;
+    padding: 16px 20px;
+    margin: 24px 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 15px;
+  }
+  .callout strong { color: var(--accent); }
+
+  hr.thin {
+    border: 0; border-top: 1px solid var(--line);
+    margin: 56px 0;
+  }
+  .footer-note {
+    font-family: ui-monospace, monospace;
+    font-size: 12px; color: var(--ink-faint);
+    margin-top: 80px; padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav>
+    <div class="brand">netresearch · skill</div>
+    <h1>Matrix announcement guideline</h1>
+    <div class="group">Reference</div>
+    <ol>
+      <li><a href="#tldr">TL;DR</a></li>
+      <li><a href="#event">Event anatomy</a></li>
+      <li><a href="#html">HTML subset</a></li>
+      <li><a href="#structure">Structure</a></li>
+      <li><a href="#elements">Element rules</a></li>
+      <li><a href="#glyphs">Glyphs &amp; emoji</a></li>
+      <li><a href="#image">When to render to PNG</a></li>
+      <li><a href="#thread">Threads &amp; mentions</a></li>
+      <li><a href="#anti">Anti-patterns</a></li>
+    </ol>
+    <div class="group">Examples</div>
+    <ol>
+      <li><a href="#ex-release">New skill</a></li>
+      <li><a href="#ex-version">Version bump</a></li>
+      <li><a href="#ex-digest">Weekly digest</a></li>
+      <li><a href="#ex-headsup">Heads-up</a></li>
+      <li><a href="#ex-pipeline">Pipeline</a></li>
+    </ol>
+    <div class="group">Templates</div>
+    <ol>
+      <li><a href="#tpl-release">Release card</a></li>
+      <li><a href="#tpl-digest">Weekly digest</a></li>
+      <li><a href="#tpl-compare">Comparison</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <h1 class="page">Matrix announcements that don&rsquo;t suck</h1>
+    <p class="page-sub">A guideline for coding agents posting into Matrix rooms. Structured, scannable, no celebration emoji, no walls of text. Designed HTML cards when the layout matters more than the words.</p>
+
+    <!-- TLDR -->
+    <section id="tldr">
+      <h2>00 — TL;DR</h2>
+      <h3>Five rules</h3>
+      <ol>
+        <li><strong>One headline, one purpose.</strong> A Matrix message is a tweet, not a blog post.</li>
+        <li><strong>Send <code>formatted_body</code> with the HTML subset, always.</strong> <code>body</code> stays as a readable plaintext fallback.</li>
+        <li><strong>Lists beat paragraphs.</strong> If you write &ldquo;and also&hellip;&rdquo;, start a <code>&lt;ul&gt;</code>.</li>
+        <li><strong>Code in <code>&lt;pre&gt;&lt;code&gt;</code> blocks.</strong> Commands, paths, version strings, IDs &mdash; every one of them goes in <code>&lt;code&gt;</code>.</li>
+        <li><strong>When the layout matters more than the words, render an HTML card to PNG.</strong> Tables, dashboards, comparisons, hero announcements.</li>
+      </ol>
+    </section>
+
+    <hr class="thin" />
+
+    <!-- Event anatomy -->
+    <section id="event">
+      <h2>01</h2>
+      <h3>What a Matrix message actually is</h3>
+      <p>An <code>m.room.message</code> event is a JSON object. Two fields decide rendering: <code>body</code> (plaintext fallback &mdash; required, used by notifications, search, IRC bridges) and <code>formatted_body</code> (HTML, only when <code>format</code> is set).</p>
+
+      <pre><code>{
+  "msgtype": "m.text",
+  "format":  "org.matrix.custom.html",
+  "body":    "Release: github-release-skill v0.2.0\nRepo: https://github.com/netresearch/github-release-skill",
+  "formatted_body":
+    "&lt;p&gt;&lt;strong&gt;Release:&lt;/strong&gt; &lt;code&gt;github-release-skill&lt;/code&gt; v0.2.0&lt;br/&gt;Repo: &lt;a href=\"https://github.com/netresearch/github-release-skill\"&gt;netresearch/github-release-skill&lt;/a&gt;&lt;/p&gt;"
+}</code></pre>
+
+      <p><strong>m.text vs m.notice.</strong> Use <code>m.notice</code> for unattended automation. Clients render it visually muted and bots are forbidden from auto-replying &mdash; this prevents bot-on-bot loops. Use <code>m.text</code> when an agent posts on behalf of a human who reviewed the message.</p>
+
+      <div class="room">
+        <div class="msg">
+          <div class="avatar bot">B</div>
+          <div>
+            <div class="msg-head"><span class="name bot">release-bot</span> <span class="ts">14:02</span> <span class="badge">m.notice</span></div>
+            <div class="msg-body"><p>📦 <strong>Release:</strong> <code>github-release-skill</code> v0.2.0 &mdash; signed annotated tags, CI-gated.</p></div>
+          </div>
+        </div>
+        <div class="msg">
+          <div class="avatar">SM</div>
+          <div>
+            <div class="msg-head"><span class="name">Sebastian Mendel</span> <span class="ts">14:05</span> <span class="badge">m.text</span></div>
+            <div class="msg-body"><p>I checked the new flow against three repos &mdash; works as advertised. Migration notes follow in a thread.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <hr class="thin" />
+
+    <!-- HTML subset -->
+    <section id="html">
+      <h2>02</h2>
+      <h3>The HTML subset you can rely on</h3>
+      <p>The Matrix spec defines an explicit allow-list. Element, Cinny, FluffyChat all converge on roughly the same set. Treat this as the floor.</p>
+
+      <p style="font-size:13px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.08em;margin-top:24px;">Allowed</p>
+      <div class="tag-grid">
+        <div class="tag-chip">&lt;p&gt; &lt;br&gt; &lt;hr&gt;<span class="note">block flow</span></div>
+        <div class="tag-chip">&lt;strong&gt; &lt;em&gt; &lt;b&gt; &lt;i&gt; &lt;u&gt; &lt;del&gt;<span class="note">inline emphasis</span></div>
+        <div class="tag-chip">&lt;code&gt; &lt;pre&gt;<span class="note">code &mdash; class=&quot;language-…&quot;</span></div>
+        <div class="tag-chip">&lt;blockquote&gt;<span class="note">quote prior content</span></div>
+        <div class="tag-chip">&lt;ul&gt; &lt;ol&gt; &lt;li&gt;<span class="note">lists</span></div>
+        <div class="tag-chip">&lt;h3&gt;–&lt;h6&gt;<span class="note">prefer h3 for titles</span></div>
+        <div class="tag-chip">&lt;table&gt; &lt;thead&gt; &lt;tbody&gt; &lt;tr&gt; &lt;th&gt; &lt;td&gt;<span class="note">basic tables only</span></div>
+        <div class="tag-chip">&lt;a href&gt;<span class="note">https/matrix.to/mxc</span></div>
+        <div class="tag-chip">&lt;span data-mx-color&gt;<span class="note">matrix-specific color</span></div>
+        <div class="tag-chip">&lt;span data-mx-spoiler&gt;<span class="note">spoiler with reason</span></div>
+        <div class="tag-chip">&lt;sub&gt; &lt;sup&gt;<span class="note">rare but allowed</span></div>
+        <div class="tag-chip">&lt;mx-reply&gt;<span class="note">client-injected on rich replies</span></div>
+      </div>
+
+      <p style="font-size:13px;color:var(--bad);text-transform:uppercase;letter-spacing:0.08em;margin-top:24px;">Banned (silently stripped)</p>
+      <div class="tag-grid">
+        <div class="tag-chip banned">&lt;script&gt;</div>
+        <div class="tag-chip banned">&lt;iframe&gt;</div>
+        <div class="tag-chip banned">&lt;form&gt;</div>
+        <div class="tag-chip banned">&lt;style&gt;</div>
+        <div class="tag-chip banned">style=&quot;…&quot;</div>
+        <div class="tag-chip banned">&lt;img src=https://&hellip;&gt;</div>
+        <div class="tag-chip banned">&lt;video&gt;</div>
+        <div class="tag-chip banned">class=&quot;…&quot; (mostly)</div>
+      </div>
+
+      <div class="callout">
+        <strong>Markdown vs HTML.</strong> If your skill composes in Markdown, run it through a real converter (markdown-it, commonmark) to produce HTML. Do <em>not</em> send raw Markdown in <code>formatted_body</code> &mdash; most clients won&rsquo;t parse it. Keep Markdown-ish flavor in <code>body</code> only.
+      </div>
+    </section>
+
+    <hr class="thin" />
+
+    <!-- Structure -->
+    <section id="structure">
+      <h2>03</h2>
+      <h3>The skeleton of every announcement</h3>
+      <p>Title prefix, subject, version. One-sentence why-this-matters. At most three sections. Footer with links and install command. Same shape every time &mdash; readers learn the rhythm and skim faster.</p>
+
+      <pre><code>[icon] [Type tag]: [Subject] [— optional version]
+[one-sentence why-this-matters]
+
+[Section heading 1]
+- bullet
+- bullet
+
+[Section heading 2]
+- bullet
+
+[Footer: links / tracking ticket / install command]</code></pre>
+
+      <p><strong>Type tags</strong> work like <code>[SECURITY]</code> in email subjects. Pick one; do not stack.</p>
+
+      <table>
+        <thead><tr><th>Tag</th><th>Meaning</th><th>Title example</th></tr></thead>
+        <tbody>
+          <tr><td><code>New skill</code></td><td>first public release</td><td>New skill: <code>github-release-skill</code> v0.2.0</td></tr>
+          <tr><td><code>Release</code></td><td>feature version of an existing skill</td><td>Release: <code>jira-skill</code> v3.12.0</td></tr>
+          <tr><td><code>Patch</code></td><td>bugfix-only bump</td><td>Patch: <code>docker-development-skill</code> v1.7.0</td></tr>
+          <tr><td><code>Digest</code></td><td>weekly or multi-skill roundup</td><td>Digest: skill ecosystem &mdash; week of 2026-04-22</td></tr>
+          <tr><td><code>Heads-up</code></td><td>breaking change, deprecation</td><td>Heads-up: <code>matrix-skill</code> v2 drops Python 3.8</td></tr>
+          <tr><td><code>Postmortem</code></td><td>incident summary</td><td>Postmortem: CI cache wipe 2026-04-25</td></tr>
+          <tr><td><code>RFC</code></td><td>proposal seeking feedback</td><td>RFC: unified checkpoint schema</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <hr class="thin" />
+
+    <!-- Elements -->
+    <section id="elements">
+      <h2>04</h2>
+      <h3>When to use which element</h3>
+      <table>
+        <thead><tr><th style="width:130px">Element</th><th>Use it for</th><th>Avoid for</th></tr></thead>
+        <tbody>
+          <tr><td><code>&lt;strong&gt;</code></td><td>the one word in a sentence the reader must not miss</td><td>every other word</td></tr>
+          <tr><td><code>&lt;code&gt;</code></td><td>commands, paths, identifiers, version strings, env vars, JSON keys</td><td>English nouns</td></tr>
+          <tr><td><code>&lt;pre&gt;&lt;code&gt;</code></td><td>multi-line commands, JSON examples, diff snippets</td><td>one-liners</td></tr>
+          <tr><td><code>&lt;ul&gt;</code></td><td>2&ndash;7 unordered items</td><td>a list of one</td></tr>
+          <tr><td><code>&lt;ol&gt;</code></td><td>numbered steps where order matters</td><td>bullets that happen to have numbers</td></tr>
+          <tr><td><code>&lt;blockquote&gt;</code></td><td>quoting a user, an error, a previous decision</td><td>indenting for visual variety</td></tr>
+          <tr><td><code>&lt;table&gt;</code></td><td>tabular data &ge;2 cols &times; &ge;3 rows</td><td>two-column term&ndash;definition pairs</td></tr>
+          <tr><td><code>&lt;hr&gt;</code></td><td>separating an unrelated postscript</td><td>between every section (use spacing)</td></tr>
+          <tr><td><code>&lt;a&gt;</code></td><td>every URL &mdash; never paste raw URLs</td><td>&ldquo;click here&rdquo; link text</td></tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:24px"><strong>Code blocks: language hints.</strong> Element renders <code>&lt;pre&gt;&lt;code class=&quot;language-bash&quot;&gt;</code> with syntax highlighting. Use it. Common: <code>language-bash</code>, <code>language-python</code>, <code>language-json</code>, <code>language-diff</code>, <code>language-yaml</code>.</p>
+    </section>
+
+    <hr class="thin" />
+
+    <!-- Glyphs -->
+    <section id="glyphs">
+      <h2>05</h2>
+      <h3>Iconography &amp; emoji</h3>
+      <p>One glyph at the front of the title, optionally one inline glyph per bullet. Never trailing decoration. Never celebrations. The glyph carries meaning &mdash; if it doesn&rsquo;t, drop it.</p>
+
+      <div class="glyph-grid">
+        <div class="glyph-row"><span class="g">🤖</span><span class="name">bot</span><span class="desc">agent-authored announcement</span></div>
+        <div class="glyph-row"><span class="g">📦</span><span class="name">release</span><span class="desc">new feature version</span></div>
+        <div class="glyph-row"><span class="g">🔧</span><span class="name">tooling</span><span class="desc">infra, build, dev experience</span></div>
+        <div class="glyph-row"><span class="g">🛡</span><span class="name">security</span><span class="desc">CVE, hardening, lockdown</span></div>
+        <div class="glyph-row"><span class="g">⚠️</span><span class="name">heads-up</span><span class="desc">breaking change, deprecation</span></div>
+        <div class="glyph-row"><span class="g">📋</span><span class="name">digest</span><span class="desc">weekly / multi-skill roundup</span></div>
+        <div class="glyph-row"><span class="g">🔬</span><span class="name">RFC</span><span class="desc">proposal, request for comment</span></div>
+        <div class="glyph-row"><span class="g">🚑</span><span class="name">hotfix</span><span class="desc">urgent patch</span></div>
+        <div class="glyph-row"><span class="g">🔥</span><span class="name">postmortem</span><span class="desc">incident summary</span></div>
+        <div class="glyph-row"><span class="g">✨</span><span class="name">new capability</span><span class="desc">use sparingly</span></div>
+        <div class="glyph-row banned"><span class="g">🚀</span><span class="name">rocket</span><span class="desc">never. it&rsquo;s a release, not a launchpad.</span></div>
+        <div class="glyph-row banned"><span class="g">🎉</span><span class="name">party</span><span class="desc">never. nobody is celebrating.</span></div>
+      </div>
+    </section>
+
+    <hr class="thin" />
+
+    <!-- Image cards -->
+    <section id="image">
+      <h2>06</h2>
+      <h3>When to render an HTML card to PNG</h3>
+      <p><code>formatted_body</code> handles prose, lists and short tables. It is <em>bad</em> at:</p>
+      <ul>
+        <li>Comparisons (before/after, plan tiers, client X vs Y)</li>
+        <li>Dashboards (test counts, coverage deltas, dependency health)</li>
+        <li>Timelines (release calendars, incident timelines)</li>
+        <li>Anything wider than ~3 columns</li>
+        <li>Color-coded status pills, badges, hero announcement cards</li>
+      </ul>
+
+      <p>For these: <strong>design an HTML card, render to PNG headlessly, upload, post as <code>m.image</code></strong>. The plaintext <code>body</code> becomes the searchable fallback.</p>
+
+      <pre><code class="language-bash"># 1. Render
+chromium --headless=new --hide-scrollbars \
+  --window-size=1200,630 \
+  --screenshot=card.png \
+  "file://$(pwd)/card.html"
+
+# 2. Upload to homeserver
+MXC=$(curl -s -X POST \
+  -H "Authorization: Bearer $MATRIX_TOKEN" \
+  -H "Content-Type: image/png" \
+  --data-binary @card.png \
+  "$HOMESERVER/_matrix/media/v3/upload?filename=card.png" \
+  | jq -r .content_uri)
+
+# 3. Send m.image
+curl -s -X PUT \
+  -H "Authorization: Bearer $MATRIX_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"msgtype\":\"m.image\",\"body\":\"…plaintext fallback…\",\"url\":\"$MXC\",\"info\":{\"mimetype\":\"image/png\",\"w\":1200,\"h\":630}}" \
+  "$HOMESERVER/_matrix/client/v3/rooms/$ROOM/send/m.room.message/$(uuidgen)"</code></pre>
+
+      <div class="callout">
+        <strong>Why HTML&rarr;PNG, not LLM-generated images.</strong> HTML/CSS gives pixel-precise control. Templates render deterministically every week &mdash; diffs are obvious, regressions catchable. Coding agents are great at HTML and bad at rasters. Lean into the strength.
+      </div>
+
+      <p><strong>Always pair the image with text.</strong> An <code>m.image</code> alone is hostile to screen readers, push notifications, search, and copy-paste. Either set <code>body</code> to the full plaintext fallback, or follow the image with a one-line <code>m.text</code> containing the install command and links.</p>
+    </section>
+
+    <hr class="thin" />
+
+    <!-- Threads & mentions -->
+    <section id="thread">
+      <h2>07</h2>
+      <h3>Threads, mentions, edits, redactions</h3>
+
+      <p><strong>Thread the long stuff.</strong> Headline as parent; extended notes, screenshots, and Q&amp;A in replies via <code>m.relates_to: { rel_type: "m.thread" }</code>.</p>
+
+      <p><strong>Mentions go through <code>matrix.to</code></strong> &mdash; not plaintext <code>@name</code>:</p>
+      <pre><code>cc &lt;a href="https://matrix.to/#/@sebastian:netresearch.de"&gt;@sebastian&lt;/a&gt;</code></pre>
+      <p>Include an <code>m.mentions</code> block so notifications fire correctly. Reserve <code>{ "room": true }</code> for outages.</p>
+
+      <p><strong>Edits within ~5 minutes</strong> use <code>m.relates_to: { rel_type: "m.replace" }</code>. Older than that &mdash; reply instead; edits to old messages are silent.</p>
+
+      <p><strong>Redact</strong> only when content is wrong-and-harmful (leaked secret, mistargeted ping). Never to &ldquo;clean up&rdquo;.</p>
+    </section>
+
+    <hr class="thin" />
+
+    <!-- Anti-patterns -->
+    <section id="anti">
+      <h2>08</h2>
+      <h3>Anti-patterns &amp; fixes</h3>
+
+      <div class="compare">
+        <div class="bad">
+          <div class="label">✗ Wall of text</div>
+          <div class="room">
+            <div class="msg">
+              <div class="avatar">SM</div>
+              <div>
+                <div class="msg-head"><span class="name">Sebastian Mendel</span> <span class="ts">13:09</span></div>
+                <div class="msg-body">
+                  <p>We&rsquo;re excited to announce that we&rsquo;ve been working on something cool. The new github-release-skill detects your project ecosystem (TYPO3, Node.js, Go, PHP, skill repos) and finds all version files automatically, bumps versions consistently, creates release branches, PRs, signed annotated tags, and after CI publishes the release, rewrites the auto-generated notes into a proper narrative description, and it also blocks gh release create&hellip;</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="good">
+          <div class="label">✓ Structured</div>
+          <div class="room">
+            <div class="msg notice">
+              <div class="avatar bot">B</div>
+              <div>
+                <div class="msg-head"><span class="name bot">release-bot</span> <span class="ts">13:09</span> <span class="badge">m.notice</span></div>
+                <div class="msg-body">
+                  <p>🤖 <strong>New skill:</strong> <code>github-release-skill</code> v0.2.0</p>
+                  <p>Releases that don&rsquo;t burn tag names, skip CI, or end up unsigned.</p>
+                  <p><strong>What it does:</strong></p>
+                  <ul>
+                    <li>Detects ecosystem &amp; bumps versions across all manifests</li>
+                    <li>Creates branches, PRs, signed annotated tags &mdash; full flow</li>
+                    <li>Rewrites auto-generated notes into a narrative</li>
+                  </ul>
+                  <p><strong>What it blocks:</strong> <code>gh release create</code>, <code>gh release delete</code>, lightweight tags.</p>
+                  <p><strong>Install:</strong> <code>/install-plugin github.com/netresearch/github-release-skill</code></p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="compare">
+        <div class="bad">
+          <div class="label">✗ Emoji ladder</div>
+          <div class="room">
+            <div class="msg">
+              <div class="avatar">SM</div>
+              <div>
+                <div class="msg-head"><span class="name">Sebastian Mendel</span> <span class="ts">14:00</span></div>
+                <div class="msg-body">
+                  <p style="font-size:18px">🚀✨🎉 NEW RELEASE!!! 🎉✨🚀</p>
+                  <p>We&rsquo;re SO excited to ship matrix-skill v1.20.0!!! 🔥🔥🔥</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="good">
+          <div class="label">✓ One glyph, one purpose</div>
+          <div class="room">
+            <div class="msg notice">
+              <div class="avatar bot">B</div>
+              <div>
+                <div class="msg-head"><span class="name bot">release-bot</span> <span class="ts">14:00</span> <span class="badge">m.notice</span></div>
+                <div class="msg-body">
+                  <p>📦 <strong>Release:</strong> <code>matrix-skill</code> v1.20.0</p>
+                  <p>Media download + E2EE decryption.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="compare">
+        <div class="bad">
+          <div class="label">✗ Inline raw URLs</div>
+          <pre><code>See https://github.com/netresearch/peer-qa-review-skill for details.</code></pre>
+        </div>
+        <div class="good">
+          <div class="label">✓ Linked, destination-as-text</div>
+          <pre><code>Repo: &lt;a href="https://github.com/netresearch/peer-qa-review-skill"&gt;
+  netresearch/peer-qa-review-skill
+&lt;/a&gt;</code></pre>
+        </div>
+      </div>
+
+      <div class="compare">
+        <div class="bad">
+          <div class="label">✗ Mention storm</div>
+          <div class="room"><div class="msg">
+            <div class="avatar">SM</div>
+            <div><div class="msg-head"><span class="name">Sebastian Mendel</span> <span class="ts">15:11</span></div>
+            <div class="msg-body"><p>cc <a>@alice</a> <a>@bob</a> <a>@carol</a> <a>@dave</a> <a>@everyone</a> &mdash; please review</p></div></div>
+          </div></div>
+        </div>
+        <div class="good">
+          <div class="label">✓ One owner, named for a reason</div>
+          <div class="room"><div class="msg">
+            <div class="avatar">SM</div>
+            <div><div class="msg-head"><span class="name">Sebastian Mendel</span> <span class="ts">15:11</span></div>
+            <div class="msg-body"><p>Owner: <a>@sebastian</a> &mdash; review by Friday for the v3.13 cut.</p></div></div>
+          </div></div>
+        </div>
+      </div>
+    </section>
+
+    <hr class="thin" />
+
+    <!-- Examples -->
+    <section id="ex-release">
+      <h2>Example 01</h2>
+      <h3>New skill announcement</h3>
+      <p>Type tag at the front. Version inline. Two columns of bullets max. Install command in a code block at the bottom. No celebration, no rocket.</p>
+      <div class="room">
+        <div class="msg notice">
+          <div class="avatar bot">B</div>
+          <div>
+            <div class="msg-head"><span class="name bot">release-bot</span> <span class="ts">13:09</span> <span class="badge">m.notice</span></div>
+            <div class="msg-body">
+              <p>🤖 <strong>New skill:</strong> <code>github-release-skill</code> v0.2.0</p>
+              <p>Releases that look simple until they go wrong &mdash; burned tag names, lightweight tags without signatures, bypassed CI, or release notes that are just a list of PR titles.</p>
+              <p><strong>What it does</strong></p>
+              <ul>
+                <li>Detects ecosystem (TYPO3, Node.js, Go, PHP, skill repos) and finds all version files</li>
+                <li>Bumps versions consistently across <code>ext_emconf.php</code>, <code>composer.json</code>, <code>package.json</code>, <code>guides.xml</code></li>
+                <li>Creates release branches, PRs, signed annotated tags &mdash; full flow</li>
+                <li>Rewrites auto-generated notes into a narrative description</li>
+              </ul>
+              <p><strong>What it prevents</strong></p>
+              <ul>
+                <li><code>gh release create</code> &mdash; blocked by hook (lightweight, bypasses CI)</li>
+                <li><code>gh release delete</code> &mdash; blocked (doesn&rsquo;t recover burned tags)</li>
+                <li>Tag deletion from remote &mdash; blocked, recommends patch version</li>
+              </ul>
+              <p><strong>Install:</strong> <code>/install-plugin https://github.com/netresearch/github-release-skill</code><br/>
+              <strong>Repo:</strong> <a>github.com/netresearch/github-release-skill</a></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="ex-version">
+      <h2>Example 02</h2>
+      <h3>Version bump &mdash; the everyday case</h3>
+      <p>One sentence summary. Three bullets max. Link the ticket.</p>
+      <div class="room">
+        <div class="msg notice">
+          <div class="avatar bot">B</div>
+          <div>
+            <div class="msg-head"><span class="name bot">release-bot</span> <span class="ts">11:24</span> <span class="badge">m.notice</span></div>
+            <div class="msg-body">
+              <p>📦 <strong>Release:</strong> <code>jira-skill</code> v3.12.0</p>
+              <p>Progressive-disclosure refactor: <code>SKILL.md</code> now routes to 8 feature-class references instead of inlining everything.</p>
+              <ul>
+                <li>New eval harness (stream-json + jq) with baseline vs post-refactor scoring</li>
+                <li><code>jira-qa-gather.py</code> bundles issue, description, comments, worklog, links into one call</li>
+                <li>Saves 4&ndash;5 separate API calls per QA review</li>
+              </ul>
+              <p><strong>Tracking:</strong> <a>NRS-4380</a> &middot; <strong>Repo:</strong> <a>netresearch/jira-skill</a></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="ex-digest">
+      <h2>Example 03</h2>
+      <h3>Weekly digest</h3>
+      <p>For multi-skill weeks, a card image is almost always better than a tall list. The text version below works as a fallback or thread post; the visual version comes from <a href="#tpl-digest">the digest template</a>.</p>
+      <div class="room">
+        <div class="msg notice">
+          <div class="avatar bot">B</div>
+          <div>
+            <div class="msg-head"><span class="name bot">release-bot</span> <span class="ts">13:51</span> <span class="badge">m.notice</span></div>
+            <div class="msg-body">
+              <p>📋 <strong>Skill ecosystem update</strong> &mdash; releases since 2026-04-22</p>
+              <p><strong>New skills this week</strong></p>
+              <ul>
+                <li><code>german-technical-writing-skill</code> v1.0.0 &mdash; German technical-writing patterns</li>
+                <li><code>typo3-a11y-skill</code> v1.1.0 &mdash; WCAG 2.1 AA patterns for TYPO3 v13/v14</li>
+                <li><code>typo3-frontend-patterns-skill</code> v1.1.0 &mdash; sticky header, lazy loading, language switcher</li>
+              </ul>
+              <p><strong>Feature releases</strong> (17 repos)</p>
+              <ul>
+                <li><code>jira-skill</code> v3.12.0 &mdash; progressive-disclosure refactor + eval harness</li>
+                <li><code>automated-assessment-skill</code> v2.8.0 &mdash; checkpoint runner hardened against ~10 edge cases</li>
+                <li><code>typo3-testing-skill</code> v5.14.0 &mdash; <code>Build/captainhook.json</code> standardised</li>
+              </ul>
+              <p><strong>Patches</strong></p>
+              <ul>
+                <li><code>git-workflow-skill</code> v1.13.1, <code>github-project-skill</code> v2.13.1, <code>php-modernization-skill</code> v1.15.1</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="ex-headsup">
+      <h2>Example 04</h2>
+      <h3>Heads-up: breaking change</h3>
+      <p>Always lead with the warning glyph. Always state the migration. Always state the timeline.</p>
+      <div class="room">
+        <div class="msg">
+          <div class="avatar">SM</div>
+          <div>
+            <div class="msg-head"><span class="name">Sebastian Mendel</span> <span class="ts">09:18</span> <span class="badge">m.text</span></div>
+            <div class="msg-body">
+              <p>⚠️ <strong>Heads-up:</strong> <code>matrix-skill</code> v2.0.0 &mdash; breaking</p>
+              <p>Drops Python 3.8 (EOL). Minimum is now 3.10.</p>
+              <p><strong>What changes:</strong> <code>matrix-read-e2ee.py</code> now uses <code>match</code> statements internally; install fails on 3.9.</p>
+              <p><strong>Migration:</strong> bump your venv before installing v2.</p>
+              <pre><code class="language-bash">pyenv install 3.10.14
+pyenv local 3.10.14
+pip install --upgrade matrix-skill==2.0.0</code></pre>
+              <p><strong>Timeline:</strong> v1.x continues to receive security patches until 2026-12-31.<br/>
+              <strong>Help:</strong> <a>NRS-4421</a></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="ex-pipeline">
+      <h2>Example 05</h2>
+      <h3>Pipeline announcement (multi-skill)</h3>
+      <p>When a feature spans two skills, a single message tells the whole story. Code block in the middle, version pills at the bottom.</p>
+      <div class="room">
+        <div class="msg notice">
+          <div class="avatar bot">B</div>
+          <div>
+            <div class="msg-head"><span class="name bot">release-bot</span> <span class="ts">13:09</span> <span class="badge">m.notice</span></div>
+            <div class="msg-body">
+              <p>📦 <strong>New: Matrix → Jira attachment pipeline</strong></p>
+              <p>Media from Matrix rooms (incl. E2EE-encrypted files) can now flow into Jira issues.</p>
+              <p><strong>3 commands, full pipeline</strong></p>
+<pre><code class="language-bash"># 1. Find media in room (JSON includes mxc URL + info)
+matrix-read-e2ee.py ROOM --json
+
+# 2. Download &amp; decrypt
+matrix-download-e2ee.py ROOM $EVENT_ID --output /tmp
+
+# 3. Attach to Jira
+jira-attachment.py add PROJ-123 /tmp/image.png</code></pre>
+              <p><strong>Releases</strong></p>
+              <ul>
+                <li><code>matrix-skill</code> v1.20.0 &mdash; media download + E2EE decryption</li>
+                <li><code>jira-skill</code> v3.10.0 &mdash; attachment upload, <code>--reporter</code> flag, user search</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <hr class="thin" />
+
+    <!-- Templates -->
+    <section id="tpl-release">
+      <h2>Template 01</h2>
+      <h3>Release card &mdash; 1200 × 630</h3>
+      <p>Drop-in HTML for single-skill releases. Render headlessly, post as <code>m.image</code>. Substitute <code>{{TITLE}}</code>, <code>{{VERSION}}</code>, the bullets, the install URL.</p>
+      <div class="card-frame">
+        <div class="card-meta"><span>templates/release-card.html</span><span>1200 × 630</span></div>
+        <iframe id="tpl1" src="templates/release-card.html" width="1200" height="630" style="transform-origin:top left"></iframe>
+      </div>
+    </section>
+
+    <section id="tpl-digest">
+      <h2>Template 02</h2>
+      <h3>Weekly digest &mdash; 1200 × 1500</h3>
+      <p>Tall card for multi-skill roundups. Pill-prefixed rows (<code>new</code> / <code>feat</code> / <code>patch</code>) keep the eye moving. Render once a week, post with a one-line text summary.</p>
+      <div class="card-frame">
+        <div class="card-meta"><span>templates/weekly-digest.html</span><span>1200 × 1500</span></div>
+        <iframe id="tpl2" src="templates/weekly-digest.html" width="1200" height="1500" style="transform-origin:top left"></iframe>
+      </div>
+    </section>
+
+    <section id="tpl-compare">
+      <h2>Template 03</h2>
+      <h3>Comparison &mdash; 1200 × 900</h3>
+      <p>Before/after, vs-tables, migration deltas. Two color-coded panels. Use for breaking changes, RFC trade-offs, or &ldquo;old way / new way&rdquo; explainers.</p>
+      <div class="card-frame">
+        <div class="card-meta"><span>templates/comparison.html</span><span>1200 × 900</span></div>
+        <iframe id="tpl3" src="templates/comparison.html" width="1200" height="900" style="transform-origin:top left"></iframe>
+      </div>
+    </section>
+
+    <p class="footer-note">Skill: matrix-announcement-skill · v0.1.0 · paired with SKILL.md</p>
+  </main>
+</div>
+
+<script>
+  // Populate templates with example data, then scale them down to fit the column.
+  function paint(iframe, fills) {
+    if (!iframe.contentDocument) return;
+    Object.entries(fills).forEach(([k, v]) => {
+      iframe.contentDocument.body.innerHTML = iframe.contentDocument.body.innerHTML
+        .replace(new RegExp('\\{\\{' + k + '\\}\\}', 'g'), v);
+    });
+  }
+
+  function fitFrame(iframe, designWidth, designHeight) {
+    const wrap = iframe.parentElement;
+    const targetWidth = wrap.clientWidth;
+    const scale = targetWidth / designWidth;
+    iframe.style.transform = 'scale(' + scale + ')';
+    // Make the wrapper take only the scaled height, eliminating dead space.
+    iframe.style.width = designWidth + 'px';
+    iframe.style.height = designHeight + 'px';
+    wrap.style.height = (designHeight * scale) + 'px';
+    wrap.style.overflow = 'hidden';
+  }
+
+  function setup() {
+    const tpl1 = document.getElementById('tpl1');
+    const tpl2 = document.getElementById('tpl2');
+    const tpl3 = document.getElementById('tpl3');
+
+    tpl1.addEventListener('load', () => {
+      paint(tpl1, {
+        TYPE_TAG: 'NEW SKILL',
+        DATE: '2026-04-29',
+        ECOSYSTEM: 'TYPO3 / NODE / GO / PHP',
+        TITLE: 'github-release-skill',
+        VERSION: '0.2.0',
+        LEDE: 'Releases that don&rsquo;t burn tag names, skip CI, or end up as unsigned lightweight tags.',
+        DOES_1: 'Detects project ecosystem &amp; finds all version files automatically',
+        DOES_2: 'Bumps versions consistently across every manifest',
+        DOES_3: 'Creates branches, PRs, signed annotated tags &mdash; full flow',
+        PREVENTS_1: '<code>gh release create</code> &mdash; lightweight, bypasses CI',
+        PREVENTS_2: '<code>gh release delete</code> &mdash; doesn&rsquo;t recover burned tags',
+        PREVENTS_3: 'Lightweight tags (<code>git tag</code> without <code>-s</code>)',
+        REPO_URL: 'github.com/netresearch/github-release-skill',
+        ORG: 'netresearch',
+      });
+      fitFrame(tpl1, 1200, 630);
+    });
+
+    tpl2.addEventListener('load', () => {
+      paint(tpl2, {
+        WEEK_START: '2026-04-22',
+        WEEK_END: '2026-04-29',
+        LEDE: 'Three new skills, six feature releases, eight patches. Highlights: progressive-disclosure refactor of <code>jira-skill</code>, hardened checkpoint runner in <code>automated-assessment-skill</code>.',
+        NEW_NAME_1: 'german-technical-writing-skill',
+        NEW_DESC_1: 'German technical-writing patterns for handbooks &amp; release notes',
+        NEW_VER_1: '1.0.0',
+        NEW_NAME_2: 'typo3-a11y-skill',
+        NEW_DESC_2: 'WCAG 2.1 AA patterns for TYPO3 v13/v14',
+        NEW_VER_2: '1.1.0',
+        FEAT_NAME_1: 'jira-skill',
+        FEAT_DESC_1: 'Progressive-disclosure refactor; new eval harness (stream-json + jq)',
+        FEAT_VER_1: '3.12.0',
+        FEAT_NAME_2: 'automated-assessment-skill',
+        FEAT_DESC_2: 'Checkpoint runner hardened against ~10 edge cases',
+        FEAT_VER_2: '2.8.0',
+        FEAT_NAME_3: 'typo3-testing-skill',
+        FEAT_DESC_3: '<code>Build/captainhook.json</code> is now the Netresearch standard location',
+        FEAT_VER_3: '5.14.0',
+        PATCH_NAME_1: 'git-workflow-skill',
+        PATCH_DESC_1: 'GW-06 unified CODEOWNERS locations, GW-14 captainhook',
+        PATCH_VER_1: '1.13.1',
+        PATCH_NAME_2: 'github-project-skill',
+        PATCH_DESC_2: 'GH-08/09/19/20/24..27 reusable-workflow acceptance',
+        PATCH_VER_2: '2.13.1',
+        PATCH_NAME_3: 'php-modernization-skill',
+        PATCH_DESC_3: 'PM-02 Build/phpstan/ subdir, PM-18 transitive rector',
+        PATCH_VER_3: '1.15.1',
+        TOTAL_REPOS: '17',
+        TOTAL_RELEASES: '14',
+        ORG: 'netresearch',
+      });
+      fitFrame(tpl2, 1200, 1500);
+    });
+
+    tpl3.addEventListener('load', () => {
+      paint(tpl3, {
+        LABEL: 'HEADS-UP / BREAKING CHANGE',
+        TITLE: 'matrix-skill v2.0.0 &mdash; Python version floor raised',
+        SUBTITLE: 'Drops Python 3.8 (EOL). Minimum is now 3.10. Existing v1.x line continues to receive security patches until 2026-12-31.',
+        LEFT_LABEL: 'Before — v1.x',
+        LEFT_HEADING: 'Python 3.8+ supported',
+        LEFT_1: 'Python 3.8 / 3.9 / 3.10 / 3.11 supported',
+        LEFT_2: 'Type hints written for 3.8 compatibility',
+        LEFT_3: '<code>match</code> statements avoided in source',
+        LEFT_4: 'Security patches only on the v1.x branch from now on',
+        RIGHT_LABEL: 'After — v2.0',
+        RIGHT_HEADING: 'Python 3.10+ required',
+        RIGHT_1: 'Python 3.10 / 3.11 / 3.12 supported',
+        RIGHT_2: 'Modern type syntax (<code>X | Y</code>, no <code>Optional[]</code>)',
+        RIGHT_3: '<code>match</code> statements throughout the parser',
+        RIGHT_4: 'Install fails fast on 3.9 with a helpful error',
+        CONTEXT: 'Tracking: NRS-4421 &middot; Migration window: 8 weeks',
+        ORG: 'netresearch',
+      });
+      fitFrame(tpl3, 1200, 900);
+    });
+
+    window.addEventListener('resize', () => {
+      fitFrame(tpl1, 1200, 630);
+      fitFrame(tpl2, 1200, 1500);
+      fitFrame(tpl3, 1200, 900);
+    });
+  }
+
+  if (document.readyState !== 'loading') setup();
+  else document.addEventListener('DOMContentLoaded', setup);
+</script>
+</body>
+</html>
