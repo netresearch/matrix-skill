@@ -19,6 +19,9 @@ Arguments:
 Options:
     --format FORMAT   Message format: text or markdown [default: markdown]
     --emote           Send as /me action (m.emote)
+    --notice          Send as m.notice — bot-flagged, suppressed from auto-reply
+                      loops. Use for unattended automation. Mutually exclusive
+                      with --emote.
     --thread EVENT    Reply in thread (event ID of thread root)
     --reply EVENT     Reply to message (event ID to reply to)
     --no-prefix       Don't add bot_prefix from config
@@ -70,6 +73,7 @@ def send_message(
     message: str,
     format: str = "markdown",
     emote: bool = False,
+    notice: bool = False,
     thread_id: str = None,
     reply_id: str = None,
 ) -> dict:
@@ -81,12 +85,22 @@ def send_message(
         message: Message content
         format: "text" or "markdown"
         emote: If True, send as m.emote (/me action)
+        notice: If True, send as m.notice (bot-flagged, no auto-reply loops)
         thread_id: Event ID of thread root (for thread replies)
         reply_id: Event ID to reply to
+
+    msgtype precedence: notice > emote > text. The CLI enforces that callers
+    pass only one of --notice or --emote via a mutually exclusive group.
     """
     txn_id = str(int(time.time() * 1000))
 
-    content = {"msgtype": "m.emote" if emote else "m.text", "body": message}
+    if notice:
+        msgtype = "m.notice"
+    elif emote:
+        msgtype = "m.emote"
+    else:
+        msgtype = "m.text"
+    content = {"msgtype": msgtype, "body": message}
 
     if format == "markdown":
         html = markdown_to_html(message)
@@ -128,8 +142,15 @@ def main():
         default="markdown",
         help="Message format (default: markdown)",
     )
-    parser.add_argument(
+    msgtype_group = parser.add_mutually_exclusive_group()
+    msgtype_group.add_argument(
         "--emote", action="store_true", help="Send as /me action (m.emote msgtype)"
+    )
+    msgtype_group.add_argument(
+        "--notice",
+        action="store_true",
+        help="Send as m.notice — bot-flagged, suppressed from auto-reply loops. "
+        "Use for unattended automation (release announcements, CI summaries).",
     )
     parser.add_argument(
         "--thread", metavar="EVENT_ID", help="Reply in thread (event ID of thread root)"
@@ -232,6 +253,7 @@ def main():
         message,
         args.format,
         emote=args.emote,
+        notice=args.notice,
         thread_id=args.thread,
         reply_id=args.reply,
     )

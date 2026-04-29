@@ -23,6 +23,9 @@ Arguments:
 
 Options:
     --emote           Send as /me action (m.emote)
+    --notice          Send as m.notice — bot-flagged, suppressed from auto-reply
+                      loops. Use for unattended automation (release announcements,
+                      CI summaries, scheduled digests). Mutually exclusive with --emote.
     --thread EVENT    Reply in thread (event ID of thread root)
     --reply EVENT     Reply to message (event ID to reply to)
     --no-prefix       Don't add bot_prefix from config
@@ -85,11 +88,17 @@ async def send_message_e2ee(
     room: str,
     message: str,
     emote: bool = False,
+    notice: bool = False,
     thread_id: str = None,
     reply_id: str = None,
     debug: bool = False,
 ) -> dict:
-    """Send an E2EE-capable message to a Matrix room."""
+    """Send an E2EE-capable message to a Matrix room.
+
+    msgtype precedence: notice > emote > text. The caller is expected to pass
+    only one of `notice` or `emote`; the CLI enforces this via a mutually
+    exclusive argument group.
+    """
 
     store_path = get_store_path()
 
@@ -284,8 +293,14 @@ async def send_message_e2ee(
                         )
 
         # Build message content with HTML formatting
+        if notice:
+            msgtype = "m.notice"
+        elif emote:
+            msgtype = "m.emote"
+        else:
+            msgtype = "m.text"
         content = {
-            "msgtype": "m.emote" if emote else "m.text",
+            "msgtype": msgtype,
             "body": message,
         }
 
@@ -331,8 +346,15 @@ def main():
     )
     parser.add_argument("room", help="Room ID (!id), alias (#room:server), or name")
     parser.add_argument("message", help="Message content")
-    parser.add_argument(
+    msgtype_group = parser.add_mutually_exclusive_group()
+    msgtype_group.add_argument(
         "--emote", action="store_true", help="Send as /me action (m.emote msgtype)"
+    )
+    msgtype_group.add_argument(
+        "--notice",
+        action="store_true",
+        help="Send as m.notice — bot-flagged, suppressed from auto-reply loops. "
+        "Use for unattended automation (release announcements, CI summaries).",
     )
     parser.add_argument(
         "--thread", metavar="EVENT_ID", help="Reply in thread (event ID of thread root)"
@@ -386,6 +408,7 @@ def main():
             room=room,
             message=message,
             emote=args.emote,
+            notice=args.notice,
             thread_id=args.thread,
             reply_id=args.reply,
             debug=args.debug,

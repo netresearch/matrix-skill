@@ -64,4 +64,4 @@ One leading glyph at most. **Never** trailing decoration, multi-emoji ladders, �
 - [templates/](references/templates/) — `release-card.html` (1200×630), `weekly-digest.html` (1200×1500), `comparison.html` (1200×900)
 - [gallery.html](references/gallery.html) — visual preview of every rule, the five worked examples, and the three templates
 
-Sending: pass the composed message to `matrix-communication` (`matrix-send-e2ee.py "$ROOM" "$MARKDOWN"`); the transport converts markdown to HTML using the rules in `html-subset.md`. For hand-crafted `formatted_body`, `m.notice` flagging, or `m.image` cards, call the homeserver API directly — recipe in `image-cards.md`.
+Sending: pass the composed message to `matrix-communication` (`matrix-send-e2ee.py "$ROOM" "$MARKDOWN" [--notice]`). The transport converts markdown to HTML using the rules in `html-subset.md`; pass `--notice` for unattended automation so other bots can't auto-reply (mutually exclusive with `--emote`). For hand-crafted `formatted_body` or `m.image` cards, call the homeserver API directly — recipe in `image-cards.md`.
