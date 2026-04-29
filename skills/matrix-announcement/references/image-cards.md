@@ -99,7 +99,7 @@ Either set the image's `body` to the full plaintext fallback the announcement wo
 {
   "msgtype": "m.image",
   "body": "Release: github-release-skill v0.2.0\n\nWhat's new:\n- detects ecosystem & bumps versions\n- signed annotated tags only\n- rewrites release notes into narrative\n\nInstall: /install-plugin https://github.com/netresearch/github-release-skill\nRepo: https://github.com/netresearch/github-release-skill",
-  "url": "mxc://netresearch.de/abc123…",
+  "url": "mxc://example.com/abc123…",
   "info": { "w": 1200, "h": 630, "mimetype": "image/png", "size": 184223 }
 }
 ```

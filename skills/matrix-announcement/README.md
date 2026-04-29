@@ -40,7 +40,7 @@ Grab the [latest release](https://github.com/netresearch/matrix-skill/releases/l
 The skill triggers on any agent-authored Matrix post longer than a single line. Examples:
 
 ```
-"Announce the v1.21.1 release in #releases:netresearch.de"
+"Announce the v1.21.1 release in #releases:example.com"
 "Post the weekly skill digest"
 "Heads-up the team that matrix-skill v2 drops Python 3.8"
 "Render a comparison card for the new auth flow and post it"

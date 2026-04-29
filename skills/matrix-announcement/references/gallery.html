@@ -563,7 +563,7 @@ curl -s -X PUT \
       <p><strong>Thread the long stuff.</strong> Headline as parent; extended notes, screenshots, and Q&amp;A in replies via <code>m.relates_to: { rel_type: "m.thread" }</code>.</p>
 
       <p><strong>Mentions go through <code>matrix.to</code></strong> &mdash; not plaintext <code>@name</code>:</p>
-      <pre><code>cc &lt;a href="https://matrix.to/#/@sebastian:netresearch.de"&gt;@sebastian&lt;/a&gt;</code></pre>
+      <pre><code>cc &lt;a href="https://matrix.to/#/@sebastian:example.com"&gt;@sebastian&lt;/a&gt;</code></pre>
       <p>Include an <code>m.mentions</code> block so notifications fire correctly. Reserve <code>{ "room": true }</code> for outages.</p>
 
       <p><strong>Edits within ~5 minutes</strong> use <code>m.relates_to: { rel_type: "m.replace" }</code>. Older than that &mdash; reply instead; edits to old messages are silent.</p>
@@ -670,7 +670,7 @@ curl -s -X PUT \
           <div class="room"><div class="msg">
             <div class="avatar">SM</div>
             <div><div class="msg-head"><span class="name">Sebastian Mendel</span> <span class="ts">15:11</span></div>
-            <div class="msg-body"><p>cc <a href="https://matrix.to/#/@alice:netresearch.de">@alice</a> <a href="https://matrix.to/#/@bob:netresearch.de">@bob</a> <a href="https://matrix.to/#/@carol:netresearch.de">@carol</a> <a href="https://matrix.to/#/@dave:netresearch.de">@dave</a> @room &mdash; please review</p></div></div>
+            <div class="msg-body"><p>cc <a href="https://matrix.to/#/@alice:example.com">@alice</a> <a href="https://matrix.to/#/@bob:example.com">@bob</a> <a href="https://matrix.to/#/@carol:example.com">@carol</a> <a href="https://matrix.to/#/@dave:example.com">@dave</a> @room &mdash; please review</p></div></div>
           </div></div>
         </div>
         <div class="good">
@@ -678,7 +678,7 @@ curl -s -X PUT \
           <div class="room"><div class="msg">
             <div class="avatar">SM</div>
             <div><div class="msg-head"><span class="name">Sebastian Mendel</span> <span class="ts">15:11</span></div>
-            <div class="msg-body"><p>Owner: <a href="https://matrix.to/#/@sebastian:netresearch.de">@sebastian</a> &mdash; review by Friday for the v3.13 cut.</p></div></div>
+            <div class="msg-body"><p>Owner: <a href="https://matrix.to/#/@sebastian:example.com">@sebastian</a> &mdash; review by Friday for the v3.13 cut.</p></div></div>
           </div></div>
         </div>
       </div>
@@ -737,7 +737,7 @@ curl -s -X PUT \
                 <li><code>jira-qa-gather.py</code> bundles issue, description, comments, worklog, links into one call</li>
                 <li>Saves 4&ndash;5 separate API calls per QA review</li>
               </ul>
-              <p><strong>Tracking:</strong> <a href="https://jira.netresearch.de/browse/NRS-4380">NRS-4380</a> &middot; <strong>Repo:</strong> <a href="https://github.com/netresearch/jira-skill">netresearch/jira-skill</a></p>
+              <p><strong>Tracking:</strong> <a href="https://issues.example.com/browse/NRS-4380">NRS-4380</a> &middot; <strong>Repo:</strong> <a href="https://github.com/netresearch/jira-skill">netresearch/jira-skill</a></p>
             </div>
           </div>
         </div>
@@ -795,7 +795,7 @@ curl -s -X PUT \
 pyenv local 3.10.14
 pip install --upgrade matrix-skill==2.0.0</code></pre>
               <p><strong>Timeline:</strong> v1.x continues to receive security patches until 2026-12-31.<br/>
-              <strong>Help:</strong> <a href="https://jira.netresearch.de/browse/NRS-4421">NRS-4421</a></p>
+              <strong>Help:</strong> <a href="https://issues.example.com/browse/NRS-4421">NRS-4421</a></p>
             </div>
           </div>
         </div>

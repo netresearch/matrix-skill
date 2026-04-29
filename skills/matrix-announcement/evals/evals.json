@@ -4,7 +4,7 @@
     {
       "id": 1,
       "eval_name": "type-tag-required",
-      "prompt": "Announce the v3.12.0 release of jira-skill in #releases:netresearch.de.",
+      "prompt": "Announce the v3.12.0 release of jira-skill in #releases:example.com.",
       "expected_output": "Composes a message that begins with a single type tag (e.g. 'Release: jira-skill v3.12.0') and a leading glyph.",
       "files": [],
       "assertions": [

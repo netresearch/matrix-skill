@@ -26,14 +26,14 @@ When in doubt, thread it. Rooms scroll fast.
 Tag people only when they actually need to see it. Use proper Matrix mentions, not plaintext `@name`:
 
 ```html
-cc <a href="https://matrix.to/#/@sebastian:netresearch.de">@sebastian</a>
+cc <a href="https://matrix.to/#/@sebastian:example.com">@sebastian</a>
 ```
 
 Include the mentions block (MSC3952, now spec) so notifications fire correctly:
 
 ```json
 "m.mentions": {
-  "user_ids": ["@sebastian:netresearch.de"]
+  "user_ids": ["@sebastian:example.com"]
 }
 ```
 
