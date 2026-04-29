@@ -49,8 +49,10 @@ All scripts live in `skills/matrix-communication/scripts/`. Use `uv run` unless 
 ```bash
 C=skills/matrix-communication/scripts
 
-# Send (always prefer E2EE) — plain | --thread | --reply | --emote | --no-prefix
+# Send (always prefer E2EE) — plain | --thread | --reply | --emote | --notice | --no-prefix
 set +H && uv run $C/matrix-send-e2ee.py ROOM "message"
+# unattended automation (m.notice — no auto-reply loops; mutex with --emote):
+set +H && uv run $C/matrix-send-e2ee.py ROOM "📦 Release: …" --notice
 
 # Read / Edit / React / Redact
 uv run $C/matrix-read-e2ee.py ROOM --limit 10 [--json]

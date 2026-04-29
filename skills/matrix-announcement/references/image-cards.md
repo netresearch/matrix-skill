@@ -65,7 +65,7 @@ uv run ${CLAUDE_SKILL_DIR}/../matrix-communication/scripts/matrix-send-e2ee.py "
   '**Install:** `/install-plugin https://github.com/netresearch/github-release-skill`'
 ```
 
-> **Note:** The `matrix-communication` transport sends `m.text` with markdown-converted HTML. For unattended automation that should be `m.notice` (and therefore unreplyable by other bots), use the raw `PUT /_matrix/client/v3/rooms/{room}/send/m.room.message/{txn}` call shown in step 3 with `"msgtype": "m.notice"`.
+> **Note:** `m.notice` is a *text* msgtype — there is no notice-flavoured `m.image`. For text-only announcements that should be unreplyable by other bots, pass `--notice` to `matrix-send-e2ee.py`. For an image announcement that should still be skipped by auto-replying bots, send the card as `m.image` (the recipe above) and then a follow-up `m.text` via `matrix-send-e2ee.py … --notice` carrying the install command and links — bots that respect `m.notice` will then ignore the whole announcement, since they ignore the text and the image is wordless.
 
 ## Why "design HTML, render to PNG" beats "have the LLM make an image"
 

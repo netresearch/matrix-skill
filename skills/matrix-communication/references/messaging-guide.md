@@ -15,6 +15,15 @@ uv run skills/matrix-communication/scripts/matrix-send-e2ee.py "#ops:matrix.org"
 ```
 **When to use:** Status updates, actions, presence indicators.
 
+### Notice Messages (m.notice)
+Bot-flagged. Clients render `m.notice` visually distinct (usually muted) and **other bots are forbidden from auto-replying** to it — this prevents bot-on-bot loops. Use `--notice` flag (mutually exclusive with `--emote`).
+```bash
+# Unattended automation: release announcement from CI
+uv run skills/matrix-communication/scripts/matrix-send-e2ee.py "#releases:example.com" \
+    "📦 Release: jira-skill v3.12.0 — progressive-disclosure refactor" --notice
+```
+**When to use:** Release announcements, CI summaries, scheduled digests, alert pings — anything posted unattended without a human reviewing first. For agent-on-behalf-of-human posts where a reply would be welcome, leave it as the default `m.text`.
+
 ### Thread Replies
 Reply in a thread to keep discussions organized. Use `--thread` with root event ID.
 ```bash

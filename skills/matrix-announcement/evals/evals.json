@@ -81,12 +81,12 @@
       "id": 7,
       "eval_name": "m-notice-for-bots",
       "prompt": "Send the release announcement automatically from CI without human review.",
-      "expected_output": "Sets msgtype to m.notice (not m.text) so other bots won't auto-reply, and surfaces that the matrix-communication scripts default to m.text — so a raw API call is required for m.notice.",
+      "expected_output": "Sets msgtype to m.notice (not m.text) so other bots won't auto-reply. Uses the matrix-send-e2ee.py --notice flag (the transport's native support) instead of falling back to a raw API call.",
       "files": [],
       "assertions": [
         "Surfaces m.notice vs m.text distinction",
         "Recommends m.notice for the unattended/CI case",
-        "Notes that matrix-send-e2ee.py sends m.text and a direct API call is needed for m.notice"
+        "Uses the --notice flag on matrix-send-e2ee.py / matrix-send.py rather than a raw curl PUT"
       ]
     },
     {
