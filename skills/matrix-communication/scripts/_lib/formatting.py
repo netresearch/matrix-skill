@@ -14,7 +14,21 @@ def shorten_service_urls(text: str) -> str:
     - GitHub Issues/PRs: https://github.com/owner/repo/issues/123 -> [owner/repo#123](url)
     - GitHub commits: https://github.com/owner/repo/commit/abc123 -> [owner/repo@abc123](url)
     - GitLab Issues/MRs: https://gitlab.example.com/group/project/-/issues/123 -> [group/project#123](url)
+
+    URLs already inside `[text](url)` markdown links are left untouched so the
+    caller's chosen link text is preserved (and to avoid producing broken
+    nested `[text]([short](url))` shapes).
     """
+    # Protect existing markdown links from being re-wrapped.
+    protected: list[str] = []
+
+    def _protect(match: "re.Match[str]") -> str:
+        idx = len(protected)
+        protected.append(match.group(0))
+        return f"\x00MDLINK{idx}\x00"
+
+    text = re.sub(r"\[[^\]]+\]\([^)]+\)", _protect, text)
+
     # Jira URLs: https://jira.*/browse/PROJ-123 or https://*.atlassian.net/browse/PROJ-123
     text = re.sub(
         r"https?://[^/]+/browse/([A-Z][A-Z0-9]+-\d+)", r"[\1](https://\g<0>)", text
@@ -43,6 +57,17 @@ def shorten_service_urls(text: str) -> str:
         text,
     )
 
+    # Restore protected markdown links. Bounds-check the index so a forged
+    # placeholder in user input can't raise IndexError — unknown placeholders
+    # are left as-is.
+    def _restore(match: "re.Match[str]") -> str:
+        idx = int(match.group(1))
+        if 0 <= idx < len(protected):
+            return protected[idx]
+        return match.group(0)
+
+    text = re.sub(r"\x00MDLINK(\d+)\x00", _restore, text)
+
     return text
 
 
@@ -56,7 +81,7 @@ def markdown_to_html(text: str) -> str:
     - ||spoiler|| text (Discord-style)
     - ```lang code blocks ```
     - > blockquotes
-    - - list items
+    - list items: `- item`, `* item`, `+ item`
     - | table | rows |
     - @user:server mentions (clickable pills)
     - #room:server room links (clickable)
@@ -107,14 +132,20 @@ def markdown_to_html(text: str) -> str:
         html,
     )
 
+    # Emphasis runs follow CommonMark left/right-flanking: the opening
+    # delimiter must NOT be followed by whitespace, and the closing one
+    # must NOT be preceded by whitespace. Without that, `* item` (a bullet)
+    # would be parsed as an italic opener and chew up the line until the
+    # next stray `*`.
+
     # Strikethrough: ~~text~~ -> <del>text</del>
-    html = re.sub(r"~~(.+?)~~", r"<del>\1</del>", html)
+    html = re.sub(r"~~(?=\S)(.+?)(?<=\S)~~", r"<del>\1</del>", html)
 
     # Bold: **text** -> <strong>text</strong>
-    html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
+    html = re.sub(r"\*\*(?=\S)(.+?)(?<=\S)\*\*", r"<strong>\1</strong>", html)
 
     # Italic: *text* -> <em>text</em>
-    html = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html)
+    html = re.sub(r"\*(?=\S)([^*\n]+?)(?<=\S)\*", r"<em>\1</em>", html)
 
     # Inline code: `text` -> <code>text</code>
     html = re.sub(r"`(.+?)`", r"<code>\1</code>", html)
@@ -193,8 +224,8 @@ def markdown_to_html(text: str) -> str:
                 result.append("<blockquote>")
                 in_quote = True
             result.append(stripped[2:])
-        # Lists: - item
-        elif stripped.startswith("- "):
+        # Lists: `- item`, `* item`, `+ item` (all valid CommonMark bullets)
+        elif stripped[:2] in ("- ", "* ", "+ "):
             if in_quote:
                 result.append("</blockquote>")
                 in_quote = False
