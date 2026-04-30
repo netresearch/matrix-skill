@@ -4,24 +4,11 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      bump:
-        description: 'Version bump type'
-        required: true
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
 
 jobs:
   release:
     uses: netresearch/skill-repo-skill/.github/workflows/release.yml@main
-    with:
-      bump: ${{ inputs.bump }}
-      attest: true
     permissions:
       contents: write          # release upload
-      id-token: write          # OIDC for sigstore (required when attest: true)
-      attestations: write      # GitHub native attestation API (required when attest: true)
+      id-token: write          # OIDC for sigstore (required by the attest job)
+      attestations: write      # GitHub native attestation API (required by the attest job)
