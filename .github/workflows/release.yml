@@ -20,6 +20,8 @@ jobs:
     uses: netresearch/skill-repo-skill/.github/workflows/release.yml@main
     with:
       bump: ${{ inputs.bump }}
+      attest: true
     permissions:
-      contents: write
-      pull-requests: write
+      contents: write          # release upload
+      id-token: write          # OIDC for sigstore (required when attest: true)
+      attestations: write      # GitHub native attestation API (required when attest: true)
