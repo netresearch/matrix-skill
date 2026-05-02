@@ -21,7 +21,10 @@
     "anthropic",
     "claude-code"
   ],
-  "aiAgentSkill": "skills/matrix-communication/SKILL.md",
+  "aiAgentSkill": [
+    "skills/matrix-communication/SKILL.md",
+    "skills/matrix-administration/SKILL.md"
+  ],
   "files": [
     "skills/matrix-communication/",
     "skills/matrix-administration/",
