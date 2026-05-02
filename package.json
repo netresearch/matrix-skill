@@ -26,6 +26,7 @@
     "skills/matrix-administration/SKILL.md"
   ],
   "files": [
+    ".claude-plugin/",
     "skills/matrix-communication/",
     "skills/matrix-administration/",
     "scripts/",
