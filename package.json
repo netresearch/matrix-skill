@@ -1,0 +1,36 @@
+{
+  "name": "@netresearch/matrix-skill",
+  "version": "0.0.0-source",
+  "description": "Netresearch AI skill for Matrix chat communication and homeserver administration.",
+  "license": "(MIT AND CC-BY-SA-4.0)",
+  "author": "Netresearch DTT GmbH (https://www.netresearch.de/)",
+  "homepage": "https://github.com/netresearch/matrix-skill",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/netresearch/matrix-skill.git"
+  },
+  "bugs": {
+    "url": "https://github.com/netresearch/matrix-skill/issues"
+  },
+  "keywords": [
+    "ai-agent-skill",
+    "matrix",
+    "chat",
+    "synapse",
+    "e2ee",
+    "anthropic",
+    "claude-code"
+  ],
+  "aiAgentSkill": "skills/matrix-communication/SKILL.md",
+  "files": [
+    "skills/matrix-communication/",
+    "skills/matrix-administration/",
+    "scripts/",
+    "LICENSE-MIT",
+    "LICENSE-CC-BY-SA-4.0",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@netresearch/agent-skill-coordinator": "^0.1"
+  }
+}
