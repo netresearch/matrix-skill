@@ -6,6 +6,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-05-28
+
 ### Added
 
 ### Changed
