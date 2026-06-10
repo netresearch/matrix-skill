@@ -26,6 +26,16 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ### Removed
 
+
+## [1.23.0] - 2026-05-15
+
+### Added
+
+- Ship as npm package via `@netresearch/agent-skill-coordinator` ([#37](https://github.com/netresearch/matrix-skill/pull/37))
+
+### Fixed
+
+- Declare both matrix skills in `aiAgentSkill` / `extra.ai-agent-skill`; include `.claude-plugin/plugin.json` in the npm tarball ([#37](https://github.com/netresearch/matrix-skill/pull/37))
 ## [1.22.0] - 2026-04-29
 
 ### Added
