@@ -79,7 +79,7 @@ The link text should be the destination's identity (ticket, repo, doc title), no
 
 Readers click the thing they are looking at — every linkable entity in the message body is a link, including incidental mentions:
 
-- **Issue keys** — every occurrence, even mid-sentence context ("blockers from <a href="…/SRVC-99">SRVC-99</a> cleared"), not only the headline ticket.
+- **Issue keys** — every occurrence, even mid-sentence context (`blockers from <a href="…/SRVC-99">SRVC-99</a> cleared`), not only the headline ticket.
 - **Version numbers** — link to their release page, keeping the version in `<code>` inside the link: `traefik <a href="…/releases/tag/v3.7.1"><code>3.7.1</code></a>→<a href="…/releases/tag/v3.7.4"><code>3.7.4</code></a>`. A version without its release notes makes the reader search for them.
 - **MRs / PRs** — use the platform's reference notation as text: GitLab `<a href="…">project/path!30</a>`, GitHub `<a href="…">org/repo#42</a>`. Never bare "MR !30" — it is ambiguous across projects and unclickable when copied.
 - **Pipelines, commits, tags, branches** — same rule: identity as text, URL behind it.
