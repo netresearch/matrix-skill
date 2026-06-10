@@ -43,7 +43,7 @@ One leading glyph at most. **Never** trailing decoration, multi-emoji ladders, �
 - [ ] Title fits on one line in Element on a 1280-wide screen.
 - [ ] First sentence states the change. No "we're excited to".
 - [ ] Every URL wrapped in `<a>` with destination-as-text.
-- [ ] Every entity is a link: issue keys (even mid-sentence), versions → release page, MRs/PRs as `project!N` / `repo#N`, pipelines, commits. Status updates: one item per line, starting with the linked issue key, blank lines between items.
+- [ ] Every entity is a link: issue keys (even mid-sentence), versions → release page, MRs/PRs as `project/path!N` / `org/repo#N`, pipelines, commits. Status updates: one item per line, starting with the linked issue key, blank lines between items.
 - [ ] Every command, path, version is in `<code>`.
 - [ ] Multi-line code in `<pre><code class="language-…">`.
 - [ ] At most one prefix glyph; no trailing emoji; no celebration.
