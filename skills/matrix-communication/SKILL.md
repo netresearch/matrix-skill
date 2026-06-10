@@ -82,7 +82,7 @@ Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-e2ee-setup.py`, `matrix-e
 | `M_UNKNOWN_TOKEN` | Get new token from Element |
 | `M_LIMIT_EXCEEDED` | Wait and retry |
 | `Could not find room` | `matrix-rooms.py` to list rooms |
-| `[Unable to decrypt]` | `matrix-key-backup.py --recovery-key "..." --import-keys` |
+| `[Unable to decrypt]` | First: `uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-fetch-keys.py ROOM --sync-time 60` (requests keys from other devices, no recovery key needed); fallback: `uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --recovery-key "..." --import-keys` |
 | `libolm not found` | `apt install libolm-dev` / `brew install libolm` |
 | `matrix-nio not found` | `python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install` |
 | `Invalid password` | Use env var: `MATRIX_PASSWORD="pass" uv run ...` |
