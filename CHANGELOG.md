@@ -6,6 +6,16 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-06-10
+
+### Added
+
+- matrix-announcement: entity-linking rules (every issue key linked, versions link to their release page, MRs/PRs in `project/path!N` / `org/repo#N` notation) and one-item-per-line status-update layout ([#41](https://github.com/netresearch/matrix-skill/pull/41))
+
+### Fixed
+
+- matrix-communication: `[Unable to decrypt]` guidance now recommends `matrix-fetch-keys.py` first — resolves the common missing-room-keys case without a recovery key ([#41](https://github.com/netresearch/matrix-skill/pull/41))
+
 ## [1.24.0] - 2026-05-28
 
 ### Added
@@ -16,6 +26,16 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ### Removed
 
+
+## [1.23.0] - 2026-05-15
+
+### Added
+
+- Ship as npm package via `@netresearch/agent-skill-coordinator` ([#37](https://github.com/netresearch/matrix-skill/pull/37))
+
+### Fixed
+
+- Declare both matrix skills in `aiAgentSkill` / `extra.ai-agent-skill`; include `.claude-plugin/plugin.json` in the npm tarball ([#37](https://github.com/netresearch/matrix-skill/pull/37))
 ## [1.22.0] - 2026-04-29
 
 ### Added
@@ -49,7 +69,10 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v1.22.0...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v1.25.0...HEAD
+[1.25.0]: https://github.com/netresearch/matrix-skill/compare/v1.24.0...v1.25.0
+[1.24.0]: https://github.com/netresearch/matrix-skill/compare/v1.23.0...v1.24.0
+[1.23.0]: https://github.com/netresearch/matrix-skill/compare/v1.22.0...v1.23.0
 [1.22.0]: https://github.com/netresearch/matrix-skill/compare/v1.21.1...v1.22.0
 [1.21.1]: https://github.com/netresearch/matrix-skill/compare/v1.21.0...v1.21.1
 [1.21.0]: https://github.com/netresearch/matrix-skill/compare/v1.20.1...v1.21.0
