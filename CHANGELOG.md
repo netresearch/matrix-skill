@@ -6,6 +6,16 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-06-10
+
+### Added
+
+- matrix-announcement: entity-linking rules (every issue key linked, versions link to their release page, MRs/PRs in `project/path!N` / `org/repo#N` notation) and one-item-per-line status-update layout ([#41](https://github.com/netresearch/matrix-skill/pull/41))
+
+### Fixed
+
+- matrix-communication: `[Unable to decrypt]` guidance now recommends `matrix-fetch-keys.py` first — resolves the common missing-room-keys case without a recovery key ([#41](https://github.com/netresearch/matrix-skill/pull/41))
+
 ## [1.24.0] - 2026-05-28
 
 ### Added
