@@ -6,6 +6,10 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Fixed
+
+- matrix-communication: corrected misleading `brew install libolm` guidance in the setup guide and `_lib/deps.py` runtime error — `python-olm` has no macOS wheel and statically links its own bundled `libolm`, so Homebrew's library is never used. Documented the macOS 26 (Tahoe) / Apple Clang 17 build failure, a community-reported build-from-source workaround (GCC + `CMAKE_POLICY_VERSION_MINIMUM`), and the upstream status (libolm deprecated; vodozemac migration in `matrix-nio` PR [#555](https://github.com/matrix-nio/matrix-nio/pull/555)) ([#43](https://github.com/netresearch/matrix-skill/issues/43))
+
 ## [1.25.0] - 2026-06-10
 
 ### Added

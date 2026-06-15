@@ -8,7 +8,7 @@
 Requires libolm system library:
     Debian/Ubuntu: sudo apt install libolm-dev
     Fedora:        sudo dnf install libolm-devel
-    macOS:         brew install libolm
+    macOS 26+:     unsupported, python-olm build fails (Clang 17); see setup-guide.md
 
 Usage:
     matrix-read-e2ee.py ROOM [--limit N] [--json] [--request-keys]
