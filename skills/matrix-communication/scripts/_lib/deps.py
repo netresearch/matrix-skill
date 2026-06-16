@@ -25,7 +25,8 @@ def check_e2ee_dependencies() -> None:
             print("Install libolm for your platform:", file=sys.stderr)
             print("  Debian/Ubuntu: sudo apt install libolm-dev", file=sys.stderr)
             print("  Fedora:        sudo dnf install libolm-devel", file=sys.stderr)
-            print("  macOS:         brew install libolm", file=sys.stderr)
+            print("  macOS 26+:     brew won't help; python-olm", file=sys.stderr)
+            print("    build fails (Clang 17), see setup-guide.md.", file=sys.stderr)
         elif "nio" in error_msg or "matrix" in error_msg:
             print("Error: matrix-nio library not found.", file=sys.stderr)
             print("", file=sys.stderr)

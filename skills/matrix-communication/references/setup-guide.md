@@ -16,7 +16,7 @@ python3 skills/matrix-communication/scripts/matrix-doctor.py --install
 
 **Required for E2EE:**
 - `matrix-nio[e2e]` - Matrix client library with encryption support
-- `libolm` - System library for Olm encryption (install via apt/dnf/brew)
+- `libolm` - Olm encryption library, bundled and compiled by `python-olm` (Linux installs a pre-built wheel; **macOS 26+ is unsupported**, see Troubleshooting)
 
 **Package manager priority:** The doctor script tries: `uvx pip` > `uv pip` > `pip` > `pip3`
 
@@ -154,10 +154,27 @@ sudo apt install libolm-dev
 
 # Fedora
 sudo dnf install libolm-devel
-
-# macOS
-brew install libolm
 ```
+
+**macOS 26 (Tahoe) / Apple Clang 17 — `brew install libolm` does NOT help.**
+
+`matrix-nio[e2e]` pulls in `python-olm`, which has **no macOS wheel** on PyPI and compiles a *bundled* copy of `libolm` from source, statically linked — it never uses the Homebrew library. That bundled build fails under Apple Clang 17 / CMake ≥ 3.30 (a C++ const-correctness hard error in `list.hh`, plus an obsolete `cmake_minimum_required(VERSION 3.4)`).
+
+Workarounds, easiest first:
+
+- Use the **non-E2EE scripts** (`matrix-send.py`, `matrix-rooms.py`, …) — they don't need `python-olm`.
+- Run the **E2EE scripts from Linux or a Linux container**, where the pre-built wheel installs cleanly.
+- Build `python-olm` on macOS with **GCC instead of Clang** (community-reported in https://github.com/matrix-nio/matrix-nio/issues/541; not verified by this project):
+
+```bash
+brew install gcc@12
+export CC=/opt/homebrew/bin/gcc-12
+export CXX=/opt/homebrew/bin/g++-12
+export CMAKE_POLICY_VERSION_MINIMUM=3.5   # clears the CMake < 3.5 error
+pip install 'matrix-nio[e2e]'             # GCC sidesteps the Clang 17 const error
+```
+
+**Upstream status:** `libolm` is archived and deprecated in favor of `vodozemac` (https://github.com/matrix-nio/matrix-nio/issues/518). The real fix — replacing olm with vodozemac in `matrix-nio` — is in progress as open PR https://github.com/matrix-nio/matrix-nio/pull/555; until it ships, macOS installs need one of the workarounds above. Related: https://github.com/matrix-nio/matrix-nio/issues/560 (macOS install) and https://github.com/matrix-nio/matrix-nio/issues/541 (CMake error). Tracking here: https://github.com/netresearch/matrix-skill/issues/43
 
 **Non-E2EE scripts fail with "Config missing required fields: access_token":**
 
