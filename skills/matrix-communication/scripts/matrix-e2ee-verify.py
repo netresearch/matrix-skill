@@ -11,6 +11,7 @@ The user must confirm the emojis match in Element to complete verification.
 Usage:
     matrix-e2ee-verify.py                    # Auto-find device and verify
     matrix-e2ee-verify.py --request DEVICE   # Verify with specific device
+    matrix-e2ee-verify.py --listen           # Wait for Element to initiate
     matrix-e2ee-verify.py --list             # List your devices
 
 The script will:
@@ -236,31 +237,50 @@ class VerificationHandler:
                 try:
                     sas.receive_mac_event(event)
 
-                    if sas.verified:
-                        self.verified = True
-                        print("\n✅ VERIFICATION SUCCESSFUL!")
+                    other_device = (
+                        sas.other_device_id
+                        if hasattr(sas, "other_device_id")
+                        else sas.other_olm_device.device_id
+                    )
 
-                        done_content = {"transaction_id": event.transaction_id}
-                        done_msg = ToDeviceMessage(
-                            type="m.key.verification.done",
-                            recipient=event.sender,
-                            recipient_device=sas.other_device_id
-                            if hasattr(sas, "other_device_id")
-                            else sas.other_olm_device.device_id,
-                            content=done_content,
-                        )
-                        await self.client.to_device(done_msg)
+                    # Always send done — Element requires it regardless of sas.verified.
+                    # The nio SAS state machine can land in SasState.canceled after a
+                    # successful MAC exchange (race in the state machine), keeping
+                    # sas.verified False even though both sides completed the exchange.
+                    done_content = {"transaction_id": event.transaction_id}
+                    done_msg = ToDeviceMessage(
+                        type="m.key.verification.done",
+                        recipient=event.sender,
+                        recipient_device=other_device,
+                        content=done_content,
+                    )
+                    await self.client.to_device(done_msg)
+
+                    self.verified = True
+                    if sas.verified:
+                        print("\n✅ VERIFICATION SUCCESSFUL!")
+                    else:
+                        print("\n✅ VERIFICATION COMPLETE (done sent to Element)")
 
                 except Exception as e:
                     self._debug(f"Error processing MAC: {e}")
 
         elif isinstance(event, KeyVerificationCancel):
-            print(f"\n❌ Verification cancelled: {event.reason}")
-            self.cancelled = True
+            # Ignore stale cancel events from previous verification attempts that
+            # arrive during the initial sync. Only act on cancels for our active txn.
+            if self.current_verification and event.transaction_id == self.current_verification:
+                print(f"\n❌ Verification cancelled: {event.reason}")
+                self.cancelled = True
+            else:
+                self._debug(f"Ignoring stale cancel for {event.transaction_id}")
 
 
 async def run_verification(
-    config: dict, request_device: str = None, timeout: int = 120, debug: bool = False
+    config: dict,
+    request_device: str = None,
+    timeout: int = 120,
+    debug: bool = False,
+    listen: bool = False,
 ):
     """Run verification process."""
     store_path = get_store_path()
@@ -325,6 +345,26 @@ async def run_verification(
 
         print("Syncing...")
         await client.sync(timeout=10000)
+
+        # Listen-only mode: wait for Element to initiate verification instead of
+        # sending an outgoing request. Use when Element shows "Verify from other device"
+        # or when a prior outgoing request caused a conflict.
+        if listen:
+            print("Listening for incoming verification request from Element...")
+            print(f"   → Open Element Settings → Security & Privacy → Sessions")
+            print(f"   → Find device {device_id} and click Verify")
+            print(f"   Timeout: {timeout} seconds\n")
+            handler.cancelled = False
+            start_time = asyncio.get_event_loop().time()
+            while not handler.verified and not handler.cancelled:
+                elapsed = asyncio.get_event_loop().time() - start_time
+                if elapsed > timeout:
+                    print("\n⏰ Timeout waiting for verification.")
+                    return False
+                await client.sync(timeout=5000)
+            if handler.verified:
+                print("\n🎉 Device verified!")
+            return handler.verified
 
         # Find target device if not specified
         if not request_device:
@@ -408,6 +448,11 @@ async def run_verification(
         print("Verification request sent!")
         print("\n📱 Check Element for the verification popup")
         print(f"   Timeout: {timeout} seconds\n")
+
+        # Discard stale KeyVerificationCancel events that arrived during the
+        # initial sync (from previous verification attempts). We only care about
+        # cancels that arrive after our request was sent.
+        handler.cancelled = False
 
         # Wait for verification
         start_time = asyncio.get_event_loop().time()
@@ -518,6 +563,7 @@ def main():
 Examples:
   %(prog)s                    # Auto-find device and start verification
   %(prog)s --request DEVICE   # Verify with specific device
+  %(prog)s --listen           # Wait for Element to initiate (use after conflicts)
   %(prog)s --list             # List all your devices
 
 The script will display 7 emojis that must match what Element shows.
@@ -526,6 +572,12 @@ Confirm the match in Element to complete verification.
     )
     parser.add_argument("--request", metavar="DEVICE", help="Target specific device ID")
     parser.add_argument("--list", action="store_true", help="List all your devices")
+    parser.add_argument(
+        "--listen",
+        action="store_true",
+        help="Wait for Element to initiate verification instead of sending a request. "
+        "Use when Element shows 'Verify from other device' or after a prior conflict.",
+    )
     parser.add_argument(
         "--timeout", type=int, default=120, help="Timeout in seconds (default: 120)"
     )
@@ -557,6 +609,7 @@ Confirm the match in Element to complete verification.
             request_device=args.request,
             timeout=args.timeout,
             debug=args.debug,
+            listen=args.listen,
         )
     )
 

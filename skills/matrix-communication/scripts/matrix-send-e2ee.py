@@ -233,6 +233,12 @@ async def send_message_e2ee(
             print(f"Olm loaded: {client.olm is not None}", file=sys.stderr)
 
         if room_obj and room_obj.encrypted and client.olm:
+            # Always include own user so own devices get Olm sessions established.
+            # should_query_keys is False when own keys were last queried recently, which
+            # causes share_group_session to skip own devices and fail to deliver Megolm keys.
+            if hasattr(client, "users_for_key_query"):
+                client.users_for_key_query.add(config["user_id"])
+
             # Query device keys for all room members
             if client.should_query_keys:
                 if debug:
@@ -278,9 +284,8 @@ async def send_message_e2ee(
                 print("Room is encrypted. Trusting devices...", file=sys.stderr)
             for member_id in room_obj.users:
                 try:
-                    for dev_id, device in client.device_store.active_user_devices(
-                        member_id
-                    ):
+                    for device in client.device_store.active_user_devices(member_id):
+                        dev_id = device.id
                         if not device.verified:
                             client.verify_device(device)
                             if debug:
