@@ -103,6 +103,46 @@ grep -q "VERIFICATION SUCCESSFUL" /tmp/verify_log.txt && echo "Verified!"
 - Enables automatic room key sharing from other devices
 - Required for some security-conscious rooms
 
+### Gate trust on the verification result — never trust unconditionally
+
+**Security rule:** only persist trust in a device *after* the SAS/emoji check
+has cryptographically passed. Calling `client.verify_device(...)` unconditionally
+marks the device trusted even on a MAC mismatch — that is a security bypass (a
+MITM device gets stored as trusted).
+
+What makes this subtle in matrix-nio:
+
+- `sas.receive_mac_event(...)` **never raises** on a bad MAC — it silently moves
+  the SAS to `SasState.canceled`. A bare `try/except` around it therefore catches
+  nothing and is not a safety check.
+- `sas.verified` can be `False` even after a *successful* MAC exchange, due to a
+  race in nio's state machine, so it cannot by itself distinguish a genuine
+  mismatch from the benign race. A device id appears in `sas.verified_devices`
+  only once its MAC is cryptographically validated, and a later cancel does not
+  clear it — so that set is the authoritative "MACs matched" signal.
+
+The correct flow (as fixed in `matrix-e2ee-verify.py`):
+
+1. On a genuine mismatch (`not sas.verified and device not in sas.verified_devices`),
+   send `m.key.verification.cancel`, report failure, and do **not** trust.
+2. Only when `sas.verified` is strictly `True`, call `client.verify_device(sas.other_olm_device)` —
+   nio's `Sas` never persists trust itself.
+
+This bypass was caught by the automated commit security review (2026-06-27) and
+re-gated on `sas.verified` in
+[#48](https://github.com/netresearch/matrix-skill/pull/48).
+
+## matrix-nio API notes (0.25.2)
+
+Maintainer notes for the E2EE scripts. Verified against matrix-nio 0.25.2 (the
+version installed for this skill — `importlib.metadata.version("matrix-nio")`):
+
+| What you might reach for | Reality (matrix-nio 0.25.2) |
+|--------------------------|-----------------------------|
+| `nio.__version__` | Does **not** exist — accessing it raises `AttributeError`. Read the version from package metadata instead: `from importlib.metadata import version; version("matrix-nio")`. |
+| `from nio.store import DeviceStore` | Wrong path — raises `ImportError`. `DeviceStore` lives in `nio.crypto`: `from nio.crypto import DeviceStore`. |
+| `device.id` | Works — it is a read-only property aliasing `device_id` (returns `self.device_id`). It does **not** raise `AttributeError`, but always prefer the canonical `device_id` attribute for robustness against future library changes. |
+
 ## Reading E2EE Messages
 
 ```bash
