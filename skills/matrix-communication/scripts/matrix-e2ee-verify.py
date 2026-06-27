@@ -243,10 +243,34 @@ class VerificationHandler:
                         else sas.other_olm_device.device_id
                     )
 
-                    # Always send done — Element requires it regardless of sas.verified.
-                    # The nio SAS state machine can land in SasState.canceled after a
-                    # successful MAC exchange (race in the state machine), keeping
-                    # sas.verified False even though both sides completed the exchange.
+                    # nio's receive_mac_event never raises on a bad MAC — it
+                    # silently sets the SAS state to SasState.canceled. sas.verified
+                    # can also be False after a *successful* MAC exchange due to a
+                    # race in nio's state machine, so it alone cannot tell a genuine
+                    # key mismatch from the benign race. verified_devices is the
+                    # authoritative signal: a device id lands there only once its MAC
+                    # has been cryptographically validated, and a later cancel does
+                    # not clear it.
+                    mac_ok = sas.verified or other_device in getattr(
+                        sas, "verified_devices", []
+                    )
+
+                    if not mac_ok:
+                        # Genuine MAC/key mismatch (possible MITM) — never report
+                        # success and never trust the device. Tell the other side we
+                        # are cancelling instead of sending m.key.verification.done.
+                        print(
+                            f"\n❌ VERIFICATION FAILED: {sas.cancel_reason or 'key mismatch'}"
+                        )
+                        try:
+                            await self.client.to_device(sas.get_cancellation())
+                        except Exception as e:
+                            self._debug(f"Could not send cancellation: {e}")
+                        self.cancelled = True
+                        return
+
+                    # MAC validated. Always send done — Element requires it even when
+                    # sas.verified is False due to the state-machine race noted above.
                     done_content = {"transaction_id": event.transaction_id}
                     done_msg = ToDeviceMessage(
                         type="m.key.verification.done",
@@ -258,12 +282,9 @@ class VerificationHandler:
 
                     self.verified = True
                     if sas.verified:
-                        # nio confirmed the SAS MACs match (Sas.verified is only True
-                        # once receive_mac_event has cryptographically validated every
-                        # key — any mismatch sets SasState.canceled). Only now is it
-                        # safe to persist trust in the local store; nio's Sas never
-                        # does this itself. Trusting when sas.verified is False would
-                        # bypass SAS verification, so we never do that.
+                        # nio confirmed the SAS MACs match. Only now is it safe to
+                        # persist trust in the local store; nio's Sas never does this
+                        # itself.
                         self.client.verify_device(sas.other_olm_device)
                         print("\n✅ VERIFICATION SUCCESSFUL!")
                     else:
@@ -283,6 +304,50 @@ class VerificationHandler:
                 self.cancelled = True
             else:
                 self._debug(f"Ignoring stale cancel for {event.transaction_id}")
+
+
+async def fetch_room_keys(client):
+    """Request room keys from now-verified devices and wait for them to arrive.
+
+    Runs after a successful verification so the freshly trusted device shares the
+    Megolm keys for encrypted rooms. Used by both the request and --listen flows.
+    """
+    print("\n📦 Fetching room keys from verified devices...")
+
+    # Filter to encrypted rooms *before* limiting, so we always look at up to 10
+    # encrypted rooms rather than 10 arbitrary rooms that might all be unencrypted.
+    encrypted_rooms = [
+        (room_id, room) for room_id, room in client.rooms.items() if room.encrypted
+    ][:10]
+    rooms_checked = len(encrypted_rooms)
+    for room_id, room in encrypted_rooms:
+        try:
+            result = await client.room_messages(room_id, start="", limit=50)
+            if isinstance(result, RoomMessagesResponse):
+                for event in result.chunk:
+                    if isinstance(event, MegolmEvent):
+                        try:
+                            await client.request_room_key(event)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+    print(f"   Checked {rooms_checked} encrypted rooms")
+    print("   Waiting for keys (30s)...")
+
+    for i in range(6):
+        # Verification already succeeded; a transient sync error here must not
+        # crash the script or mask that success.
+        try:
+            await client.sync(timeout=5000)
+        except Exception:
+            pass
+        if (i + 1) % 2 == 0:
+            print(f"   ... {(i + 1) * 5}s")
+
+    print("\n🎉 Device verified and keys synced!")
+    print("   Use matrix-fetch-keys.py ROOM for additional keys")
 
 
 async def run_verification(
@@ -373,7 +438,7 @@ async def run_verification(
                     return False
                 await client.sync(timeout=5000)
             if handler.verified:
-                print("\n🎉 Device verified!")
+                await fetch_room_keys(client)
             return handler.verified
 
         # Find target device if not specified
@@ -476,34 +541,7 @@ async def run_verification(
 
         # Post-verification: fetch room keys
         if handler.verified:
-            print("\n📦 Fetching room keys from verified devices...")
-
-            rooms_checked = 0
-            for room_id, room in list(client.rooms.items())[:10]:
-                if room.encrypted:
-                    rooms_checked += 1
-                    try:
-                        result = await client.room_messages(room_id, start="", limit=50)
-                        if isinstance(result, RoomMessagesResponse):
-                            for event in result.chunk:
-                                if isinstance(event, MegolmEvent):
-                                    try:
-                                        await client.request_room_key(event)
-                                    except Exception:
-                                        pass
-                    except Exception:
-                        pass
-
-            print(f"   Checked {rooms_checked} encrypted rooms")
-            print("   Waiting for keys (30s)...")
-
-            for i in range(6):
-                await client.sync(timeout=5000)
-                if (i + 1) % 2 == 0:
-                    print(f"   ... {(i + 1) * 5}s")
-
-            print("\n🎉 Device verified and keys synced!")
-            print("   Use matrix-fetch-keys.py ROOM for additional keys")
+            await fetch_room_keys(client)
 
         return handler.verified
 
