@@ -314,27 +314,35 @@ async def fetch_room_keys(client):
     """
     print("\n📦 Fetching room keys from verified devices...")
 
-    rooms_checked = 0
-    for room_id, room in list(client.rooms.items())[:10]:
-        if room.encrypted:
-            rooms_checked += 1
-            try:
-                result = await client.room_messages(room_id, start="", limit=50)
-                if isinstance(result, RoomMessagesResponse):
-                    for event in result.chunk:
-                        if isinstance(event, MegolmEvent):
-                            try:
-                                await client.request_room_key(event)
-                            except Exception:
-                                pass
-            except Exception:
-                pass
+    # Filter to encrypted rooms *before* limiting, so we always look at up to 10
+    # encrypted rooms rather than 10 arbitrary rooms that might all be unencrypted.
+    encrypted_rooms = [
+        (room_id, room) for room_id, room in client.rooms.items() if room.encrypted
+    ][:10]
+    rooms_checked = len(encrypted_rooms)
+    for room_id, room in encrypted_rooms:
+        try:
+            result = await client.room_messages(room_id, start="", limit=50)
+            if isinstance(result, RoomMessagesResponse):
+                for event in result.chunk:
+                    if isinstance(event, MegolmEvent):
+                        try:
+                            await client.request_room_key(event)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
 
     print(f"   Checked {rooms_checked} encrypted rooms")
     print("   Waiting for keys (30s)...")
 
     for i in range(6):
-        await client.sync(timeout=5000)
+        # Verification already succeeded; a transient sync error here must not
+        # crash the script or mask that success.
+        try:
+            await client.sync(timeout=5000)
+        except Exception:
+            pass
         if (i + 1) % 2 == 0:
             print(f"   ... {(i + 1) * 5}s")
 
