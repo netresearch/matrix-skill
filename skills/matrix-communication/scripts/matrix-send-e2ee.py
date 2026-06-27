@@ -285,7 +285,7 @@ async def send_message_e2ee(
             for member_id in room_obj.users:
                 try:
                     for device in client.device_store.active_user_devices(member_id):
-                        dev_id = device.id
+                        dev_id = device.device_id
                         if not device.verified:
                             client.verify_device(device)
                             if debug:

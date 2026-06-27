@@ -258,6 +258,13 @@ class VerificationHandler:
 
                     self.verified = True
                     if sas.verified:
+                        # nio confirmed the SAS MACs match (Sas.verified is only True
+                        # once receive_mac_event has cryptographically validated every
+                        # key — any mismatch sets SasState.canceled). Only now is it
+                        # safe to persist trust in the local store; nio's Sas never
+                        # does this itself. Trusting when sas.verified is False would
+                        # bypass SAS verification, so we never do that.
+                        self.client.verify_device(sas.other_olm_device)
                         print("\n✅ VERIFICATION SUCCESSFUL!")
                     else:
                         print("\n✅ VERIFICATION COMPLETE (done sent to Element)")
@@ -268,7 +275,10 @@ class VerificationHandler:
         elif isinstance(event, KeyVerificationCancel):
             # Ignore stale cancel events from previous verification attempts that
             # arrive during the initial sync. Only act on cancels for our active txn.
-            if self.current_verification and event.transaction_id == self.current_verification:
+            if (
+                self.current_verification
+                and event.transaction_id == self.current_verification
+            ):
                 print(f"\n❌ Verification cancelled: {event.reason}")
                 self.cancelled = True
             else:
@@ -351,7 +361,7 @@ async def run_verification(
         # or when a prior outgoing request caused a conflict.
         if listen:
             print("Listening for incoming verification request from Element...")
-            print(f"   → Open Element Settings → Security & Privacy → Sessions")
+            print("   → Open Element Settings → Security & Privacy → Sessions")
             print(f"   → Find device {device_id} and click Verify")
             print(f"   Timeout: {timeout} seconds\n")
             handler.cancelled = False
