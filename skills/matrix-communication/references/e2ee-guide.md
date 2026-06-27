@@ -125,7 +125,7 @@ The correct flow (as fixed in `matrix-e2ee-verify.py`):
 
 1. On a genuine mismatch (`not sas.verified and device not in sas.verified_devices`),
    send `m.key.verification.cancel`, report failure, and do **not** trust.
-2. Only on a confirmed match call `client.verify_device(sas.other_olm_device)` —
+2. Only when `sas.verified` is strictly `True`, call `client.verify_device(sas.other_olm_device)` —
    nio's `Sas` never persists trust itself.
 
 This bypass was caught by the automated commit security review (2026-06-27) and
@@ -141,7 +141,7 @@ version installed for this skill — `importlib.metadata.version("matrix-nio")`)
 |--------------------------|-----------------------------|
 | `nio.__version__` | Does **not** exist — accessing it raises `AttributeError`. Read the version from package metadata instead: `from importlib.metadata import version; version("matrix-nio")`. |
 | `from nio.store import DeviceStore` | Wrong path — raises `ImportError`. `DeviceStore` lives in `nio.crypto`: `from nio.crypto import DeviceStore`. |
-| `device.id` | Works — it is a read-only property aliasing `device_id` (returns `self.device_id`). It does **not** raise `AttributeError`; a claim that `device.id` errors is incorrect. |
+| `device.id` | Works — it is a read-only property aliasing `device_id` (returns `self.device_id`). It does **not** raise `AttributeError`, but always prefer the canonical `device_id` attribute for robustness against future library changes. |
 
 ## Reading E2EE Messages
 
