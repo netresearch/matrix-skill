@@ -96,10 +96,15 @@ Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-e2ee-setup.py`, `matrix-e
 - **Using Element X** for verification — use Element Desktop or Android
 - **Hardcoding passwords** — use `MATRIX_PASSWORD` env var
 
+## No editorializing
+
+In messages and announcements, state what happened, not how good or careful the work is — no narrating expected results ("all tests green", "shipped") or self-praise ("clean", "the honest breaking change"). Judged by tone, not a wordlist. See `references/no-editorializing.md`.
+
 ## References
 
 - `references/setup-guide.md` — setup
 - `references/e2ee-guide.md` — E2EE, key recovery, verification
 - `references/messaging-guide.md` — formatting, reactions
 - `references/api-reference.md` — Matrix API
+- `references/no-editorializing.md` — writing without self-praise / narrating the expected
 - [netresearch/matrix-skill](https://github.com/netresearch/matrix-skill)
