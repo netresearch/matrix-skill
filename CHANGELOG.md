@@ -6,6 +6,22 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [1.25.3] - 2026-07-01
+
+### Documentation
+
+- matrix-communication, matrix-announcement: added a "no editorializing" rule for messages and announcements — state what changed, not how good it is ([#51](https://github.com/netresearch/matrix-skill/pull/51)).
+
+## [1.25.2] - 2026-06-27
+
+### Fixed
+
+- matrix-communication: E2EE own-device delivery and verification — don't report verification success on a MAC mismatch, and fetch room keys in `--listen` ([#47](https://github.com/netresearch/matrix-skill/pull/47), [#48](https://github.com/netresearch/matrix-skill/pull/48)).
+
+### Documentation
+
+- matrix-communication: gate E2EE device trust strictly on verification, with matrix-nio API notes ([#49](https://github.com/netresearch/matrix-skill/pull/49)).
+
 ## [1.25.1] - 2026-06-18
 
 ### Fixed
