@@ -132,7 +132,7 @@ Use the `#test` room (or a room named `test`) for all testing. Never test in pro
 - [Safety guide](skills/matrix-administration/references/safety-guide.md)
 
 ### matrix-announcement
-- [SKILL.md](skills/matrix-announcement/SKILL.md) — five rules + type-tag table + pre-send checklist
+- [SKILL.md](skills/matrix-announcement/SKILL.md) — five rules + type-tag list + pre-send checklist
 - [HTML subset](skills/matrix-announcement/references/html-subset.md)
 - [Structure & length budget](skills/matrix-announcement/references/structure.md)
 - [Glyphs](skills/matrix-announcement/references/glyphs.md)
