@@ -15,7 +15,7 @@ A Matrix room with five active bots quickly becomes unreadable when each one pos
 
 ## Features
 
-- **Slim SKILL.md** — five rules + type-tag table + pre-send checklist, kept within 500-word target
+- **Slim SKILL.md** — five rules + type-tag list + pre-send checklist, kept within 500-word target
 - **Six reference guides** — html-subset, structure, glyphs, image-cards, threading, anti-patterns
 - **Seven drop-in `formatted_body` skeletons** — release, new-skill, digest, heads-up, postmortem, RFC, patch
 - **Three rendered HTML card templates** — `release-card.html` (1200×630), `weekly-digest.html` (1200×1500), `comparison.html` (1200×900). Render headlessly with Chromium, upload, post as `m.image`.
