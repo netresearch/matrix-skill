@@ -62,4 +62,4 @@ One leading glyph at most. **Never** trailing decoration, multi-emoji ladders, �
 - [templates/](references/templates/) — three HTML card templates
 - [gallery.html](references/gallery.html) — visual preview of rules and templates
 
-Sending: `matrix-communication` ships it (`matrix-send-e2ee.py "$ROOM" "$MARKDOWN" [--notice]`), converting markdown to HTML per `html-subset.md`. `--notice` marks automation, exclusive of `--emote`. Hand-crafted `formatted_body`/`m.image`: call the homeserver API — recipe in `image-cards.md`.
+Sending: `matrix-communication` ships it (`${CLAUDE_SKILL_DIR}/../matrix-communication/scripts/matrix-send-e2ee.py "$ROOM" "$MARKDOWN" [--notice]`), converting markdown to HTML per `html-subset.md`. `--notice` marks automation, exclusive of `--emote`. Hand-crafted `formatted_body`/`m.image`: call the homeserver API — recipe in `image-cards.md`.
