@@ -6,6 +6,17 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [1.25.4] - 2026-07-13
+
+### Fixed
+
+- matrix-announcement: resolve the cross-skill script path in SKILL.md ([#53](https://github.com/netresearch/matrix-skill/pull/53)).
+
+### Documentation
+
+- matrix-communication: `no-editorializing.md` now points at the canonical copy ([#54](https://github.com/netresearch/matrix-skill/pull/54)).
+- matrix-announcement: trimmed SKILL.md generic bloat to meet the 500-word cap ([#53](https://github.com/netresearch/matrix-skill/pull/53)).
+
 ## [1.25.3] - 2026-07-01
 
 ### Documentation
