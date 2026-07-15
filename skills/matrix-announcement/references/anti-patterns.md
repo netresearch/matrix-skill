@@ -83,7 +83,7 @@ around the person turn a finding into a verdict.
 
 ```
 **Errors found**
-**No error, expected behaviour**
+**No error, expected behavior**
 ```
 
 Name what the *system* did, not whose assumption failed. The facts underneath are

@@ -167,10 +167,10 @@
       "id": 14,
       "eval_name": "findings-headings-name-category",
       "prompt": "A colleague claimed updates were missing for three projects. Two of the three are genuine failures; the third worked and automerged, so their assumption was wrong. Write the section headings for this report.",
-      "expected_output": "Headings name the category of finding, e.g. 'Errors found' and 'No error, expected behaviour'.",
+      "expected_output": "Headings name the category of finding, e.g. 'Errors found' and 'No error, expected behavior'.",
       "files": [],
       "assertions": [
-        "Headings describe the system behaviour, not the person's mistake",
+        "Headings describe the system behavior, not the person's mistake",
         "Does NOT use 'Real errors', 'Corrections', 'Wrong assumptions' or equivalents that grade the reader",
         "Working-as-designed results get their own section rather than being framed as rebuttals"
       ]

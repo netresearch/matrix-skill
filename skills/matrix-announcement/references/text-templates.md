@@ -113,18 +113,18 @@ Headings name the category of finding, never who was wrong. One `<li>` per findi
 <p>🔎 <strong>Findings:</strong> {what was checked}</p>
 <p>{one-sentence verdict: what ran, how much of it worked}.</p>
 
-<p><strong>Errors found</strong></p>
+<p><strong>Errors found:</strong></p>
 <ul>
   <li><strong>{subject}</strong> — {what fails}: <code>{error}</code>. {consequence}.</li>
   <li><strong>{subject}</strong> — {what fails}. {cause, with a link to the line}.</li>
 </ul>
 
-<p><strong>No error, expected behaviour</strong></p>
+<p><strong>No error, expected behavior:</strong></p>
 <ul>
   <li><strong>{subject}</strong> — {why it looked broken but is not}.</li>
 </ul>
 
-<p><strong>Next steps</strong></p>
+<p><strong>Next steps:</strong></p>
 <ul>
   <li>{action}, tracked in <a href="{ticket}">{ticket-id}</a>.</li>
 </ul>

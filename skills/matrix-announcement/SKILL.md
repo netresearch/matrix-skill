@@ -33,7 +33,7 @@ Content rules for Matrix announcements: HTML subset, type tags, glyphs, `m.text`
 - `Findings` — result of an investigation or audit
 - `RFC` — proposal seeking feedback
 
-Findings reports group by category of finding (`Errors found`, `No error, expected behaviour`), never by who was wrong (`Real errors`, `Corrections`).
+Findings reports group by category of finding (`Errors found`, `No error, expected behavior`), never by who was wrong (`Real errors`, `Corrections`).
 
 ## Glyphs
 
