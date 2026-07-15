@@ -17,6 +17,7 @@ The rule: **one glyph at the front of the title**, optionally one inline glyph p
 | 🔬 | RFC | proposal, request for comment |
 | 🚑 | hotfix | urgent patch |
 | 🔥 | postmortem | incident summary |
+| 🔎 | findings | investigation or audit result |
 | ✨ | new capability | use sparingly; never on every release |
 
 ## Banned

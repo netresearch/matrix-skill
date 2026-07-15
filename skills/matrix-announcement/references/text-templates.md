@@ -105,6 +105,31 @@ For more than ~6 lines of releases, render `templates/weekly-digest.html` to PNG
 <p><strong>Follow-up:</strong> <a href="{ticket}">{ticket-id}</a></p>
 ```
 
+## Findings (investigation / audit result)
+
+Headings name the category of finding, never who was wrong. One `<li>` per finding, however long the item runs.
+
+```html
+<p>🔎 <strong>Findings:</strong> {what was checked}</p>
+<p>{one-sentence verdict: what ran, how much of it worked}.</p>
+
+<p><strong>Errors found:</strong></p>
+<ul>
+  <li><strong>{subject}</strong> — {what fails}: <code>{error}</code>. {consequence}.</li>
+  <li><strong>{subject}</strong> — {what fails}. {cause, with a link to the line}.</li>
+</ul>
+
+<p><strong>No error, expected behavior:</strong></p>
+<ul>
+  <li><strong>{subject}</strong> — {why it looked broken but is not}.</li>
+</ul>
+
+<p><strong>Next steps:</strong></p>
+<ul>
+  <li>{action}, tracked in <a href="{ticket}">{ticket-id}</a>.</li>
+</ul>
+```
+
 ## RFC
 
 ```html

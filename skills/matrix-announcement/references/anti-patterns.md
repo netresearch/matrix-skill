@@ -28,6 +28,69 @@ What it blocks:
 Install: /install-plugin https://github.com/netresearch/github-release-skill
 ```
 
+## ✗ Bold lead-in paragraphs
+
+The wall of text above is easy to spot — it is marketing prose. This one is not: the
+content is factual, linked, and correctly sectioned, so it reads as "already structured"
+while writing. It still lands as a wall, because each finding is a paragraph that merely
+*starts* with a bold word.
+
+```
+**Errors found**
+
+**vemags** — MR !49 exists, but typo3:create-ticket fails: User 'x' cannot be
+assigned issues. The script aborts via set -eu, so neither ticket nor automerge
+happens. vemags stays on 13.4.32.
+
+**bmdv** — bmdv/cms/main-13 is never picked up by the cron. In
+generate-child-pipelines.sh:79 grep -v -F -f matches substrings without -x, so the
+slow-repos.txt entry bmdv/cms/main swallows bmdv/cms/main-13 — no log entry.
+```
+
+### ✓ One finding, one list item
+
+```html
+<strong>Errors found</strong>
+<ul>
+  <li><strong>vemags</strong> — <a href="…/merge_requests/49">vemags/cms/main!49</a>
+      exists, but <code>typo3:create-ticket</code> fails:
+      <code>User 'x' cannot be assigned issues.</code> The script aborts via
+      <code>set -eu</code>, so neither ticket nor automerge happens.</li>
+  <li><strong>bmdv</strong> — <code>bmdv/cms/main-13</code> is never picked up by the
+      cron. <a href="…#L79"><code>generate-child-pipelines.sh:79</code></a> uses
+      <code>grep -v -F -f</code> without <code>-x</code>, so the
+      <code>slow-repos.txt</code> entry <code>bmdv/cms/main</code> swallows
+      <code>bmdv/cms/main-13</code>.</li>
+</ul>
+```
+
+**The test:** if the items are enumerable — findings, projects, tickets, failures — they
+are a `<ul>`, no matter how long each item is. Length is not a reason to drop the list;
+it is the reason you need one. A bold word at the start of a paragraph is emphasis, not
+structure: it gives the reader no left edge to scan down.
+
+## ✗ Headings that name who was wrong
+
+Reports that refute someone's assumptions get read by that someone. Headings framed
+around the person turn a finding into a verdict.
+
+```
+**Real errors**          ← implies the reader's other points were fake
+**Corrections**          ← "I am correcting you"
+```
+
+### ✓ Headings that name the category
+
+```
+**Errors found**
+**No error, expected behavior**
+```
+
+Name what the *system* did, not whose assumption failed. The facts underneath are
+identical; only the framing changes, and the framing decides whether the facts get read.
+Related but distinct from [no-editorializing](../../matrix-communication/references/no-editorializing.md):
+that rule bans praising your own work, this one bans grading someone else's.
+
 ## ✗ Emoji ladder
 
 ```
