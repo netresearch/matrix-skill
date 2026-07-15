@@ -30,7 +30,10 @@ Pick one. Do not stack.
 | `Digest` | weekly / multi-skill roundup | `Digest: skill ecosystem — week of 2026-04-22` |
 | `Heads-up` | breaking change, deprecation, migration | `Heads-up: matrix-skill v2 drops Python 3.8` |
 | `Postmortem` | incident summary | `Postmortem: CI cache wipe 2026-04-25` |
+| `Findings` | result of an investigation or audit — what ran, what broke, what is expected behaviour | `Findings: Renovate run after TYPO3 14.3.5` |
 | `RFC` | proposal looking for feedback | `RFC: unified checkpoint schema` |
+
+`Postmortem` vs `Findings`: a postmortem explains one incident that is already over (symptom → cause → fix). `Findings` reports what a check turned up across several subjects, where some results are failures and some are working-as-designed.
 
 ## Section headings
 
@@ -40,6 +43,7 @@ Use **at most three** sections per message. Common patterns:
 - **New / Changed / Fixed** — for version bumps
 - **Highlights / This week's releases / Open questions** — for digests
 - **Symptom / Cause / Fix** — for postmortems
+- **Errors found / No error, expected behaviour / Next steps** — for findings reports
 - **Why / How / Try it** — for proposals
 
 Render headings as `<strong>Heading:</strong>` on its own line, or `<h3>` if the message is long enough to warrant TOC-style skimming. Avoid `<h2>`/`<h1>` (too loud).
@@ -87,6 +91,12 @@ Readers click the thing they are looking at — every linkable entity in the mes
 ### Status updates: one item per line
 
 Multi-item progress posts (maintenance logs, digest-style updates) get one line per ticket/work item, separated by blank lines, each line starting with the linked issue key. Readers scan for *their* item; interleaved prose hides it.
+
+### Findings reports: one finding, one list item
+
+A findings report (investigation result, audit, "did the automation run?") is a list, not prose — `<ul>` with one `<li>` per finding, each opening with the linked subject. This holds when the items are long: a finding that needs three sentences is still one `<li>`. A paragraph that merely starts with a bold word gives the reader no left edge to scan down. See [anti-patterns](anti-patterns.md) ("Bold lead-in paragraphs").
+
+Group findings under headings that name **the category of finding, never the person who was wrong**: `Errors found` / `No error, expected behaviour`, not `Real errors` / `Corrections`. Reports that refute someone's assumptions are read by that someone, and the framing decides whether the facts get read at all.
 
 ## Length budget
 

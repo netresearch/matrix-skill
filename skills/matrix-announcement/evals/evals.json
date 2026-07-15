@@ -149,6 +149,31 @@
         "Does NOT use <h1> or <h2>",
         "First-level title remains the type-tag line, not a heading"
       ]
+    },
+    {
+      "id": 13,
+      "eval_name": "long-findings-still-a-list",
+      "prompt": "Report the result of checking an automated Renovate run across projects. Three findings need explaining: vemags (ticket job fails because a Jira user cannot be assigned, so no ticket and no automerge), bmdv (a grep -F without -x filters the repo out via substring match), hsm (code lives in a foreign Forgejo, unreachable). Each finding needs two to three sentences.",
+      "expected_output": "Renders the three findings as a <ul> with one <li> each, despite each item running several sentences.",
+      "files": [],
+      "assertions": [
+        "Uses <ul> with one <li> per finding",
+        "Does NOT render findings as consecutive paragraphs that merely begin with a bold subject",
+        "Long items stay a single <li> rather than being split into paragraphs",
+        "Each <li> opens with the linked or bolded subject (vemags / bmdv / hsm)"
+      ]
+    },
+    {
+      "id": 14,
+      "eval_name": "findings-headings-name-category",
+      "prompt": "A colleague claimed updates were missing for three projects. Two of the three are genuine failures; the third worked and automerged, so their assumption was wrong. Write the section headings for this report.",
+      "expected_output": "Headings name the category of finding, e.g. 'Errors found' and 'No error, expected behaviour'.",
+      "files": [],
+      "assertions": [
+        "Headings describe the system behaviour, not the person's mistake",
+        "Does NOT use 'Real errors', 'Corrections', 'Wrong assumptions' or equivalents that grade the reader",
+        "Working-as-designed results get their own section rather than being framed as rebuttals"
+      ]
     }
   ]
 }
