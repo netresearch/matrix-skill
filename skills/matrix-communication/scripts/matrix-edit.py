@@ -23,8 +23,8 @@ Options:
 """
 
 import json
-import sys
 import os
+import sys
 import time
 import urllib.parse
 
@@ -32,13 +32,13 @@ import urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
-    load_config,
-    matrix_request,
-    resolve_room_alias,
-    find_room_by_name,
-    markdown_to_html,
     add_bot_prefix,
     clean_message,
+    find_room_by_name,
+    load_config,
+    markdown_to_html,
+    matrix_request,
+    resolve_room_alias,
 )
 
 sys.stdout.reconfigure(line_buffering=True)

@@ -30,20 +30,20 @@ Note: First run takes ~2-5s for initial sync and key setup.
 
 import asyncio
 import json
-import sys
 import os
+import sys
 
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
     check_e2ee_dependencies,
-    load_config,
-    get_store_path,
-    load_credentials,
+    clean_message,
     find_room_in_nio_client,
     format_timestamp,
-    clean_message,
+    get_store_path,
+    load_config,
+    load_credentials,
     prefer_ipv4,
     suppress_nio_logging,
 )
@@ -54,11 +54,11 @@ check_e2ee_dependencies()
 from nio import (
     AsyncClient,
     AsyncClientConfig,
-    RoomResolveAliasResponse,
-    RoomMessageText,
-    RoomMessageEmote,
     MegolmEvent,
+    RoomMessageEmote,
     RoomMessagesResponse,
+    RoomMessageText,
+    RoomResolveAliasResponse,
 )
 
 sys.stdout.reconfigure(line_buffering=True)
@@ -268,7 +268,7 @@ async def read_messages_e2ee(
                                 f"  Requested key for session {event.session_id[:16]}...",
                                 file=sys.stderr,
                             )
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
                         if debug:
                             print(f"  Failed to request key: {e}", file=sys.stderr)
 

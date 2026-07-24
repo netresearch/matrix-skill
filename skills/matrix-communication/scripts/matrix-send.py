@@ -46,21 +46,21 @@ Examples:
 """
 
 import json
-import sys
 import os
+import sys
 import time
 
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
-    load_config,
-    matrix_request,
-    resolve_room_alias,
-    find_room_by_name,
-    markdown_to_html,
     add_bot_prefix,
     clean_message,
+    find_room_by_name,
+    load_config,
+    markdown_to_html,
+    matrix_request,
+    resolve_room_alias,
 )
 
 sys.stdout.reconfigure(line_buffering=True)
@@ -74,8 +74,8 @@ def send_message(
     format: str = "markdown",
     emote: bool = False,
     notice: bool = False,
-    thread_id: str = None,
-    reply_id: str = None,
+    thread_id: str | None = None,
+    reply_id: str | None = None,
 ) -> dict:
     """Send a message to a Matrix room.
 

@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
-
 
 # A join policy is one of:
 #   "public"
@@ -27,7 +25,7 @@ class Room:
     id: str
     name: str
     version: int
-    creator: Optional[str] = None
+    creator: str | None = None
     join_policy: JoinPolicy = "public"
     space_children: list[str] = field(default_factory=list)
     permissions: dict[str, int] = field(default_factory=dict)
@@ -35,7 +33,7 @@ class Room:
     is_encrypted: bool = False
     is_space: bool = False
     is_replaced: bool = False
-    predecessor: Optional[str] = None
+    predecessor: str | None = None
 
 
 def condense(data: list[dict]) -> dict[str, Room]:

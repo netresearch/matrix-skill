@@ -6,10 +6,9 @@ All functions use ONLY stdlib.
 import contextlib
 import json
 import socket
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
-
 
 _ALLOWED_SCHEMES = frozenset({"http", "https"})
 
@@ -50,7 +49,7 @@ def _do_request(req: urllib.request.Request) -> dict:
     """
     _require_http_scheme(req.full_url)
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-    with urllib.request.urlopen(req) as response:  # noqa: S310 — scheme validated above
+    with urllib.request.urlopen(req) as response:
         return json.loads(response.read().decode())
 
 
@@ -67,7 +66,9 @@ def _parse_http_error(e: urllib.error.HTTPError) -> dict:
         return {"error": error_body, "errcode": str(e.code)}
 
 
-def matrix_request(config: dict, method: str, endpoint: str, data: dict = None) -> dict:
+def matrix_request(
+    config: dict, method: str, endpoint: str, data: dict | None = None
+) -> dict:
     """Make a Matrix API request.
 
     Args:

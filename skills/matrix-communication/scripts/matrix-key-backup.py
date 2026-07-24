@@ -12,24 +12,23 @@ Usage:
     matrix-key-backup.py --status                          # Check backup status
 """
 
-import asyncio
 import argparse
+import asyncio
 import base64
 import json
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _lib import load_config, get_store_path, load_credentials
-
-from cryptography.hazmat.primitives import hashes, hmac as crypto_hmac
+import aiohttp
+from _lib import get_store_path, load_config, load_credentials
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hmac as crypto_hmac
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
-
 from nio import AsyncClient, AsyncClientConfig
-import aiohttp
 
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
@@ -336,7 +335,7 @@ async def main():
 
         # Save backup key for future use
         backup_key_file = store_path / "backup_key.json"
-        with open(backup_key_file, "w") as f:
+        with open(backup_key_file, "w") as f:  # noqa: ASYNC230  # short local key/emoji file write; blocking open acceptable here
             json.dump(
                 {
                     "backup_key": base64.b64encode(backup_key).decode(),
@@ -392,7 +391,7 @@ async def main():
             imported = 0
             failed = 0
 
-            for room_id, room_data in rooms.items():
+            for room_data in rooms.values():
                 sessions = room_data.get("sessions", {})
                 for session_id, session_data in sessions.items():
                     try:
@@ -407,7 +406,7 @@ async def main():
                         if imported % 10 == 0:
                             print(f"  Processed {imported} sessions...")
 
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
                         failed += 1
                         if failed <= 5:
                             print(f"  Failed to decrypt session {session_id[:20]}: {e}")

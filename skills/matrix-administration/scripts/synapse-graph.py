@@ -34,7 +34,6 @@ from _lib import (
     rate_room,
 )
 
-
 _COLORS = {
     "blue": "#2222ff",
     "bright_blue": "#7777ff",

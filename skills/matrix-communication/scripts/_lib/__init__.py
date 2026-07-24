@@ -15,23 +15,35 @@ Usage:
 # Config
 from _lib.config import get_config_path, load_config
 
+# Dependency checking
+from _lib.deps import check_e2ee_dependencies
+
+# E2EE (only used by E2EE scripts, but still stdlib-only)
+from _lib.e2ee import (
+    delete_credentials,
+    get_credentials_path,
+    get_store_path,
+    load_credentials,
+    save_credentials,
+)
+
+# Formatting
+from _lib.formatting import (
+    add_bot_prefix,
+    markdown_to_html,
+    shorten_service_urls,
+)
+
 # HTTP API
 from _lib.http import matrix_request
 
 # Room operations
 from _lib.rooms import (
-    resolve_room_alias,
-    get_room_info,
-    list_joined_rooms,
     find_room_by_name,
     find_room_in_nio_client,
-)
-
-# Formatting
-from _lib.formatting import (
-    shorten_service_urls,
-    markdown_to_html,
-    add_bot_prefix,
+    get_room_info,
+    list_joined_rooms,
+    resolve_room_alias,
 )
 
 # Utilities
@@ -42,45 +54,33 @@ from _lib.utils import (
     suppress_nio_logging,
 )
 
-# Dependency checking
-from _lib.deps import check_e2ee_dependencies
-
-# E2EE (only used by E2EE scripts, but still stdlib-only)
-from _lib.e2ee import (
-    get_store_path,
-    get_credentials_path,
-    load_credentials,
-    save_credentials,
-    delete_credentials,
-)
-
 __all__ = [
-    # Config
-    "get_config_path",
-    "load_config",
-    # HTTP
-    "matrix_request",
-    # Rooms
-    "resolve_room_alias",
-    "get_room_info",
-    "list_joined_rooms",
-    "find_room_by_name",
-    "find_room_in_nio_client",
-    # Formatting
-    "shorten_service_urls",
-    "markdown_to_html",
     "add_bot_prefix",
-    # Utils
-    "clean_message",
-    "format_timestamp",
-    "prefer_ipv4",
-    "suppress_nio_logging",
     # Deps
     "check_e2ee_dependencies",
+    # Utils
+    "clean_message",
+    "delete_credentials",
+    "find_room_by_name",
+    "find_room_in_nio_client",
+    "format_timestamp",
+    # Config
+    "get_config_path",
+    "get_credentials_path",
+    "get_room_info",
     # E2EE
     "get_store_path",
-    "get_credentials_path",
+    "list_joined_rooms",
+    "load_config",
     "load_credentials",
+    "markdown_to_html",
+    # HTTP
+    "matrix_request",
+    "prefer_ipv4",
+    # Rooms
+    "resolve_room_alias",
     "save_credentials",
-    "delete_credentials",
+    # Formatting
+    "shorten_service_urls",
+    "suppress_nio_logging",
 ]

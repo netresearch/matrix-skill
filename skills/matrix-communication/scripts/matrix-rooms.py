@@ -31,13 +31,13 @@ Examples:
 """
 
 import json
-import sys
 import os
+import sys
 
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import load_config, list_joined_rooms, find_room_by_name
+from _lib import find_room_by_name, list_joined_rooms, load_config
 
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
