@@ -22,18 +22,18 @@ Options:
 
 import argparse
 import asyncio
-import sys
 import os
+import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
     check_e2ee_dependencies,
-    load_config,
-    get_store_path,
-    load_credentials,
     find_room_in_nio_client,
+    get_store_path,
+    load_config,
+    load_credentials,
     prefer_ipv4,
     suppress_nio_logging,
 )
@@ -43,10 +43,10 @@ check_e2ee_dependencies()
 from nio import (
     AsyncClient,
     AsyncClientConfig,
-    RoomResolveAliasResponse,
-    RoomGetEventError,
     DownloadError,
     MemoryDownloadResponse,
+    RoomGetEventError,
+    RoomResolveAliasResponse,
 )
 
 
@@ -128,7 +128,7 @@ async def download_media(
 
         resp = await client.room_get_event(room_id, event_id)
         if isinstance(resp, RoomGetEventError):
-            raise RuntimeError(f"Failed to get event: {resp.message}")
+            raise RuntimeError(f"Failed to get event: {resp.message}")  # noqa: TRY004  # preserve RuntimeError contract expected by callers
 
         event = resp.event
         source = event.source if hasattr(event, "source") else {}
@@ -160,7 +160,7 @@ async def download_media(
         resp = await client.download(mxc=mxc_url)
 
         if isinstance(resp, DownloadError):
-            raise RuntimeError(f"Download failed: {resp.message}")
+            raise RuntimeError(f"Download failed: {resp.message}")  # noqa: TRY004  # preserve RuntimeError contract expected by callers
 
         # Get raw bytes
         if isinstance(resp, MemoryDownloadResponse):

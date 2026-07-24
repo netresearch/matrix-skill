@@ -51,5 +51,5 @@ def format_timestamp(ts: int) -> str:
     """
     if ts == 0:
         return "unknown"
-    dt = datetime.fromtimestamp(ts / 1000)
+    dt = datetime.fromtimestamp(ts / 1000)  # noqa: DTZ006  # local time intended for human-readable display
     return dt.strftime("%Y-%m-%d %H:%M")

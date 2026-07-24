@@ -4,6 +4,7 @@ All functions use ONLY stdlib.
 """
 
 import urllib.parse
+
 from _lib.http import matrix_request
 
 
@@ -137,7 +138,7 @@ def find_room_by_name(config: dict, search_term: str) -> tuple[str | None, list]
     for room in rooms:
         if search_lower in room["name"].lower():
             matches.append(room)
-        elif room.get("alias") and search_lower in room["alias"].lower():
+        elif room.get("alias") and search_lower in room["alias"].lower():  # noqa: SIM102  # kept nested for readability of partial-match dedup
             if room not in matches:
                 matches.append(room)
 

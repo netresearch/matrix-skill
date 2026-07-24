@@ -17,7 +17,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-
 _ALLOWED_SCHEMES = frozenset({"http", "https"})
 
 
@@ -57,7 +56,7 @@ def _do_request(req: urllib.request.Request) -> dict:
     """
     _require_http_scheme(req.full_url)
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-    with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT) as response:  # noqa: S310 — scheme validated above
+    with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT) as response:
         body = response.read().decode()
         if not body:
             return {}

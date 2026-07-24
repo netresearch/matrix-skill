@@ -71,7 +71,7 @@ def main() -> int:
     for r in rooms.values():
         if r.is_replaced:
             continue
-        overall, messages = rate_room(r, rooms, home_spaces, language)
+        _overall, messages = rate_room(r, rooms, home_spaces, language)
         ratings = [m for m in messages if m[0] != RoomRating.SUCCESS]
         if any(rating == RoomRating.FAIL for rating, _ in ratings):
             flagged.append((r, ratings))

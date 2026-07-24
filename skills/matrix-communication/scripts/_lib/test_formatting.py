@@ -17,7 +17,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from formatting import markdown_to_html, shorten_service_urls  # noqa: E402
+from formatting import markdown_to_html, shorten_service_urls
 
 
 class ShortenServiceUrlsTests(unittest.TestCase):

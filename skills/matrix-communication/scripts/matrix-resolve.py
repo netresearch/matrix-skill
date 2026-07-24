@@ -18,8 +18,8 @@ Options:
 """
 
 import json
-import sys
 import os
+import sys
 
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

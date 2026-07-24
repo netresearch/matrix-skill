@@ -21,20 +21,20 @@ Options:
 """
 
 import json
-import sys
 import os
+import sys
 import urllib.parse
 
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
+    clean_message,
+    find_room_by_name,
+    format_timestamp,
     load_config,
     matrix_request,
     resolve_room_alias,
-    find_room_by_name,
-    format_timestamp,
-    clean_message,
 )
 
 sys.stdout.reconfigure(line_buffering=True)

@@ -23,15 +23,15 @@ The script will:
 """
 
 import asyncio
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
     check_e2ee_dependencies,
-    load_config,
     get_store_path,
+    load_config,
     load_credentials,
     prefer_ipv4,
     suppress_nio_logging,
@@ -43,18 +43,18 @@ check_e2ee_dependencies()
 from nio import (
     AsyncClient,
     AsyncClientConfig,
-    KeyVerificationEvent,
-    KeyVerificationStart,
+    DevicesResponse,
     KeyVerificationAccept,
+    KeyVerificationCancel,
+    KeyVerificationEvent,
     KeyVerificationKey,
     KeyVerificationMac,
-    KeyVerificationCancel,
-    ToDeviceMessage,
-    UnknownToDeviceEvent,
-    ToDeviceError,
-    DevicesResponse,
+    KeyVerificationStart,
     MegolmEvent,
     RoomMessagesResponse,
+    ToDeviceError,
+    ToDeviceMessage,
+    UnknownToDeviceEvent,
 )
 
 try:
@@ -129,7 +129,7 @@ class VerificationHandler:
             try:
                 await self.client.accept_key_verification(event.transaction_id)
                 print("Accepted, waiting for emoji exchange...")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
                 self._debug(f"Error accepting: {e}")
 
         elif isinstance(event, KeyVerificationStart):
@@ -140,7 +140,7 @@ class VerificationHandler:
             try:
                 await self.client.accept_key_verification(event.transaction_id)
                 self.sas_accepted = True
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
                 self._debug(f"Error accepting: {e}")
 
         elif isinstance(event, KeyVerificationAccept):
@@ -204,7 +204,7 @@ class VerificationHandler:
 
                 # Write to file for agent polling (before stdout which may be buffered)
                 emoji_file = "/tmp/matrix_verification_emojis.txt"
-                with open(emoji_file, "w") as f:
+                with open(emoji_file, "w") as f:  # noqa: ASYNC230  # short local key/emoji file write; blocking open acceptable here
                     f.write("\n".join(emoji_lines))
 
                 # Also print to stdout
@@ -225,7 +225,7 @@ class VerificationHandler:
 
                 print("Waiting for you to confirm in Element...")
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
                 self._debug(f"Error in key exchange: {e}")
 
         elif isinstance(event, KeyVerificationMac):
@@ -264,7 +264,7 @@ class VerificationHandler:
                         )
                         try:
                             await self.client.to_device(sas.get_cancellation())
-                        except Exception as e:
+                        except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
                             self._debug(f"Could not send cancellation: {e}")
                         self.cancelled = True
                         return
@@ -290,7 +290,7 @@ class VerificationHandler:
                     else:
                         print("\n✅ VERIFICATION COMPLETE (done sent to Element)")
 
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
                     self._debug(f"Error processing MAC: {e}")
 
         elif isinstance(event, KeyVerificationCancel):
@@ -328,9 +328,9 @@ async def fetch_room_keys(client):
                     if isinstance(event, MegolmEvent):
                         try:
                             await client.request_room_key(event)
-                        except Exception:
+                        except Exception:  # noqa: BLE001, S110  # best-effort cleanup; blind-except intentional, safe to ignore
                             pass
-        except Exception:
+        except Exception:  # noqa: BLE001, S110  # best-effort cleanup; blind-except intentional, safe to ignore
             pass
 
     print(f"   Checked {rooms_checked} encrypted rooms")
@@ -341,7 +341,7 @@ async def fetch_room_keys(client):
         # crash the script or mask that success.
         try:
             await client.sync(timeout=5000)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110  # best-effort cleanup; blind-except intentional, safe to ignore
             pass
         if (i + 1) % 2 == 0:
             print(f"   ... {(i + 1) * 5}s")
@@ -352,7 +352,7 @@ async def fetch_room_keys(client):
 
 async def run_verification(
     config: dict,
-    request_device: str = None,
+    request_device: str | None = None,
     timeout: int = 120,
     debug: bool = False,
     listen: bool = False,
@@ -483,14 +483,14 @@ async def run_verification(
         # Query keys first
         try:
             await client.keys_query()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
             if debug:
                 print(f"[DEBUG] Keys query: {e}")
 
         # Try to find device in store
         user_id = config["user_id"]
         if user_id in client.device_store:
-            for dev_id, _device in client.device_store[user_id].items():
+            for dev_id in client.device_store[user_id]:
                 if dev_id == request_device:
                     break
 

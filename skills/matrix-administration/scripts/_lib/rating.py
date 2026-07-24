@@ -16,7 +16,6 @@ Stdlib only.
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Optional
 
 from _lib.condensing import Room
 
@@ -86,7 +85,7 @@ _T = {
 def rate_room(
     r: Room,
     rooms: dict[str, Room],
-    home_space_ids: Optional[list[str]] = None,
+    home_space_ids: list[str] | None = None,
     language: str = "en",
 ) -> tuple[RoomRating, list[tuple[RoomRating, str]]]:
     """Run health checks on a single room.

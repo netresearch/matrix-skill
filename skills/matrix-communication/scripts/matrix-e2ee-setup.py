@@ -29,20 +29,20 @@ Options:
 import asyncio
 import getpass
 import json
-import sys
 import os
+import sys
 
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
     check_e2ee_dependencies,
-    load_config,
-    get_store_path,
-    load_credentials,
-    save_credentials,
     delete_credentials,
+    get_store_path,
+    load_config,
+    load_credentials,
     prefer_ipv4,
+    save_credentials,
     suppress_nio_logging,
 )
 
@@ -124,7 +124,7 @@ def show_status(config: dict):
         print(f"  Store:  {get_store_path()}")
     else:
         print("E2EE Status: NOT SET UP")
-        print("")
+        print()
         print("Run setup with your Matrix password:")
         print("  matrix-e2ee-setup.py YOUR_PASSWORD")
 
@@ -195,7 +195,7 @@ def main():
         else:
             print("E2EE already set up!")
             print(f"Device: {creds['device_id']}")
-            print("")
+            print()
             print("To reconfigure, first run: matrix-e2ee-setup.py --logout")
         return
 
@@ -204,7 +204,7 @@ def main():
     if not password:
         print(f"Setting up E2EE device for {config['user_id']}")
         print("Password is used once to create device, then not stored.")
-        print("")
+        print()
         try:
             password = getpass.getpass(f"Matrix password for {config['user_id']}: ")
         except (KeyboardInterrupt, EOFError):
@@ -231,7 +231,7 @@ def main():
         print("E2EE device created successfully!")
         print(f"  Device ID: {result['device_id']}")
         print(f"  User:      {result['user_id']}")
-        print("")
+        print()
         print("You can now use matrix-send-e2ee.py without password.")
         print("The device appears as 'Matrix Skill E2EE' in your sessions.")
 

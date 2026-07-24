@@ -22,7 +22,7 @@ def pretty_bytes(number: float, binary: bool = False, space: bool = True) -> str
     >>> pretty_bytes(1500, binary=True)
     '1.46 KiB'
     """
-    if number != number or number in (float("inf"), float("-inf")):
+    if number != number or number in (float("inf"), float("-inf")):  # noqa: PLR0124  # NaN check: NaN != NaN is True
         raise ValueError(f"Expected a finite number, got: {number!r}")
 
     units = _BIBYTE_UNITS if binary else _BYTE_UNITS

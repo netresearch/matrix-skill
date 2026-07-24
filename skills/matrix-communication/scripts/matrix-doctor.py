@@ -64,11 +64,11 @@ def run_pip_command(pip_cmd: str, args: list[str]) -> tuple[bool, str]:
         full_cmd = [pip_cmd] + args
 
     try:
-        result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=120)  # noqa: PLW1510  # returncode inspected manually below
         return result.returncode == 0, result.stdout + result.stderr
     except subprocess.TimeoutExpired:
         return False, "Command timed out"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
         return False, str(e)
 
 
@@ -82,7 +82,7 @@ def check_matrix_nio_e2ee() -> tuple[bool, str]:
             from importlib.metadata import version
 
             nio_version = version("matrix-nio")
-        except Exception:
+        except Exception:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
             nio_version = "unknown"
 
         # Check for E2EE support by trying to import olm
@@ -136,7 +136,7 @@ def check_config() -> tuple[bool, str, dict]:
         return True, f"Config OK: {config.get('user_id')}", config
     except json.JSONDecodeError as e:
         return False, f"Invalid JSON in config: {e}", {}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
         return False, f"Error reading config: {e}", {}
 
 
@@ -156,7 +156,7 @@ def check_e2ee_setup() -> tuple[bool, str]:
             creds = json.load(f)
         device_id = creds.get("device_id", "unknown")
         return True, f"E2EE device configured: {device_id}"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
         return False, f"Error reading E2EE credentials: {e}"
 
 
@@ -221,7 +221,7 @@ def main():
     checks["libolm"]["message"] = olm_msg
 
     # Check config
-    config_ok, config_msg, config_data = check_config()
+    config_ok, config_msg, _config_data = check_config()
     checks["config"]["ok"] = config_ok
     checks["config"]["message"] = config_msg
 
@@ -231,15 +231,14 @@ def main():
     checks["e2ee_setup"]["message"] = e2ee_msg
 
     # Auto-install if requested
-    if args.install and pip_cmd:
-        if not checks["matrix_nio"]["ok"]:
-            success, messages = install_dependencies(pip_cmd, args.quiet)
-            if success:
-                # Re-check after install
-                nio_ok, nio_msg = check_matrix_nio_e2ee()
-                checks["matrix_nio"]["ok"] = nio_ok
-                checks["matrix_nio"]["message"] = nio_msg
-                checks["install_messages"] = messages
+    if args.install and pip_cmd and not checks["matrix_nio"]["ok"]:
+        success, messages = install_dependencies(pip_cmd, args.quiet)
+        if success:
+            # Re-check after install
+            nio_ok, nio_msg = check_matrix_nio_e2ee()
+            checks["matrix_nio"]["ok"] = nio_ok
+            checks["matrix_nio"]["message"] = nio_msg
+            checks["install_messages"] = messages
 
     # Output
     if args.json:

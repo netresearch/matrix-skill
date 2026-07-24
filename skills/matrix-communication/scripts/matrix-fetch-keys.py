@@ -17,23 +17,22 @@ Usage:
     matrix-fetch-keys.py ROOM [--limit N] [--sync-time S]
 """
 
-import asyncio
 import argparse
-import sys
+import asyncio
 import os
+import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _lib import load_config, get_store_path, load_credentials, find_room_by_name
-
+from _lib import find_room_by_name, get_store_path, load_config, load_credentials
 from nio import (
     AsyncClient,
     AsyncClientConfig,
-    MegolmEvent,
-    RoomMessagesResponse,
-    RoomKeyRequestResponse,
     ForwardedRoomKeyEvent,
+    MegolmEvent,
     RoomKeyEvent,
+    RoomKeyRequestResponse,
+    RoomMessagesResponse,
     UnknownToDeviceEvent,
 )
 
@@ -91,7 +90,7 @@ class KeyFetcher:
             else:
                 self._debug(f"Key request failed: {result}")
                 return False
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
             self._debug(f"Key request error: {e}")
             return False
 

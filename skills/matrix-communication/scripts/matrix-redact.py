@@ -22,8 +22,8 @@ Options:
 """
 
 import json
-import sys
 import os
+import sys
 import time
 import urllib.parse
 
@@ -31,11 +31,11 @@ import urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
+    clean_message,
+    find_room_by_name,
     load_config,
     matrix_request,
     resolve_room_alias,
-    find_room_by_name,
-    clean_message,
 )
 
 sys.stdout.reconfigure(line_buffering=True)
@@ -43,7 +43,7 @@ sys.stderr.reconfigure(line_buffering=True)
 
 
 def redact_message(
-    config: dict, room_id: str, event_id: str, reason: str = None
+    config: dict, room_id: str, event_id: str, reason: str | None = None
 ) -> dict:
     """Redact a message from a Matrix room."""
     txn_id = str(int(time.time() * 1000))

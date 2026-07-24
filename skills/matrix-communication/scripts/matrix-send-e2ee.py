@@ -50,21 +50,21 @@ Examples:
 
 import asyncio
 import json
-import sys
 import os
+import sys
 
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
-    check_e2ee_dependencies,
-    load_config,
-    get_store_path,
-    load_credentials,
-    find_room_in_nio_client,
-    markdown_to_html,
     add_bot_prefix,
+    check_e2ee_dependencies,
     clean_message,
+    find_room_in_nio_client,
+    get_store_path,
+    load_config,
+    load_credentials,
+    markdown_to_html,
     prefer_ipv4,
     suppress_nio_logging,
 )
@@ -89,8 +89,8 @@ async def send_message_e2ee(
     message: str,
     emote: bool = False,
     notice: bool = False,
-    thread_id: str = None,
-    reply_id: str = None,
+    thread_id: str | None = None,
+    reply_id: str | None = None,
     debug: bool = False,
 ) -> dict:
     """Send an E2EE-capable message to a Matrix room.
@@ -275,7 +275,7 @@ async def send_message_e2ee(
                                 f"Keys claim response: {claim_response}",
                                 file=sys.stderr,
                             )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
                 if debug:
                     print(f"Key claiming skipped: {e}", file=sys.stderr)
 
@@ -290,7 +290,7 @@ async def send_message_e2ee(
                             client.verify_device(device)
                             if debug:
                                 print(f"Trusted: {member_id}/{dev_id}", file=sys.stderr)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
                     if debug:
                         print(
                             f"Could not verify devices for {member_id}: {e}",
