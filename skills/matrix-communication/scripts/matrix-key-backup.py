@@ -335,17 +335,16 @@ async def main():
 
         # Save backup key for future use
         backup_key_file = store_path / "backup_key.json"
-        with open(backup_key_file, "w") as f:  # noqa: ASYNC230  # short local key/emoji file write; blocking open acceptable here
-            json.dump(
-                {
-                    "backup_key": base64.b64encode(backup_key).decode(),
-                    "version": backup_info.get("version"),
-                    "algorithm": backup_info.get("algorithm"),
-                },
-                f,
-                indent=2,
-            )
-        os.chmod(backup_key_file, 0o600)
+        backup_key_payload = json.dumps(
+            {
+                "backup_key": base64.b64encode(backup_key).decode(),
+                "version": backup_info.get("version"),
+                "algorithm": backup_info.get("algorithm"),
+            },
+            indent=2,
+        )
+        await asyncio.to_thread(backup_key_file.write_text, backup_key_payload)
+        await asyncio.to_thread(os.chmod, backup_key_file, 0o600)
         print(f"\n✅ Backup key saved to: {backup_key_file}")
 
         if not args.import_keys:
