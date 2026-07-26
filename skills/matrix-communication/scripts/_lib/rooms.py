@@ -3,6 +3,8 @@
 All functions use ONLY stdlib.
 """
 
+import json
+import sys
 import urllib.parse
 
 from _lib.http import matrix_request
@@ -197,3 +199,53 @@ def find_room_in_nio_client(client_rooms: dict, search_term: str) -> str | None:
         return partial_matches[0]
 
     return None
+
+
+def resolve_room_cli(
+    config: dict, room_input: str, json_out: bool = False, debug: bool = False
+) -> str:
+    """Resolve a ROOM CLI argument (ID, alias, or name) to a room ID.
+
+    Shared by scripts that take a ROOM positional argument, so each script
+    doesn't reimplement the same ID/alias/name resolution order and error
+    formatting. Prints a JSON or human-readable error and exits 1 if the
+    room cannot be resolved — callers can assume a valid room ID is
+    returned or the process has already ended.
+    """
+    if room_input.startswith("!"):
+        if debug:
+            print(f"Using room ID directly: {room_input}", file=sys.stderr)
+        return room_input
+
+    if room_input.startswith("#"):
+        try:
+            room_id = resolve_room_alias(config, room_input)
+            if debug:
+                print(f"Resolved alias {room_input} -> {room_id}", file=sys.stderr)
+            return room_id
+        except ValueError as e:
+            if json_out:
+                print(json.dumps({"error": str(e)}))
+            else:
+                print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    found_id, matches = find_room_by_name(config, room_input)
+    if found_id:
+        if debug:
+            print(f"Found room: {found_id}", file=sys.stderr)
+        return found_id
+
+    error_msg = f"Could not find room '{room_input}'"
+    if matches:
+        error_msg += ". Multiple matches found:\n"
+        for m in matches:
+            alias_str = f" ({m['alias']})" if m.get("alias") else ""
+            error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
+    else:
+        error_msg += ". Use 'matrix-rooms.py' to list available rooms."
+    if json_out:
+        print(json.dumps({"error": error_msg}))
+    else:
+        print(f"Error: {error_msg}", file=sys.stderr)
+    sys.exit(1)

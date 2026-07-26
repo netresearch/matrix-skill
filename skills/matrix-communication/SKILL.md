@@ -46,6 +46,12 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py --search ops
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-resolve.py "#room:server"
 
+# Room management (create, invite, promote)
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-create-room.py "Room Name" --alias localpart --invite '@user:server'
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-invite.py ROOM '@user:server'
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-power-level.py ROOM --show
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-power-level.py ROOM --set '@user:server' 50
+
 # E2EE management
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py --status
 MATRIX_PASSWORD="pass" uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py
@@ -68,7 +74,9 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 | React | `matrix-react.py` | (same) |
 | Delete | `matrix-redact.py` | (same) |
 
-Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-e2ee-setup.py`, `matrix-e2ee-verify.py`, `matrix-fetch-keys.py`, `matrix-key-backup.py`, `matrix-doctor.py`.
+Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-create-room.py`, `matrix-invite.py`, `matrix-power-level.py`, `matrix-e2ee-setup.py`, `matrix-e2ee-verify.py`, `matrix-fetch-keys.py`, `matrix-key-backup.py`, `matrix-doctor.py`.
+
+`matrix-power-level.py --set`: `--show` first on rooms you didn't create (see `references/api-reference.md`).
 
 ## Config
 

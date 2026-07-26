@@ -6,6 +6,10 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Added
+
+- matrix-communication: room management — `matrix-create-room.py` (create, with optional alias/topic/initial invites), `matrix-invite.py`, and `matrix-power-level.py` (`--show`/`--get`/`--set`, GET-modify-PUT against `m.room.power_levels`).
+
 ## [1.25.4] - 2026-07-13
 
 ### Fixed
