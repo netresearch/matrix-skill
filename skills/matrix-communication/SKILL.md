@@ -114,5 +114,6 @@ In messages and announcements, state what happened, not how good or careful the 
 - `references/e2ee-guide.md` — E2EE, key recovery, verification
 - `references/messaging-guide.md` — formatting, reactions
 - `references/api-reference.md` — Matrix API
+- `references/hookshot-integration.md` — provisioning webhooks via the matrix-hookshot bridge bot
 - `references/no-editorializing.md` — writing without self-praise / narrating the expected
 - [netresearch/matrix-skill](https://github.com/netresearch/matrix-skill)
