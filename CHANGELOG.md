@@ -6,6 +6,10 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Added
+
+- matrix-communication: `references/hookshot-integration.md` — documents provisioning webhooks via the matrix-hookshot bridge bot (invite, promote to moderator, `!hookshot webhook <name>` command, retrieving the secret URL from the bot's admin DM), discovered via live testing.
+
 ## [1.27.0] - 2026-07-26
 
 ### Added
