@@ -61,6 +61,64 @@ GET /rooms/{roomId}/state/m.room.name
 }
 ```
 
+### Room Management
+
+```bash
+# Create a room
+POST /createRoom
+
+# Body:
+{
+  "name": "Room Name",
+  "preset": "private_chat",
+  "room_alias_name": "localpart",
+  "topic": "Optional topic",
+  "invite": ["@user:server"]
+}
+
+# preset: private_chat (default) | public_chat | trusted_private_chat
+
+# Response:
+{
+  "room_id": "!abc:server"
+}
+
+# Invite a user
+POST /rooms/{roomId}/invite
+
+# Body:
+{
+  "user_id": "@user:server"
+}
+
+# Response: {} on success
+
+# Get power levels (state key is the empty string, hence the trailing slash)
+GET /rooms/{roomId}/state/m.room.power_levels/
+
+# Response (abridged):
+{
+  "users": {"@admin:server": 100},
+  "users_default": 0,
+  "events": {...},
+  "state_default": 50,
+  "ban": 50, "kick": 50, "redact": 50, "invite": 0
+}
+
+# Set power levels — PUT replaces the ENTIRE state event, no server-side
+# merge. Always GET first, mutate the "users" dict, then PUT the whole
+# object back, or every other key (state_default, ban/kick/redact/invite,
+# other users' levels) gets wiped.
+PUT /rooms/{roomId}/state/m.room.power_levels/
+
+# The acting user's own power level must be >= the level being granted
+# and >= the target's current level, or the homeserver returns M_FORBIDDEN.
+
+# On newer room versions the creator has implicit, permanent authority and
+# must NOT appear in "users" — setting the creator's own level is rejected:
+# {"error": "Creator user must not appear in content.users", ...}
+```
+
 ### Messages
 
 ```bash

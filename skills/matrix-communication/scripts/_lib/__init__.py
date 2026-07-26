@@ -44,6 +44,7 @@ from _lib.rooms import (
     get_room_info,
     list_joined_rooms,
     resolve_room_alias,
+    resolve_room_cli,
 )
 
 # Utilities
@@ -79,6 +80,7 @@ __all__ = [
     "prefer_ipv4",
     # Rooms
     "resolve_room_alias",
+    "resolve_room_cli",
     "save_credentials",
     # Formatting
     "shorten_service_urls",

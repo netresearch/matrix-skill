@@ -305,6 +305,43 @@
         "Suggests matrix-key-backup.py with --recovery-key and --import-keys, or matrix-fetch-keys.py",
         "Does not suggest non-E2EE fallback as primary solution"
       ]
+    },
+    {
+      "id": 26,
+      "eval_name": "create-room",
+      "prompt": "Create a new private Matrix room called 'LSB Project' with the alias 'lsb' and invite @jane.doe:netresearch.de.",
+      "expected_output": "Uses matrix-create-room.py with name, --alias, and --invite.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-create-room.py script",
+        "Passes 'LSB Project' as the room name",
+        "Uses --alias lsb",
+        "Uses --invite '@jane.doe:netresearch.de'"
+      ]
+    },
+    {
+      "id": 27,
+      "eval_name": "invite-to-room",
+      "prompt": "Invite @jane.doe:netresearch.de to the ops room.",
+      "expected_output": "Uses matrix-invite.py with room identifier and user ID.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-invite.py script",
+        "Passes 'ops' as room identifier",
+        "Passes '@jane.doe:netresearch.de' as user ID"
+      ]
+    },
+    {
+      "id": 28,
+      "eval_name": "promote-to-moderator",
+      "prompt": "Promote @jane.doe:netresearch.de to moderator in the LSB Project room.",
+      "expected_output": "Uses matrix-power-level.py --set with the user ID and level 50, ideally after checking the room with --show first.",
+      "files": [],
+      "assertions": [
+        "Uses matrix-power-level.py script",
+        "Uses --set '@jane.doe:netresearch.de' 50",
+        "Does not attempt a raw PUT that would drop other power_levels keys"
+      ]
     }
   ]
 }

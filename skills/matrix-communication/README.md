@@ -10,6 +10,7 @@ Send and receive messages in Matrix chat rooms with full E2EE encryption support
 - **Edit Messages** - Modify existing messages
 - **Reactions** - Add emoji reactions (✅ 👍 🚀)
 - **Redact** - Delete messages
+- **Room Management** - Create rooms, invite users, manage power levels
 - **Bot Prefix** - Optional 🤖 prefix for automated messages
 
 ## Installation
