@@ -6,9 +6,11 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [1.27.1] - 2026-07-26
+
 ### Added
 
-- matrix-communication: `references/hookshot-integration.md` — documents provisioning webhooks via the matrix-hookshot bridge bot (invite, promote to moderator, `!hookshot webhook <name>` command, retrieving the secret URL from the bot's admin DM), discovered via live testing.
+- matrix-communication: `references/hookshot-integration.md` — documents provisioning webhooks via the matrix-hookshot bridge bot (invite, promote to moderator, `!hookshot webhook <name>` command, retrieving the secret URL from the bot's admin DM), discovered via live testing ([#61](https://github.com/netresearch/matrix-skill/pull/61)).
 
 ## [1.27.0] - 2026-07-26
 
