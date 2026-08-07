@@ -171,7 +171,18 @@ def check_token(config: dict, offline: bool = False) -> tuple[bool | None, str]:
         return None, "Not verified (--offline): a parseable token is not a working one"
 
     import urllib.error
+    import urllib.parse
     import urllib.request
+
+    # Same guard as matrix-administration's _lib/admin_http._require_http_scheme:
+    # urllib honours file:// and friends, so a homeserver value that is not
+    # http(s) would turn a health check into a local file read.
+    scheme = urllib.parse.urlparse(homeserver).scheme
+    if scheme not in ("http", "https"):
+        return (
+            None,
+            f"Refusing to verify the token against scheme {scheme!r}; only http/https allowed",
+        )
 
     which = "admin_token" if config.get("admin_token") else "access_token"
     req = urllib.request.Request(
@@ -179,7 +190,8 @@ def check_token(config: dict, offline: bool = False) -> tuple[bool | None, str]:
         headers={"Authorization": f"Bearer {token}"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310  # scheme comes from the user's own config
+        # scheme restricted to http/https above
+        with urllib.request.urlopen(req, timeout=5) as resp:
             whoami = json.load(resp)
     except urllib.error.HTTPError as exc:
         body = exc.read().decode(errors="replace")[:200]
