@@ -12,7 +12,25 @@ python3 skills/matrix-communication/scripts/matrix-doctor.py
 
 # Auto-install missing dependencies
 python3 skills/matrix-communication/scripts/matrix-doctor.py --install
+
+# Skip the homeserver call (air-gapped / CI): the token row then reads
+# 'not verified' instead of OK, and the summary says so
+python3 skills/matrix-communication/scripts/matrix-doctor.py --offline
 ```
+
+The `token` row asks the homeserver (`GET /_matrix/client/v3/account/whoami`)
+whether the config token actually works, because a revoked or expired token
+leaves the config file perfectly well-formed. It has three outcomes:
+
+| row | meaning |
+| --- | --- |
+| `[OK] token` | the homeserver accepted it and it belongs to the configured `user_id` |
+| `[FAIL] token` | the homeserver rejected it (HTTP 401 `M_UNKNOWN_TOKEN`) — log in again and replace it |
+| `[??] token` | nothing was verified: no token in the config (normal for E2EE, which uses the credentials store), `--offline`, or the homeserver was unreachable |
+
+`[??]` is deliberately not `OK`: the summary then reads "Checks passed, except
+token — could not be verified" rather than "All checks passed", so a passing
+doctor never implies a working credential.
 
 **Required for E2EE:**
 - `matrix-nio[e2e]` - Matrix client library with encryption support

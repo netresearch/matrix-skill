@@ -9,25 +9,28 @@ Checks all dependencies and configuration, installs missing packages,
 and reports on E2EE setup status.
 
 Usage:
-    matrix-doctor.py [--install] [--json] [--quiet]
+    matrix-doctor.py [--install] [--json] [--quiet] [--offline]
     matrix-doctor.py --help
 
 Options:
     --install   Automatically install missing dependencies
     --json      Output as JSON
     --quiet     Only show errors
+    --offline   Skip the token check's homeserver call (reports 'not verified')
     --help      Show this help
 """
 
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from _lib import http
 from _lib.config import get_config_path
 from _lib.e2ee import get_store_path
 
@@ -140,6 +143,74 @@ def check_config() -> tuple[bool, str, dict]:
         return False, f"Error reading config: {e}", {}
 
 
+def check_token(config: dict, offline: bool = False) -> tuple[bool | None, str]:
+    """Ask the homeserver whether the config token actually works.
+
+    ``check_config`` only proves the file parses. A token that has expired or been
+    revoked leaves the config perfectly well-formed, so without this the doctor
+    reports a healthy setup while every authenticated call returns HTTP 401
+    ``M_UNKNOWN_TOKEN`` - and a green doctor sends you looking for the problem
+    everywhere except at the credential.
+
+    Returns ``(True, msg)`` only when the homeserver confirmed the token,
+    ``(False, msg)`` when it rejected it, and ``(None, msg)`` when there is
+    nothing to verify or the answer is unknown. Unknown is never OK: no token in
+    the config is normal for E2EE use (those scripts authenticate from the
+    credentials store), and an unreachable homeserver is a missing answer, not a
+    passing one.
+    """
+    token = config.get("admin_token") or config.get("access_token")
+    if not token:
+        return (
+            None,
+            "No token in config (normal for E2EE - those scripts use the credentials store)",
+        )
+
+    if not config.get("homeserver"):
+        return None, "No homeserver in config - cannot verify the token"
+    if offline:
+        return None, "Not verified (--offline): a parseable token is not a working one"
+
+    which = "admin_token" if config.get("admin_token") else "access_token"
+
+    # Delegate to _lib.http.matrix_request rather than hand-rolling urllib: it
+    # already carries the http(s) scheme allow-list (urllib honours file://, so
+    # an unguarded homeserver value would turn a health check into a local file
+    # read), the Matrix error parsing, and the IPv4 retry for hosts with dead
+    # IPv6 routes. It has no timeout of its own, and a doctor must not hang on a
+    # black-holed host, so the socket default is scoped around the call.
+    request_config = {**config, "access_token": token}
+    old_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(5)
+    try:
+        whoami = http.matrix_request(request_config, "GET", "/account/whoami")
+    except ValueError as exc:  # scheme rejected by the allow-list
+        return None, str(exc)
+    except Exception as exc:  # noqa: BLE001  # intentional fail-soft: unknown, never reported as OK
+        return None, f"Could not verify {which}: {exc}"
+    finally:
+        socket.setdefaulttimeout(old_timeout)
+
+    if "error" in whoami:
+        errcode = whoami.get("errcode") or ""
+        if errcode in ("M_UNKNOWN_TOKEN", "M_MISSING_TOKEN", "M_FORBIDDEN"):
+            return (
+                False,
+                f"{which} rejected by the homeserver ({errcode}) - log in again to mint a new one",
+            )
+        detail = f"{errcode}: {whoami['error']}" if errcode else str(whoami["error"])
+        return None, f"Could not verify {which} - {detail}"[:200]
+
+    served = whoami.get("user_id", "")
+    configured = config.get("user_id", "")
+    if configured and served and served != configured:
+        return (
+            False,
+            f"{which} is valid but belongs to {served}, while the config says {configured}",
+        )
+    return True, f"{which} valid for {served or configured}"
+
+
 def check_e2ee_setup() -> tuple[bool, str]:
     """Check E2EE device setup status."""
     store_dir = get_store_path()
@@ -189,6 +260,11 @@ def main():
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Only show errors")
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Skip the token check's homeserver call; it then reports 'not verified', never OK",
+    )
 
     args = parser.parse_args()
 
@@ -197,6 +273,7 @@ def main():
         "matrix_nio": {"ok": False, "message": "", "critical": True},
         "libolm": {"ok": False, "message": "", "critical": False},
         "config": {"ok": False, "message": "", "critical": True},
+        "token": {"ok": False, "message": "", "critical": False},
         "e2ee_setup": {"ok": False, "message": "", "critical": False},
     }
 
@@ -221,9 +298,15 @@ def main():
     checks["libolm"]["message"] = olm_msg
 
     # Check config
-    config_ok, config_msg, _config_data = check_config()
+    config_ok, config_msg, config_data = check_config()
     checks["config"]["ok"] = config_ok
     checks["config"]["message"] = config_msg
+
+    # Check the token against the homeserver (a parseable token is not a working one)
+    token_ok, token_msg = check_token(config_data, offline=args.offline)
+    checks["token"]["ok"] = token_ok is True
+    checks["token"]["unknown"] = token_ok is None
+    checks["token"]["message"] = token_msg
 
     # Check E2EE setup
     e2ee_ok, e2ee_msg = check_e2ee_setup()
@@ -255,14 +338,23 @@ def main():
         print("=" * 60)
         print()
 
+    unverified = []
+
     for name, check in checks.items():
         if name == "install_messages":
             continue
 
-        icon = "OK" if check["ok"] else "FAIL"
+        # Three states, not two: a check that could not be answered must not
+        # render as OK (it would claim a verification that never happened) and
+        # must not render as FAIL either (it is not a finding).
+        if check.get("unknown"):
+            icon = "??"
+            unverified.append(name)
+        else:
+            icon = "OK" if check["ok"] else "FAIL"
         critical = " (required)" if check.get("critical") else ""
 
-        if not check["ok"]:
+        if not check["ok"] and not check.get("unknown"):
             all_ok = False
             if check.get("critical"):
                 critical_ok = False
@@ -276,8 +368,12 @@ def main():
     if not args.quiet:
         print("=" * 60)
 
-    if all_ok:
+    if all_ok and not unverified:
         print("All checks passed! Matrix Skill is ready to use.")
+    elif all_ok:
+        print(
+            f"Checks passed, except {', '.join(unverified)} - could not be verified (see above)."
+        )
     elif critical_ok:
         print("Core functionality OK. Some optional features may be limited.")
     else:
@@ -292,6 +388,8 @@ def main():
             print("  - Set up Matrix: see SKILL.md Setup Guide")
         if not checks["e2ee_setup"]["ok"] and checks["config"]["ok"]:
             print("  - Run: matrix-e2ee-setup.py")
+        if not checks["token"]["ok"] and not checks["token"].get("unknown"):
+            print("  - Token rejected: log in again and replace it in the config")
 
     sys.exit(0 if critical_ok else 1)
 

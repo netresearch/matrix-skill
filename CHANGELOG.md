@@ -6,6 +6,30 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Fixed
+
+- **`matrix-doctor.py` reported a healthy setup for a token the homeserver
+  rejects.** `check_config` only proved that `config.json` exists, parses, and
+  carries `homeserver` and `user_id` — it never asked the homeserver anything, so
+  an expired or revoked token still produced `[OK] config` and `All checks
+  passed! Matrix Skill is ready to use.` while every authenticated call returned
+  HTTP 401 `M_UNKNOWN_TOKEN`. A green doctor beside a 401 sends you looking for
+  the problem everywhere except at the credential; worse, when the doctor's
+  verdict stands in as evidence that something is fine, a dead token reads as
+  "nothing to see" instead of "could not verify".
+
+  A new `token` row asks `GET /_matrix/client/v3/account/whoami` and reports
+  three states: accepted (and belonging to the configured `user_id`), rejected,
+  or not verified. Not-verified renders as `[??]`, never `OK` — no token in the
+  config is normal for E2EE use, `--offline` skips the call, and an unreachable
+  homeserver is a missing answer. The summary line now names what it could not
+  verify instead of claiming everything passed.
+
+### Added
+
+- **`matrix-doctor.py --offline`** skips the token check's homeserver call for
+  air-gapped or CI runs; the row then reads "not verified" rather than OK.
+
 ## [1.27.1] - 2026-07-26
 
 ### Added

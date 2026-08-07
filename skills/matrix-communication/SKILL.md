@@ -61,6 +61,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --recovery-key "EsTj ...
 
 # Health check (uses python3, not uv run)
 python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
+python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --offline   # no homeserver call; token reads 'not verified'
 ```
 
 ## Script Selection
@@ -93,6 +94,7 @@ Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-create-room.py`, `matrix-
 | `[Unable to decrypt]` | First: `uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-fetch-keys.py ROOM --sync-time 60` (requests keys from other devices, no recovery key needed); fallback: `uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --recovery-key "..." --import-keys` |
 | `libolm not found` | Linux: `apt install libolm-dev`; macOS 26+ unsupported (see `references/setup-guide.md`) |
 | `matrix-nio not found` | `python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install` |
+| `M_UNKNOWN_TOKEN` / HTTP 401 | The config token expired or was revoked. `matrix-doctor.py` reports it as `[FAIL] token`; log in again and replace it in the config |
 | `Invalid password` | Use env var: `MATRIX_PASSWORD="pass" uv run ...` |
 | `signature failed` | Dedicated device via `matrix-e2ee-setup.py` |
 
