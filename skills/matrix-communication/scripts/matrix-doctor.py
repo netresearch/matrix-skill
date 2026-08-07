@@ -23,12 +23,14 @@ Options:
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from _lib import http
 from _lib.config import get_config_path
 from _lib.e2ee import get_store_path
 
@@ -164,54 +166,40 @@ def check_token(config: dict, offline: bool = False) -> tuple[bool | None, str]:
             "No token in config (normal for E2EE - those scripts use the credentials store)",
         )
 
-    homeserver = str(config.get("homeserver", "")).rstrip("/")
-    if not homeserver:
+    if not config.get("homeserver"):
         return None, "No homeserver in config - cannot verify the token"
     if offline:
         return None, "Not verified (--offline): a parseable token is not a working one"
 
-    import urllib.error
-    import urllib.parse
-    import urllib.request
-
-    # Same guard as matrix-administration's _lib/admin_http._require_http_scheme:
-    # urllib honours file:// and friends, so a homeserver value that is not
-    # http(s) would turn a health check into a local file read.
-    scheme = urllib.parse.urlparse(homeserver).scheme
-    if scheme not in ("http", "https"):
-        return (
-            None,
-            f"Refusing to verify the token against scheme {scheme!r}; only http/https allowed",
-        )
-
     which = "admin_token" if config.get("admin_token") else "access_token"
-    req = urllib.request.Request(
-        f"{homeserver}/_matrix/client/v3/account/whoami",
-        headers={"Authorization": f"Bearer {token}"},
-    )
+
+    # Delegate to _lib.http.matrix_request rather than hand-rolling urllib: it
+    # already carries the http(s) scheme allow-list (urllib honours file://, so
+    # an unguarded homeserver value would turn a health check into a local file
+    # read), the Matrix error parsing, and the IPv4 retry for hosts with dead
+    # IPv6 routes. It has no timeout of its own, and a doctor must not hang on a
+    # black-holed host, so the socket default is scoped around the call.
+    request_config = {**config, "access_token": token}
+    old_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(5)
     try:
-        # scheme restricted to http/https above
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            whoami = json.load(resp)
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")[:200]
-        errcode = ""
-        try:
-            errcode = json.loads(body).get("errcode", "")
-        except (json.JSONDecodeError, AttributeError):
-            pass
-        if exc.code in (401, 403):
-            hint = f" ({errcode})" if errcode else ""
+        whoami = http.matrix_request(request_config, "GET", "/account/whoami")
+    except ValueError as exc:  # scheme rejected by the allow-list
+        return None, str(exc)
+    except Exception as exc:  # noqa: BLE001  # intentional fail-soft: unknown, never reported as OK
+        return None, f"Could not verify {which}: {exc}"
+    finally:
+        socket.setdefaulttimeout(old_timeout)
+
+    if "error" in whoami:
+        errcode = whoami.get("errcode") or ""
+        if errcode in ("M_UNKNOWN_TOKEN", "M_MISSING_TOKEN", "M_FORBIDDEN"):
             return (
                 False,
-                f"{which} rejected by the homeserver: HTTP {exc.code}{hint} - log in again to mint a new one",
+                f"{which} rejected by the homeserver ({errcode}) - log in again to mint a new one",
             )
-        return (
-            None,
-            f"Could not verify {which}: HTTP {exc.code} {errcode or body}".strip(),
-        )
-    except Exception as exc:  # noqa: BLE001  # intentional fail-soft: unknown, never reported as OK
-        return None, f"Could not reach {homeserver} to verify {which}: {exc}"
+        detail = f"{errcode}: {whoami['error']}" if errcode else str(whoami["error"])
+        return None, f"Could not verify {which} - {detail}"[:200]
 
     served = whoami.get("user_id", "")
     configured = config.get("user_id", "")
