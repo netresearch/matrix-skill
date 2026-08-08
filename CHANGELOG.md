@@ -6,6 +6,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [1.28.0] - 2026-08-08
+
 ### Fixed
 
 - **`matrix-doctor.py` reported a healthy setup for a token the homeserver
@@ -98,7 +100,6 @@ For the canonical narrative version of each release (rewritten after CI publishe
 ### Fixed
 
 ### Removed
-
 
 ## [1.23.0] - 2026-05-15
 
