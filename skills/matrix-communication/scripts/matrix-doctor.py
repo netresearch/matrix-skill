@@ -16,7 +16,7 @@ Options:
     --install   Automatically install missing dependencies
     --json      Output as JSON
     --quiet     Only show errors
-    --offline   Skip the token check's homeserver call (reports 'not verified')
+    --offline   Skip the homeserver calls (token and e2ee_setup read 'not verified')
     --help      Show this help
 """
 
@@ -143,51 +143,33 @@ def check_config() -> tuple[bool, str, dict]:
         return False, f"Error reading config: {e}", {}
 
 
-def check_token(config: dict, offline: bool = False) -> tuple[bool | None, str]:
-    """Ask the homeserver whether the config token actually works.
+def _verify_credential(
+    config: dict, token: str, label: str, remedy: str
+) -> tuple[bool | None, str, str | None]:
+    """Ask the homeserver whether one credential works.
 
-    ``check_config`` only proves the file parses. A token that has expired or been
-    revoked leaves the config perfectly well-formed, so without this the doctor
-    reports a healthy setup while every authenticated call returns HTTP 401
-    ``M_UNKNOWN_TOKEN`` - and a green doctor sends you looking for the problem
-    everywhere except at the credential.
+    Returns ``(state, message, device_id)``. ``state`` is ``True`` when the
+    homeserver confirmed the token, ``False`` when it rejected it or it serves a
+    different account, and ``None`` when the answer could not be obtained.
+    ``device_id`` is only set on ``True`` - it is the device the homeserver
+    attributes the token to, which is not necessarily the one the caller expects.
 
-    Returns ``(True, msg)`` only when the homeserver confirmed the token,
-    ``(False, msg)`` when it rejected it, and ``(None, msg)`` when there is
-    nothing to verify or the answer is unknown. Unknown is never OK: no token in
-    the config is normal for E2EE use (those scripts authenticate from the
-    credentials store), and an unreachable homeserver is a missing answer, not a
-    passing one.
+    Delegate to _lib.http.matrix_request rather than hand-rolling urllib: it
+    already carries the http(s) scheme allow-list (urllib honours file://, so
+    an unguarded homeserver value would turn a health check into a local file
+    read), the Matrix error parsing, and the IPv4 retry for hosts with dead
+    IPv6 routes. It has no timeout of its own, and a doctor must not hang on a
+    black-holed host, so the socket default is scoped around the call.
     """
-    token = config.get("admin_token") or config.get("access_token")
-    if not token:
-        return (
-            None,
-            "No token in config (normal for E2EE - those scripts use the credentials store)",
-        )
-
-    if not config.get("homeserver"):
-        return None, "No homeserver in config - cannot verify the token"
-    if offline:
-        return None, "Not verified (--offline): a parseable token is not a working one"
-
-    which = "admin_token" if config.get("admin_token") else "access_token"
-
-    # Delegate to _lib.http.matrix_request rather than hand-rolling urllib: it
-    # already carries the http(s) scheme allow-list (urllib honours file://, so
-    # an unguarded homeserver value would turn a health check into a local file
-    # read), the Matrix error parsing, and the IPv4 retry for hosts with dead
-    # IPv6 routes. It has no timeout of its own, and a doctor must not hang on a
-    # black-holed host, so the socket default is scoped around the call.
     request_config = {**config, "access_token": token}
     old_timeout = socket.getdefaulttimeout()
     socket.setdefaulttimeout(5)
     try:
         whoami = http.matrix_request(request_config, "GET", "/account/whoami")
     except ValueError as exc:  # scheme rejected by the allow-list
-        return None, str(exc)
+        return None, str(exc), None
     except Exception as exc:  # noqa: BLE001  # intentional fail-soft: unknown, never reported as OK
-        return None, f"Could not verify {which}: {exc}"
+        return None, f"Could not verify {label}: {exc}", None
     finally:
         socket.setdefaulttimeout(old_timeout)
 
@@ -196,23 +178,99 @@ def check_token(config: dict, offline: bool = False) -> tuple[bool | None, str]:
         if errcode in ("M_UNKNOWN_TOKEN", "M_MISSING_TOKEN", "M_FORBIDDEN"):
             return (
                 False,
-                f"{which} rejected by the homeserver ({errcode}) - log in again to mint a new one",
+                f"{label} rejected by the homeserver ({errcode}) - {remedy}",
+                None,
             )
         detail = f"{errcode}: {whoami['error']}" if errcode else str(whoami["error"])
-        return None, f"Could not verify {which} - {detail}"[:200]
+        return None, f"Could not verify {label} - {detail}"[:200], None
 
     served = whoami.get("user_id", "")
     configured = config.get("user_id", "")
     if configured and served and served != configured:
         return (
             False,
-            f"{which} is valid but belongs to {served}, while the config says {configured}",
+            f"{label} is valid but belongs to {served}, while the config says {configured}",
+            None,
         )
-    return True, f"{which} valid for {served or configured}"
+    return (
+        True,
+        f"{label} valid for {served or configured}",
+        whoami.get("device_id"),
+    )
 
 
-def check_e2ee_setup() -> tuple[bool, str]:
-    """Check E2EE device setup status."""
+def check_token(config: dict, offline: bool = False) -> tuple[bool | None, str]:
+    """Ask the homeserver whether the config tokens actually work.
+
+    ``check_config`` only proves the file parses. A token that has expired or been
+    revoked leaves the config perfectly well-formed, so without this the doctor
+    reports a healthy setup while every authenticated call returns HTTP 401
+    ``M_UNKNOWN_TOKEN`` - and a green doctor sends you looking for the problem
+    everywhere except at the credential.
+
+    Every token in the config is checked, not just the first one found. The two
+    serve different scripts - ``synapse-*`` authenticates with ``admin_token``,
+    the non-E2EE ``matrix-*.py`` scripts read ``access_token`` - so verifying one
+    says nothing about the other.
+
+    Returns ``(True, msg)`` only when the homeserver confirmed every token
+    present, ``(False, msg)`` when it rejected any of them, and ``(None, msg)``
+    when there is nothing to verify or an answer is missing. Unknown is never OK:
+    no token in the config is normal for E2EE use (those scripts authenticate
+    from the credentials store), and an unreachable homeserver is a missing
+    answer, not a passing one.
+    """
+    tokens = [
+        (label, config[label])
+        for label in ("admin_token", "access_token")
+        if config.get(label)
+    ]
+    if not tokens:
+        return (
+            None,
+            "No token in config (normal for E2EE - those scripts use the credentials store)",
+        )
+
+    if not config.get("homeserver"):
+        return None, "No homeserver in config - cannot verify the tokens"
+    if offline:
+        return None, "Not verified (--offline): a parseable token is not a working one"
+
+    results = [
+        _verify_credential(
+            config,
+            token,
+            label,
+            "mint a new token for the skill and replace it in the config - "
+            "never copy one out of a client you use",
+        )
+        for label, token in tokens
+    ]
+    message = "; ".join(msg for _, msg, _ in results)
+
+    if any(state is False for state, _, _ in results):
+        return False, message
+    if all(state is True for state, _, _ in results):
+        return True, message
+    return None, message
+
+
+def check_e2ee_setup(config: dict, offline: bool = False) -> tuple[bool | None, str]:
+    """Check the E2EE credential - against the homeserver, not just the file.
+
+    Reading ``credentials.json`` proves a device was set up at some point. It does
+    not prove the device still exists: log the device out in Element, or delete it
+    from the session list, and the file is unchanged while every ``*-e2ee.py``
+    script starts failing. The failure surfaces as ``Room not found`` (a rejected
+    token yields an empty joined-rooms list), which points nowhere near the
+    credential - so the file check alone is exactly the trap ``check_token``
+    exists to close, on the credential the E2EE scripts actually authenticate with.
+
+    The device comparison also catches the reverse mistake: pasting another
+    client's access token into ``credentials.json``. The token verifies, but it
+    belongs to that client's device - and driving one device from two clients
+    breaks decryption in both.
+    """
     store_dir = get_store_path()
     creds_file = store_dir / "credentials.json"
 
@@ -225,10 +283,43 @@ def check_e2ee_setup() -> tuple[bool, str]:
     try:
         with open(creds_file) as f:
             creds = json.load(f)
-        device_id = creds.get("device_id", "unknown")
-        return True, f"E2EE device configured: {device_id}"
     except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
         return False, f"Error reading E2EE credentials: {e}"
+
+    device_id = creds.get("device_id", "unknown")
+    token = creds.get("access_token")
+
+    if not token:
+        return (
+            False,
+            f"E2EE credentials for {device_id} carry no access_token - run matrix-e2ee-setup.py",
+        )
+    if not config.get("homeserver"):
+        return None, f"E2EE device {device_id} configured - no homeserver to verify it"
+    if offline:
+        return None, f"E2EE device {device_id} configured - not verified (--offline)"
+
+    state, message, served_device = _verify_credential(
+        config,
+        token,
+        f"E2EE credential ({device_id})",
+        "the device is gone - run matrix-e2ee-setup.py to mint a new one, "
+        "then matrix-key-backup.py --import-keys to restore the room keys",
+    )
+    if state is not True:
+        return state, message
+
+    if served_device and served_device != device_id:
+        return (
+            False,
+            (
+                f"E2EE credential belongs to device {served_device}, but credentials.json "
+                f"says {device_id} - this is another client's token; run matrix-e2ee-setup.py "
+                "for a device of your own"
+            ),
+        )
+
+    return True, f"E2EE device confirmed by the homeserver: {device_id}"
 
 
 def install_dependencies(pip_cmd: str, quiet: bool = False) -> tuple[bool, list[str]]:
@@ -263,7 +354,7 @@ def main():
     parser.add_argument(
         "--offline",
         action="store_true",
-        help="Skip the token check's homeserver call; it then reports 'not verified', never OK",
+        help="Skip the homeserver calls; the token and E2EE checks then report 'not verified', never OK",
     )
 
     args = parser.parse_args()
@@ -308,9 +399,10 @@ def main():
     checks["token"]["unknown"] = token_ok is None
     checks["token"]["message"] = token_msg
 
-    # Check E2EE setup
-    e2ee_ok, e2ee_msg = check_e2ee_setup()
-    checks["e2ee_setup"]["ok"] = e2ee_ok
+    # Check E2EE setup (the stored credential, against the homeserver)
+    e2ee_ok, e2ee_msg = check_e2ee_setup(config_data, offline=args.offline)
+    checks["e2ee_setup"]["ok"] = e2ee_ok is True
+    checks["e2ee_setup"]["unknown"] = e2ee_ok is None
     checks["e2ee_setup"]["message"] = e2ee_msg
 
     # Auto-install if requested
@@ -386,10 +478,17 @@ def main():
             print("  - Run: matrix-doctor.py --install")
         if not checks["config"]["ok"]:
             print("  - Set up Matrix: see SKILL.md Setup Guide")
-        if not checks["e2ee_setup"]["ok"] and checks["config"]["ok"]:
+        if (
+            not checks["e2ee_setup"]["ok"]
+            and not checks["e2ee_setup"].get("unknown")
+            and checks["config"]["ok"]
+        ):
             print("  - Run: matrix-e2ee-setup.py")
         if not checks["token"]["ok"] and not checks["token"].get("unknown"):
-            print("  - Token rejected: log in again and replace it in the config")
+            print(
+                "  - Token rejected: mint a new one for the skill "
+                "(matrix-e2ee-setup.py), never copy one out of a client you use"
+            )
 
     sys.exit(0 if critical_ok else 1)
 

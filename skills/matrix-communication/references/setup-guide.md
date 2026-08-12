@@ -86,6 +86,19 @@ chmod 600 ~/.config/matrix/config.json
 
 ### Step 5: Set up E2EE device (recommended)
 
+> **⛔ Do not shortcut this step with a token you already have.**
+>
+> Copying an access token out of Element (or any other running client) looks like
+> it works — the token is valid, calls succeed, messages send. It also hijacks
+> that client's `device_id`. Encryption state is per device and lives in each
+> client's local store, so the two now hold different session keys for the same
+> identity: the client starts showing `[Unable to decrypt]` for its own messages
+> and only recovers after a logout/login cycle.
+>
+> There is no warning at the moment you paste, and the symptom shows up in the
+> other client, not here. The password below is used once and not stored; it buys
+> a device that belongs to the skill alone.
+
 **Three ways to provide the password:**
 
 **Option A: Environment variable (recommended for agents)**
@@ -110,7 +123,10 @@ This creates a dedicated "Matrix Skill E2EE" device. The password is used once a
 
 ### Step 6: Add access token to config
 
-After E2EE setup, copy the access token to enable non-E2EE scripts:
+After E2EE setup, copy the access token to enable non-E2EE scripts. The source is
+the skill's own `credentials.json` — the command below reads it from there. Never
+substitute a token from a client you use; the token in the config is the one most
+likely to be copied around later.
 
 ```bash
 ACCESS_TOKEN=$(python3 -c "import json; print(json.load(open('$HOME/.local/share/matrix-skill/store/credentials.json'))['access_token'])")

@@ -14,6 +14,20 @@ allowed-tools: Bash(python3:*) Bash(uv:*) Read Write
 
 Matrix rooms: send, read, download media. **Always use `*-e2ee.py` scripts.**
 
+> ## ⛔ NEVER reuse a running client's access token
+>
+> Not from Element, Element X, FluffyChat or a browser session. Not in
+> `config.json`, not in `credentials.json`, not "just to test".
+>
+> A token carries a `device_id` and E2EE state is per device, held in each
+> client's local store. Two clients on one device cannot read each other's
+> messages. **The victim is the client you use** — it shows `[Unable to decrypt]`
+> for its own messages until logged out and back in. Nothing fails at the moment
+> you paste.
+>
+> `matrix-e2ee-setup.py` mints a device of its own. No password → no E2EE, and
+> that is the answer. `matrix-doctor.py` fails `e2ee_setup` on a foreign device.
+
 **Bash `!` rule:** Prepend `set +H &&` when arguments contain `!`
 
 ## Quick Reference
@@ -83,23 +97,28 @@ Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-create-room.py`, `matrix-
 
 `~/.config/matrix/config.json` — required: `homeserver`, `user_id`. Optional: `access_token`
 
+`access_token` is for the non-E2EE scripts only. Copy it from the skill's own
+`credentials.json` (setup guide, Step 6) — never from a client you use.
+
 ## Error Handling
 
 | Error | Solution |
 |-------|----------|
 | `M_FORBIDDEN` | Join room first in Element |
-| `M_UNKNOWN_TOKEN` | Get new token from Element |
+| `M_UNKNOWN_TOKEN` | `matrix-e2ee-setup.py` for a device of your own — do NOT copy a token out of Element |
 | `M_LIMIT_EXCEEDED` | Wait and retry |
 | `Could not find room` | `matrix-rooms.py` to list rooms |
 | `[Unable to decrypt]` | First: `uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-fetch-keys.py ROOM --sync-time 60` (requests keys from other devices, no recovery key needed); fallback: `uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --recovery-key "..." --import-keys` |
 | `libolm not found` | Linux: `apt install libolm-dev`; macOS 26+ unsupported (see `references/setup-guide.md`) |
 | `matrix-nio not found` | `python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install` |
-| `M_UNKNOWN_TOKEN` / HTTP 401 | The config token expired or was revoked. `matrix-doctor.py` reports it as `[FAIL] token`; log in again and replace it in the config |
+| `M_UNKNOWN_TOKEN` / HTTP 401 | The config token expired or was revoked. `matrix-doctor.py` reports it as `[FAIL] token`; mint a new one for the skill and replace it in the config |
+| `Room not found` on a room you are in | The E2EE credential is dead — a rejected token yields an empty joined-rooms list. `matrix-doctor.py` reports it as `[FAIL] e2ee_setup` |
 | `Invalid password` | Use env var: `MATRIX_PASSWORD="pass" uv run ...` |
 | `signature failed` | Dedicated device via `matrix-e2ee-setup.py` |
 
 ## Common Mistakes
 
+- **Reusing a client's access token** — breaks decryption in that client, see the warning above. Always `matrix-e2ee-setup.py`
 - **Using non-E2EE scripts** for encrypted rooms — always use `*-e2ee.py`
 - **Forgetting `set +H`** — `!` in messages gets mangled by bash
 - **Skipping `--import-keys`** — key backup doesn't save without it
