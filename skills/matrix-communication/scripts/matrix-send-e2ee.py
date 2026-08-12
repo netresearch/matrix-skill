@@ -66,6 +66,7 @@ from _lib import (
     load_credentials,
     markdown_to_html,
     prefer_ipv4,
+    restore_login_checked,
     suppress_nio_logging,
 )
 
@@ -153,11 +154,7 @@ async def send_message_e2ee(
 
     try:
         # Restore session from stored credentials
-        client.restore_login(
-            user_id=config["user_id"],
-            device_id=device_id,
-            access_token=access_token,
-        )
+        restore_login_checked(client, config["user_id"], device_id, access_token)
         if debug:
             print("Session restored", file=sys.stderr)
 

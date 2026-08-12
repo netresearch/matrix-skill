@@ -34,6 +34,7 @@ from _lib import (
     load_config,
     load_credentials,
     prefer_ipv4,
+    restore_login_checked,
     suppress_nio_logging,
 )
 
@@ -80,6 +81,25 @@ class VerificationHandler:
     def _debug(self, msg):
         if self.debug:
             print(f"[DEBUG] {msg}")
+
+    def _report_accept_failure(self, exc: Exception) -> None:
+        """Explain a failed accept instead of hiding it behind --debug.
+
+        nio raises "Key verification with the transaction id ... does not exist"
+        when it has no keys for the other device: without them it cannot build
+        the SAS object, so the transaction it is asked about was never created.
+        The message names the transaction, which is the one thing that is not
+        the problem.
+        """
+        message = str(exc)
+        print(f"\n❌ Could not accept the verification: {message}")
+        if "does not exist" in message:
+            print(
+                "   This device has no keys for the other one, so no verification "
+                "could be built for it.\n"
+                "   Run matrix-e2ee-verify.py --list to check the device is visible, "
+                "and see the E2EE guide on querying keys for a fresh store."
+            )
 
     async def handle_raw_event(self, event):
         """Handle raw to-device events."""
@@ -130,7 +150,7 @@ class VerificationHandler:
                 await self.client.accept_key_verification(event.transaction_id)
                 print("Accepted, waiting for emoji exchange...")
             except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-                self._debug(f"Error accepting: {e}")
+                self._report_accept_failure(e)
 
         elif isinstance(event, KeyVerificationStart):
             if self.sas_accepted:
@@ -145,7 +165,7 @@ class VerificationHandler:
                 # reveals it after the initiator's key, so the initiator can
                 # check that commitment. Sending it early breaks the exchange.
             except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-                self._debug(f"Error accepting: {e}")
+                self._report_accept_failure(e)
 
         elif isinstance(event, KeyVerificationAccept):
             print("Other device accepted")
@@ -416,7 +436,7 @@ async def run_verification(
     client.add_to_device_callback(handler.handle_event, KeyVerificationEvent)
 
     try:
-        client.restore_login(config["user_id"], device_id, access_token)
+        restore_login_checked(client, config["user_id"], device_id, access_token)
         if client.store:
             client.load_store()
 
@@ -427,6 +447,23 @@ async def run_verification(
 
         print("Syncing...")
         await client.sync(timeout=10000)
+
+        # Make sure we hold device keys for our own account before verifying.
+        # nio builds the SAS object from the other device's keys, so a device it
+        # has never queried cannot be verified - accept_key_verification() then
+        # fails with "Key verification with the transaction id ... does not
+        # exist", which points at the transaction and not at the missing device.
+        #
+        # nio only queries users it has marked as changed, and a store created
+        # moments ago has marked nobody: keys_query() answers "No key query
+        # required" while the device store is empty. Mark ourselves explicitly.
+        client.olm.add_changed_users({config["user_id"]})
+        query = await client.keys_query()
+        if debug:
+            print(f"[DEBUG] Keys query: {type(query).__name__}")
+        known = len(list(client.device_store.active_user_devices(config["user_id"])))
+        if debug:
+            print(f"[DEBUG] Known devices for this account: {known}")
 
         # Listen-only mode: wait for Element to initiate verification instead of
         # sending an outgoing request. Use when Element shows "Verify from other device"
@@ -589,7 +626,7 @@ async def list_devices(config: dict) -> list:
     )
 
     try:
-        client.restore_login(config["user_id"], device_id, access_token)
+        restore_login_checked(client, config["user_id"], device_id, access_token)
 
         resp = await client.devices()
         if isinstance(resp, DevicesResponse):
