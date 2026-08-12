@@ -35,7 +35,40 @@ uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py --status
 - Proper cross-signing setup
 - Avoids "signature verification failed" errors
 
-**Access token fallback (not recommended):** Using `access_token` from config reuses Element's device, causing key sync issues and verification problems. Only use if password-based setup isn't possible.
+### ⛔ Never point the E2EE scripts at another client's token
+
+There is no access-token fallback. Earlier revisions of this guide offered one
+"if password-based setup isn't possible" — that advice was wrong and is retracted.
+
+A Matrix access token is bound to a `device_id`, and E2EE state is per device:
+the olm identity and the megolm session keys live in each client's own local
+store, never on the server in usable form. Point matrix-nio at Element's token
+and two independent clients now act as one device. Neither can read what the
+other encrypts.
+
+What that looks like in practice:
+
+- Element shows `[Unable to decrypt]` **for messages you just sent yourself**
+- restarting Element appears to fix it (it refetches from key backup), then it
+  returns
+- other people in the room may see your device as changed or unverified
+- nothing fails at the moment you paste the token — the writes succeed
+
+Recovery is a logout of the affected client and a fresh login, plus a key-backup
+restore. That is disruptive on a client you actually use.
+
+The correct move in every case, including "I already have a token":
+
+```bash
+MATRIX_PASSWORD="YOUR_PASSWORD" uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py
+```
+
+No password available? Then E2EE is not set up — say so and stop. A borrowed
+token is not a workaround, it is damage to someone's running session.
+
+`matrix-doctor.py` enforces this: it asks the homeserver which device the stored
+credential belongs to and fails `e2ee_setup` when that is not the device in
+`credentials.json`.
 
 ## E2EE Script Usage
 
