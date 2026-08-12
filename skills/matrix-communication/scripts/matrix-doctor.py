@@ -312,9 +312,11 @@ def check_e2ee_setup(config: dict, offline: bool = False) -> tuple[bool | None, 
     if served_device and served_device != device_id:
         return (
             False,
-            f"E2EE credential belongs to device {served_device}, but credentials.json "
-            f"says {device_id} - this is another client's token; run matrix-e2ee-setup.py "
-            "for a device of your own",
+            (
+                f"E2EE credential belongs to device {served_device}, but credentials.json "
+                f"says {device_id} - this is another client's token; run matrix-e2ee-setup.py "
+                "for a device of your own"
+            ),
         )
 
     return True, f"E2EE device confirmed by the homeserver: {device_id}"
