@@ -7,9 +7,14 @@
 Fetch and decrypt keys from Matrix key backup using recovery key or passphrase.
 
 Usage:
+    matrix-key-backup.py --import-keys                     # Reuse the stored backup key
     matrix-key-backup.py --recovery-key "EsTj qRGp ..."   # Use recovery key
     matrix-key-backup.py --passphrase "your passphrase"   # Use passphrase
     matrix-key-backup.py --status                          # Check backup status
+
+The first form works once a recovery key or passphrase has been used at least
+once: that run stores the decrypted backup key in the E2EE store directory, and
+later runs reuse it as long as it matches the backup version on the server.
 """
 
 import argparse
@@ -29,6 +34,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from nio import AsyncClient, AsyncClientConfig
+from nio.crypto import InboundGroupSession
 
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
@@ -172,10 +178,13 @@ def decrypt_backup_session(encrypted: dict, backup_key: bytes) -> dict:
     ephemeral_public = X25519PublicKey.from_public_bytes(ephemeral)
     shared_secret = private_key.exchange(ephemeral_public)
 
-    # Derive keys using HKDF
+    # Derive keys using HKDF. The spec splits the 80 bytes 32/32/16: AES key,
+    # MAC key, and the AES-CBC IV. The IV is derived here, it is NOT carried in
+    # the ciphertext - reading it off the front of the ciphertext decrypts the
+    # first block to garbage and usually dies on the padding check.
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
-        length=80,  # 32 AES + 32 HMAC + 16 IV (but IV comes from first 16 bytes separately)
+        length=80,
         salt=b"",
         info=b"",
     )
@@ -183,32 +192,79 @@ def decrypt_backup_session(encrypted: dict, backup_key: bytes) -> dict:
 
     aes_key = derived[:32]
     mac_key = derived[32:64]
-    # IV is first 16 bytes of ciphertext? No, let's check...
-    # Actually for m.megolm_backup.v1.curve25519-aes-sha2:
-    # The ciphertext includes the IV at the start
+    iv = derived[64:80]
 
-    # Verify MAC over ciphertext
+    # Verify the MAC. The spec computes it over the ciphertext and truncates to
+    # 8 bytes, so compare only as many bytes as the backup carries.
     h = crypto_hmac.HMAC(mac_key, hashes.SHA256())
     h.update(ciphertext)
-    expected_mac = h.finalize()
+    spec_mac = h.finalize()
 
-    if mac != expected_mac[: len(mac)]:  # MAC might be truncated
-        raise ValueError("Session MAC verification failed")
-
-    # The first 16 bytes of ciphertext are the IV
-    iv = ciphertext[:16]
-    actual_ciphertext = ciphertext[16:]
+    if mac != spec_mac[: len(mac)]:
+        # libolm's olm_pk_encrypt MACs the empty string rather than the
+        # ciphertext. Backups written by any libolm-based client - which is
+        # most of them, Element included - carry that MAC, so a strict check
+        # rejects every session in the backup rather than a tampered one.
+        # Accept exactly that one alternative and nothing else.
+        h = crypto_hmac.HMAC(mac_key, hashes.SHA256())
+        h.update(b"")
+        if mac != h.finalize()[: len(mac)]:
+            raise ValueError("Session MAC verification failed")
 
     # Decrypt using AES-CBC (not CTR!)
     cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv))
     decryptor = cipher.decryptor()
-    padded_plaintext = decryptor.update(actual_ciphertext) + decryptor.finalize()
+    padded_plaintext = decryptor.update(ciphertext) + decryptor.finalize()
 
     # Remove PKCS7 padding
     pad_len = padded_plaintext[-1]
     plaintext = padded_plaintext[:-pad_len]
 
     return json.loads(plaintext)
+
+
+def load_stored_backup_key(store_path, backup_info: dict) -> bytes | None:
+    """Return the backup key a previous run stored, if it fits this backup.
+
+    A successful SSSS decryption writes the key to ``backup_key.json`` "for
+    future use", and until now nothing read it back: every run demanded the
+    recovery key again. Two things have to line up before the stored key may be
+    used - the backup version it was saved for, and the public key the server
+    publishes for the current backup. A rotated backup leaves a stale file
+    behind, and a key that decrypts nothing is worse than asking for the
+    recovery key.
+    """
+    key_file = store_path / "backup_key.json"
+    if not key_file.exists():
+        return None
+
+    try:
+        stored = json.loads(key_file.read_text())
+        key = base64.b64decode(stored["backup_key"])
+    except (OSError, ValueError, KeyError) as e:
+        print(f"Ignoring {key_file}: {e}")
+        return None
+
+    if str(stored.get("version")) != str(backup_info.get("version")):
+        print(
+            f"Ignoring stored backup key: saved for version {stored.get('version')}, "
+            f"server is on {backup_info.get('version')}"
+        )
+        return None
+
+    try:
+        public = X25519PrivateKey.from_private_bytes(key).public_key()
+        derived = base64.b64encode(public.public_bytes_raw()).decode()
+    except ValueError as e:
+        print(f"Ignoring stored backup key: {e}")
+        return None
+
+    expected = backup_info.get("auth_data", {}).get("public_key", "")
+    if derived.rstrip("=") != expected.rstrip("="):
+        print("Ignoring stored backup key: public key does not match this backup")
+        return None
+
+    return key
 
 
 async def main():
@@ -264,88 +320,99 @@ async def main():
                     print(f"Total sessions: {session_count}")
             return 0
 
-        # Need recovery key or passphrase
+        # A previous run stores the decrypted backup key next to the E2EE store.
+        # Use it when it fits this backup version, so a re-import does not need
+        # the recovery key again. An explicit --recovery-key/--passphrase wins:
+        # that is how you recover after the backup version was rotated.
+        stored_key = None
         if not args.recovery_key and not args.passphrase:
-            print("\nTo restore keys, provide --recovery-key or --passphrase")
-            print("\nYour recovery key looks like: EsTj qRGp YB4C ...")
-            return 1
-
-        # Get default SSSS key info
-        url = f"{config['homeserver']}/_matrix/client/v3/user/{config['user_id']}/account_data/m.secret_storage.default_key"
-        async with session.get(url, headers=headers) as resp:
-            if resp.status != 200:
-                print(f"No SSSS key info found: {resp.status}")
+            stored_key = load_stored_backup_key(store_path, backup_info)
+            if stored_key is None:
+                print("\nTo restore keys, provide --recovery-key or --passphrase")
+                print("\nYour recovery key looks like: EsTj qRGp YB4C ...")
                 return 1
-            default_key_data = await resp.json()
-            default_key_id = default_key_data.get("key")
+            print("\n=== Backup Key ===")
+            print(f"Using stored key: {store_path / 'backup_key.json'}")
 
-        # Get key info for passphrase derivation
-        url = f"{config['homeserver']}/_matrix/client/v3/user/{config['user_id']}/account_data/m.secret_storage.key.{default_key_id}"
-        async with session.get(url, headers=headers) as resp:
-            if resp.status != 200:
-                print(f"Could not get key info: {resp.status}")
-                return 1
-            key_info = await resp.json()
-
-        # Derive SSSS key
-        print("\n=== Deriving SSSS Key ===")
-        if args.recovery_key:
-            ssss_key = decode_recovery_key(args.recovery_key)
-            print("Using recovery key")
+        if stored_key is not None:
+            backup_key = stored_key
         else:
-            ssss_key = derive_key_from_passphrase(args.passphrase, key_info)
-            print("Derived key from passphrase")
+            # Get default SSSS key info
+            url = f"{config['homeserver']}/_matrix/client/v3/user/{config['user_id']}/account_data/m.secret_storage.default_key"
+            async with session.get(url, headers=headers) as resp:
+                if resp.status != 200:
+                    print(f"No SSSS key info found: {resp.status}")
+                    return 1
+                default_key_data = await resp.json()
+                default_key_id = default_key_data.get("key")
 
-        # Get encrypted backup key from SSSS
-        url = f"{config['homeserver']}/_matrix/client/v3/user/{config['user_id']}/account_data/m.megolm_backup.v1"
-        async with session.get(url, headers=headers) as resp:
-            if resp.status != 200:
-                print(f"No backup key in SSSS: {resp.status}")
+            # Get key info for passphrase derivation
+            url = f"{config['homeserver']}/_matrix/client/v3/user/{config['user_id']}/account_data/m.secret_storage.key.{default_key_id}"
+            async with session.get(url, headers=headers) as resp:
+                if resp.status != 200:
+                    print(f"Could not get key info: {resp.status}")
+                    return 1
+                key_info = await resp.json()
+
+            # Derive SSSS key
+            print("\n=== Deriving SSSS Key ===")
+            if args.recovery_key:
+                ssss_key = decode_recovery_key(args.recovery_key)
+                print("Using recovery key")
+            else:
+                ssss_key = derive_key_from_passphrase(args.passphrase, key_info)
+                print("Derived key from passphrase")
+
+            # Get encrypted backup key from SSSS
+            url = f"{config['homeserver']}/_matrix/client/v3/user/{config['user_id']}/account_data/m.megolm_backup.v1"
+            async with session.get(url, headers=headers) as resp:
+                if resp.status != 200:
+                    print(f"No backup key in SSSS: {resp.status}")
+                    return 1
+                backup_ssss = await resp.json()
+
+            encrypted = backup_ssss.get("encrypted", {}).get(default_key_id)
+            if not encrypted:
+                print(f"No encryption data for key {default_key_id}")
                 return 1
-            backup_ssss = await resp.json()
 
-        encrypted = backup_ssss.get("encrypted", {}).get(default_key_id)
-        if not encrypted:
-            print(f"No encryption data for key {default_key_id}")
-            return 1
+            # Decrypt backup key
+            print("\n=== Decrypting Backup Key ===")
+            try:
+                backup_key = decrypt_ssss(encrypted, ssss_key)
+                print(f"✅ Backup key decrypted ({len(backup_key)} bytes)")
 
-        # Decrypt backup key
-        print("\n=== Decrypting Backup Key ===")
-        try:
-            backup_key = decrypt_ssss(encrypted, ssss_key)
-            print(f"✅ Backup key decrypted ({len(backup_key)} bytes)")
+                # Verify public key matches
+                private = X25519PrivateKey.from_private_bytes(backup_key)
+                public = private.public_key().public_bytes_raw()
+                public_b64 = base64.b64encode(public).decode()
+                expected_public = auth_data.get("public_key")
 
-            # Verify public key matches
-            private = X25519PrivateKey.from_private_bytes(backup_key)
-            public = private.public_key().public_bytes_raw()
-            public_b64 = base64.b64encode(public).decode()
-            expected_public = auth_data.get("public_key")
+                print(f"   Derived public:  {public_b64}")
+                print(f"   Expected public: {expected_public}")
 
-            print(f"   Derived public:  {public_b64}")
-            print(f"   Expected public: {expected_public}")
+                if public_b64 != expected_public:
+                    print("❌ Public key mismatch!")
+                    return 1
+                print("✅ Public key verified!")
 
-            if public_b64 != expected_public:
-                print("❌ Public key mismatch!")
+            except ValueError as e:
+                print(f"❌ Decryption failed: {e}")
                 return 1
-            print("✅ Public key verified!")
 
-        except ValueError as e:
-            print(f"❌ Decryption failed: {e}")
-            return 1
-
-        # Save backup key for future use
-        backup_key_file = store_path / "backup_key.json"
-        backup_key_payload = json.dumps(
-            {
-                "backup_key": base64.b64encode(backup_key).decode(),
-                "version": backup_info.get("version"),
-                "algorithm": backup_info.get("algorithm"),
-            },
-            indent=2,
-        )
-        await asyncio.to_thread(backup_key_file.write_text, backup_key_payload)
-        await asyncio.to_thread(os.chmod, backup_key_file, 0o600)
-        print(f"\n✅ Backup key saved to: {backup_key_file}")
+            # Save backup key for future use
+            backup_key_file = store_path / "backup_key.json"
+            backup_key_payload = json.dumps(
+                {
+                    "backup_key": base64.b64encode(backup_key).decode(),
+                    "version": backup_info.get("version"),
+                    "algorithm": backup_info.get("algorithm"),
+                },
+                indent=2,
+            )
+            await asyncio.to_thread(backup_key_file.write_text, backup_key_payload)
+            await asyncio.to_thread(os.chmod, backup_key_file, 0o600)
+            print(f"\n✅ Backup key saved to: {backup_key_file}")
 
         if not args.import_keys:
             print("\nUse --import-keys to fetch and import room keys from backup")
@@ -390,29 +457,45 @@ async def main():
             imported = 0
             failed = 0
 
-            for room_data in rooms.values():
+            # room_id is part of the megolm session identity, so it has to come
+            # from the key it was filed under - iterate items(), not values().
+            for room_id, room_data in rooms.items():
                 sessions = room_data.get("sessions", {})
                 for session_id, session_data in sessions.items():
                     try:
-                        decrypt_backup_session(session_data, backup_key)
+                        decrypted = decrypt_backup_session(session_data, backup_key)
 
-                        # Import the session
-                        if hasattr(client.olm, "import_inbound_group_session"):
-                            # This would need the session export format
-                            pass
+                        signing_key = decrypted.get("sender_claimed_keys", {}).get(
+                            "ed25519"
+                        )
+                        sender_key = decrypted.get("sender_key")
+                        session_key = decrypted.get("session_key")
+                        if not (signing_key and sender_key and session_key):
+                            raise ValueError("session is missing key material")
+
+                        session = InboundGroupSession.import_session(
+                            session_key,
+                            signing_key,
+                            sender_key,
+                            room_id,
+                            decrypted.get("forwarding_curve25519_key_chain") or [],
+                        )
+                        client.olm.store.save_inbound_group_session(session)
 
                         imported += 1
-                        if imported % 10 == 0:
-                            print(f"  Processed {imported} sessions...")
+                        if imported % 500 == 0:
+                            print(f"  Imported {imported} sessions...")
 
                     except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
                         failed += 1
                         if failed <= 5:
-                            print(f"  Failed to decrypt session {session_id[:20]}: {e}")
+                            print(f"  Failed on session {session_id[:20]}: {e}")
 
             print("\n=== Import Complete ===")
             print(f"Imported: {imported}")
             print(f"Failed: {failed}")
+            if failed and not imported:
+                return 1
 
         finally:
             await client.close()

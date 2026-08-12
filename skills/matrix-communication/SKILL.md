@@ -74,6 +74,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-verify.py --listen --timeout 180 
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-verify.py --list                   # device IDs
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-fetch-keys.py ROOM --sync-time 60
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --recovery-key "EsTj ..." --import-keys
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --import-keys   # reuses the stored backup key
 
 # Health check (uses python3, not uv run)
 python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
