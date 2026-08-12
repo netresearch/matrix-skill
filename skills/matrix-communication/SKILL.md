@@ -16,20 +16,17 @@ Matrix rooms: send, read, download media. **Always use `*-e2ee.py` scripts.**
 
 > ## ⛔ NEVER reuse a running client's access token
 >
-> Not from Element, Element X, FluffyChat, a browser session, or any device you
-> did not create here. Not in `config.json`, not in `credentials.json`.
+> Not from Element, Element X, FluffyChat or a browser session. Not in
+> `config.json`, not in `credentials.json`, not "just to test".
 >
-> A Matrix access token carries a `device_id`, and encryption state is per
-> device. Two clients on one `device_id` is not a supported state: each keeps its
-> olm and megolm sessions in its own local store, so what one encrypts, the other
-> cannot read. **The victim is the real client** — it starts showing
-> `[Unable to decrypt]` for its own messages and stays broken until it is logged
-> out and back in. This damage is silent; nothing warns you at the moment you
-> paste.
+> A token carries a `device_id` and E2EE state is per device, held in each
+> client's local store. Two clients on one device cannot read each other's
+> messages. **The victim is the client you use** — it shows `[Unable to decrypt]`
+> for its own messages until logged out and back in. Nothing fails at the moment
+> you paste.
 >
-> The skill gets its **own device** from `matrix-e2ee-setup.py`. That is the only
-> supported way in. `matrix-doctor.py` fails the `e2ee_setup` check when the
-> stored credential belongs to a device it did not create.
+> `matrix-e2ee-setup.py` mints a device of its own. No password → no E2EE, and
+> that is the answer. `matrix-doctor.py` fails `e2ee_setup` on a foreign device.
 
 **Bash `!` rule:** Prepend `set +H &&` when arguments contain `!`
 
