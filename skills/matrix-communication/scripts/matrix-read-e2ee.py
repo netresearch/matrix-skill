@@ -45,6 +45,7 @@ from _lib import (
     load_config,
     load_credentials,
     prefer_ipv4,
+    restore_login_checked,
     suppress_nio_logging,
 )
 
@@ -175,9 +176,7 @@ async def read_messages_e2ee(
     undecryptable_events = []
 
     try:
-        client.restore_login(
-            user_id=config["user_id"], device_id=device_id, access_token=access_token
-        )
+        restore_login_checked(client, config["user_id"], device_id, access_token)
 
         if client.store:
             client.load_store()
