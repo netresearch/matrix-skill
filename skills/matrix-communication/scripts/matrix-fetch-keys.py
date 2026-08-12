@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["matrix-nio[e2e]"]
+# dependencies = ["matrix-nio[e2e]<0.26"]
 # ///
 """
 Fetch missing room keys by requesting them from other devices.

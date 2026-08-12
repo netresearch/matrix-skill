@@ -330,7 +330,7 @@ def install_dependencies(pip_cmd: str, quiet: bool = False) -> tuple[bool, list[
     if not quiet:
         messages.append("Installing matrix-nio[e2e]...")
 
-    success, output = run_pip_command(pip_cmd, ["install", "matrix-nio[e2e]"])
+    success, output = run_pip_command(pip_cmd, ["install", "matrix-nio[e2e]<0.26"])
     if success:
         messages.append("matrix-nio[e2e] installed successfully")
     else:

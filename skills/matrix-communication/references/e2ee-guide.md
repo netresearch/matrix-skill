@@ -99,7 +99,46 @@ uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --request DEVIC
 uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --debug --timeout 180
 ```
 
-**Smart device selection:** Automatically prioritizes Element clients (Desktop/Android/iOS) over backup devices that can't respond interactively.
+**Smart device selection:** Automatically prioritizes Element clients (Desktop/Android/iOS) over backup devices that can't respond interactively. Without `--request` it picks a device on its own and may well pick the wrong one — a phone that is not the client you are sitting in front of. Run `--list` and name the device.
+
+`--listen` is the other direction: wait for Element to start the verification instead of sending a request. Use it when Element already shows "Start verification on the other device", which means it is waiting for this side to accept.
+
+### A fresh device cannot verify until its keys are queried
+
+Right after `matrix-e2ee-setup.py` the store knows no other devices, and
+verification fails on an error that names the wrong thing:
+
+```
+Error accepting: Key verification with the transaction id <id> does not exist.
+```
+
+nio cannot build a SAS object for a device it has no keys for. It only queries
+users it has marked as changed, and a new store has marked nobody — `--debug`
+reports `Keys query: No key query required.` while the device list is empty.
+Force one query for your own user before verifying.
+
+### The nio pin and the store belong together
+
+The scripts pin `matrix-nio[e2e]<0.26`. That is not cosmetic:
+
+- 0.26 sends the SAS commitment as a hex digest where 0.25 sent unpadded base64,
+  so Element rejects every verification before it shows emoji
+  (matrix-nio/matrix-nio#570)
+- the two releases use different crypto backends (libolm vs vodozemac) and write
+  incompatible stores — opening one with the other fails as `BAD_ACCOUNT_KEY`,
+  which reads like a credential problem and is not one
+
+Moving the pin is therefore a migration, not a version bump:
+
+```bash
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py --logout
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py          # new device
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --import-keys
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-verify.py --request DEVICE
+```
+
+Run every step on the same pin. One command from an unpinned checkout reopens
+the store on the other backend and rewrites its account.
 
 ### Agent Workflow for Real-Time Emoji Display
 
