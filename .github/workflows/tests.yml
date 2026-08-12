@@ -1,0 +1,65 @@
+name: Unit Tests
+
+# Nothing else in CI executes the test files. The lint workflow parses them with
+# ruff, which proves they are syntactically valid Python and nothing more - a
+# change that breaks the code under test ships green without this job.
+#
+# The suites are stdlib `unittest` and are run by path, not by discovery:
+# `unittest discover` rooted above the scripts directory finds nothing (the skill
+# directories are not importable packages - hyphens in the names) and still exits
+# 0, so a discovery-based job would report success while running no tests. Each
+# file is executed directly, the way its own docstring documents, and the run
+# fails if a file reports zero tests.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  unittest:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run test suites
+        run: |
+          set -uo pipefail
+          mapfile -t files < <(find skills -type f -name 'test_*.py' | sort)
+
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "::error::No test files found under skills/"
+            exit 1
+          fi
+
+          echo "Found ${#files[@]} test file(s)"
+          status=0
+
+          for f in "${files[@]}"; do
+            echo "::group::$f"
+            output=$(python3 "$f" -v 2>&1)
+            rc=$?
+            echo "$output"
+            echo "::endgroup::"
+
+            if [[ $rc -ne 0 ]]; then
+              echo "::error file=$f::test suite failed"
+              status=1
+            elif grep -q "^Ran 0 tests" <<<"$output"; then
+              echo "::error file=$f::collected no tests"
+              status=1
+            fi
+          done
+
+          exit $status

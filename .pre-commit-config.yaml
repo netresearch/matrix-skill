@@ -49,8 +49,12 @@ repos:
     hooks:
       - id: actionlint
 
+  # Keep this rev on the same ruff version the reusable validate.yml runs
+  # (`uvx --no-build ruff@X.Y.Z`). The two pins are in different repositories and
+  # nothing enforces the pairing, so a hook older than CI passes locally and
+  # fails in CI on rules the older ruff does not have yet. See issue #75.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.14
+    rev: v0.16.0
     hooks:
       - id: ruff
       - id: ruff-format
