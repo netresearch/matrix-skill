@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["matrix-nio[e2e]", "cryptography", "aiohttp"]
+# dependencies = ["matrix-nio[e2e]<0.26", "cryptography", "aiohttp"]
 # ///
 """
 Fetch and decrypt keys from Matrix key backup using recovery key or passphrase.
