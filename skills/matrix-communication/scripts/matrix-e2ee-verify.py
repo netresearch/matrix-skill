@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["matrix-nio[e2e]"]
+# dependencies = ["matrix-nio[e2e]<0.26"]
 # ///
 """Interactive device verification for Matrix E2EE.
 
@@ -140,6 +140,10 @@ class VerificationHandler:
             try:
                 await self.client.accept_key_verification(event.transaction_id)
                 self.sas_accepted = True
+                # Our key goes out once theirs arrives, not here: the accepting
+                # side commits to its key in m.key.verification.accept and only
+                # reveals it after the initiator's key, so the initiator can
+                # check that commitment. Sending it early breaks the exchange.
             except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
                 self._debug(f"Error accepting: {e}")
 
@@ -211,17 +215,18 @@ class VerificationHandler:
                 for line in emoji_lines:
                     print(line)
 
-                # Share our key
-                key_msg = sas.share_key()
-                if key_msg:
-                    await self.client.to_device(key_msg)
-                self.key_sent = True
+                # Their key is in, so ours may go out now. Confirming the short
+                # auth string afterwards is left to nio's client method: it
+                # calls accept_sas() and sends the MAC in the order the protocol
+                # expects. Hand-rolling accept_sas() + get_mac() + to_device()
+                # skips nio's own bookkeeping around the transaction.
+                if not self.key_sent:
+                    key_msg = sas.share_key()
+                    if key_msg:
+                        await self.client.to_device(key_msg)
+                    self.key_sent = True
 
-                # Accept our side (user confirms in Element)
-                sas.accept_sas()
-                mac_msg = sas.get_mac()
-                if mac_msg:
-                    await self.client.to_device(mac_msg)
+                await self.client.confirm_short_auth_string(event.transaction_id)
 
                 print("Waiting for you to confirm in Element...")
 
@@ -399,14 +404,16 @@ async def run_verification(
     handler = VerificationHandler(client, debug=debug)
 
     client.add_to_device_callback(handler.handle_raw_event, UnknownToDeviceEvent)
+
+    # One registration, on the base class. nio dispatches a callback whenever
+    # isinstance(event, filter) holds, and KeyVerificationEvent is the base of
+    # Request/Start/Accept/Key/Mac/Cancel - so registering the subclasses as
+    # well ran the handler twice for every event. The duplicate call reached
+    # sas.receive_mac_event() a second time on an already-consumed SAS, which
+    # nio answers by cancelling the transaction: Element then reports "The
+    # expected key did not match the verified one" and verification never
+    # completes. KeyVerificationRequest is covered by the same base class.
     client.add_to_device_callback(handler.handle_event, KeyVerificationEvent)
-    if KeyVerificationRequest:
-        client.add_to_device_callback(handler.handle_event, KeyVerificationRequest)
-    client.add_to_device_callback(handler.handle_event, KeyVerificationStart)
-    client.add_to_device_callback(handler.handle_event, KeyVerificationAccept)
-    client.add_to_device_callback(handler.handle_event, KeyVerificationKey)
-    client.add_to_device_callback(handler.handle_event, KeyVerificationMac)
-    client.add_to_device_callback(handler.handle_event, KeyVerificationCancel)
 
     try:
         client.restore_login(config["user_id"], device_id, access_token)
