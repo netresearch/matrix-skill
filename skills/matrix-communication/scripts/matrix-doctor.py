@@ -238,7 +238,11 @@ def check_token(config: dict, offline: bool = False) -> tuple[bool | None, str]:
 
     results = [
         _verify_credential(
-            config, token, label, "log in again and replace it in the config"
+            config,
+            token,
+            label,
+            "mint a new token for the skill and replace it in the config - "
+            "never copy one out of a client you use",
         )
         for label, token in tokens
     ]
@@ -479,7 +483,10 @@ def main():
         ):
             print("  - Run: matrix-e2ee-setup.py")
         if not checks["token"]["ok"] and not checks["token"].get("unknown"):
-            print("  - Token rejected: log in again and replace it in the config")
+            print(
+                "  - Token rejected: mint a new one for the skill "
+                "(matrix-e2ee-setup.py), never copy one out of a client you use"
+            )
 
     sys.exit(0 if critical_ok else 1)
 
