@@ -24,7 +24,13 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _lib import find_room_by_name, get_store_path, load_config, load_credentials
+from _lib import (
+    find_room_by_name,
+    get_store_path,
+    load_config,
+    load_credentials,
+    restore_login_checked,
+)
 from nio import (
     AsyncClient,
     AsyncClientConfig,
@@ -162,8 +168,8 @@ async def main():
     fetcher = KeyFetcher(client, debug=args.debug)
 
     try:
-        client.restore_login(
-            config["user_id"], creds["device_id"], creds["access_token"]
+        restore_login_checked(
+            client, config["user_id"], creds["device_id"], creds["access_token"]
         )
         if client.store:
             client.load_store()

@@ -21,9 +21,11 @@ from _lib.deps import check_e2ee_dependencies
 # E2EE (only used by E2EE scripts, but still stdlib-only)
 from _lib.e2ee import (
     delete_credentials,
+    explain_store_error,
     get_credentials_path,
     get_store_path,
     load_credentials,
+    restore_login_checked,
     save_credentials,
 )
 
@@ -62,6 +64,7 @@ __all__ = [
     # Utils
     "clean_message",
     "delete_credentials",
+    "explain_store_error",
     "find_room_by_name",
     "find_room_in_nio_client",
     "format_timestamp",
@@ -81,6 +84,7 @@ __all__ = [
     # Rooms
     "resolve_room_alias",
     "resolve_room_cli",
+    "restore_login_checked",
     "save_credentials",
     # Formatting
     "shorten_service_urls",

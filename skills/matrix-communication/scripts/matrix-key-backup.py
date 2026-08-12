@@ -26,7 +26,12 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import aiohttp
-from _lib import get_store_path, load_config, load_credentials
+from _lib import (
+    get_store_path,
+    load_config,
+    load_credentials,
+    restore_login_checked,
+)
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import hmac as crypto_hmac
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
@@ -446,8 +451,8 @@ async def main():
         )
 
         try:
-            client.restore_login(
-                config["user_id"], creds["device_id"], creds["access_token"]
+            restore_login_checked(
+                client, config["user_id"], creds["device_id"], creds["access_token"]
             )
             if client.store:
                 client.load_store()
