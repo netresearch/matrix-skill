@@ -6,6 +6,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-08-13
+
 ### Documentation
 
 - `SKILL.md` and `AGENTS.md` say how to read a room log: adjacent lines from one
