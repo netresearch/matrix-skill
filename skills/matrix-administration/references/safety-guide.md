@@ -37,6 +37,8 @@ The hardening pipeline is **partially irreversible**:
 
 The room version must be > 9 for `restricted` joins; otherwise the script prints a red ❌ for that step. Switching to `restricted` removes discoverability for users not in the parent space.
 
+Unlike `synapse-deactivate-user.py`, this script has no `--yes` and asks nothing: it runs the pipeline as soon as it is invoked. Confirm with the operator first — see step 4 above.
+
 ### `synapse-make-admin.py` / `synapse-join-room.py`
 
 - Only works while *some* existing admin is still in the room (Synapse refuses otherwise).

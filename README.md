@@ -4,7 +4,7 @@ Agentic Skills for Matrix, distributed as a Claude Code plugin. Three skills shi
 
 | Skill | Purpose | API surface |
 |-------|---------|-------------|
-| [**matrix-communication**](skills/matrix-communication/) | Send / read / edit / react in chat rooms on behalf of a regular user, with full E2EE support | Matrix Client-Server API |
+| [**matrix-communication**](skills/matrix-communication/) | Send / read / edit / react in chat rooms on behalf of a regular user, with full E2EE support, and follow a room live through a daemon | Matrix Client-Server API |
 | [**matrix-administration**](skills/matrix-administration/) | Operate a Synapse homeserver — snapshot rooms, rate room health, render a Graphviz map, force-join, promote, harden, deactivate, search history | Synapse Admin API |
 | [**matrix-announcement**](skills/matrix-announcement/) | Compose scannable, structured Matrix announcements — release notes, digests, heads-ups, postmortems. HTML subset, type-tag system, glyph rules, and HTML-card-to-PNG templates. | Content guidance only — pairs with `matrix-communication` |
 
@@ -14,22 +14,31 @@ The three skills are independent — you can install the plugin and use any comb
 
 ## matrix-communication — Features
 
+**Follow a room while you work.** `matrix-watchd.py` holds the E2EE store, syncs,
+decrypts, and appends every event of a watched room to a per-room JSONL log.
+`matrix-watch.py` follows that log without opening the store, so any number of
+readers run at once — an agent can stay current with a room, post its status and
+answer, without a second process ever touching the encryption state.
+
 - **Send messages** to any joined Matrix room
-- **Rich formatting** - bold, italic, code, strikethrough, spoilers, lists, blockquotes
-- **Smart link shortening** - Jira, GitHub, GitLab URLs become readable links
-- **Matrix mentions** - `@user:server` becomes clickable user pill
-- **Room links** - `#room:server` becomes clickable room link
-- **Code blocks** - Syntax-highlighted multi-line code
-- **Emotes** - `/me` style action messages (`--emote`)
-- **Thread replies** - Keep discussions organized (`--thread`)
-- **Reactions** - Add emoji reactions to messages (✅ 👍 🚀)
-- **Edit messages** - Modify sent messages
-- **Redact messages** - Delete messages from rooms
-- **Visual effects** - Confetti 🎉, fireworks 🎆, snowfall ❄️ (Element clients)
+- **Rich formatting** — bold, italic, code, strikethrough, spoilers, lists, blockquotes
+- **Real mentions** — `--mention '@user:server'` sets `m.mentions`, which is what
+  notifies a client, and renders that name in your text as a pill; a plain
+  `@name` without `--mention` does neither
+- **Smart link shortening** — Jira, GitHub, GitLab URLs become readable links
+- **Room links** — `#room:server` becomes a clickable room link
+- **Code blocks** — syntax-highlighted multi-line code
+- **Emotes** — `/me` style action messages (`--emote`)
+- **Thread replies** — keep discussions organized (`--thread`)
+- **Reactions** — add emoji reactions to messages
+- **Edit and redact** — modify or delete messages you sent
+- **Visual effects** — confetti, fireworks, snowfall (Element clients)
 - **List rooms** to find the right destination
-- **Read messages** - both unencrypted and E2EE decryption
-- **Bot prefix** - optional 🤖 prefix for automated messages
-- **Device verification** - SAS emoji verification for E2EE
+- **Read messages** — both unencrypted and E2EE decryption
+- **Bot prefix** — optional 🤖 prefix for automated messages
+- **Device verification** — SAS emoji verification for E2EE
+- **One writer per store** — every path that opens the E2EE store takes an
+  exclusive lock, so two processes cannot corrupt it
 
 ## Installation
 
@@ -97,67 +106,137 @@ brew install libolm            # macOS
 
 ## Usage
 
+Paths are shortened to `$C` below:
+
+```bash
+C=skills/matrix-communication/scripts
+```
+
+The `*-e2ee.py` scripts are the ones to use. Most Matrix rooms are encrypted, and
+the non-E2EE variants cannot read or write in them. Prepend `set +H` to any
+command whose arguments contain `!`, or bash history expansion eats it.
+
 ### Send a Message
 
 ```bash
-# By room alias
-uv run skills/matrix-communication/scripts/matrix-send.py "#myroom:matrix.org" "Deployment complete!"
+set +H && uv run $C/matrix-send-e2ee.py "#myroom:matrix.org" "Deployment complete"
+set +H && uv run $C/matrix-send-e2ee.py "!abc123:matrix.org" "**Build passed** for abc123"
 
-# By room ID
-uv run skills/matrix-communication/scripts/matrix-send.py "!abc123:matrix.org" "Hello!"
-
-# With markdown formatting
-uv run skills/matrix-communication/scripts/matrix-send.py "#dev:matrix.org" "**Build passed** for commit abc123"
+# Notify someone. --mention is what actually reaches them.
+set +H && uv run $C/matrix-send-e2ee.py "#dev:matrix.org" \
+  "alex, schaust du drauf?" --mention '@alex:matrix.org'
 ```
+
+### Follow a Room
+
+```bash
+# Add rooms to watch_rooms in ~/.config/matrix/config.json, then:
+uv run $C/matrix-watchd.py --start
+uv run $C/matrix-watchd.py --status
+
+# One line per event on stdout, for a human or an agent's monitor
+uv run $C/matrix-watch.py "#myroom:matrix.org"
+
+# What arrived since this reader last looked, then exit
+uv run $C/matrix-watch.py "#myroom:matrix.org" --once
+```
+
+While the daemon runs it owns the store; send, react, redact and edit route
+through it automatically. With no daemon they open the store themselves. Nothing
+changes at the call site either way.
 
 ### List Joined Rooms
 
 ```bash
-# List all rooms
-uv run skills/matrix-communication/scripts/matrix-rooms.py
-
-# Search for specific room
-uv run skills/matrix-communication/scripts/matrix-rooms.py --search ops
+uv run $C/matrix-rooms.py
+uv run $C/matrix-rooms.py --search ops
 ```
 
 ### Read Messages
 
 ```bash
-# Read last 10 messages (unencrypted rooms)
-uv run skills/matrix-communication/scripts/matrix-read.py "#myroom:matrix.org"
-
-# Read E2EE encrypted messages
-uv run skills/matrix-communication/scripts/matrix-read-e2ee.py "#myroom:matrix.org" --limit 10
-
-# Read more messages
-uv run skills/matrix-communication/scripts/matrix-read.py "#myroom:matrix.org" --limit 50
+uv run $C/matrix-read-e2ee.py "#myroom:matrix.org" --limit 10
+uv run $C/matrix-read-e2ee.py "#myroom:matrix.org" --limit 50 --json
 ```
 
 ### Resolve Room Alias
 
 ```bash
-uv run skills/matrix-communication/scripts/matrix-resolve.py "#myroom:matrix.org"
+uv run $C/matrix-resolve.py "#myroom:matrix.org"
+```
+
+### Check the Setup
+
+```bash
+python3 $C/matrix-doctor.py          # verifies every credential against the homeserver
 ```
 
 ## E2EE Support
 
-E2EE is set up automatically when you configure the skill via the agent. The agent creates a dedicated "Matrix Skill E2EE" device that works alongside your Element client without conflicts.
+`matrix-e2ee-setup.py` creates a dedicated "Matrix Skill E2EE" device that runs
+alongside your Element client. It logs in once with your password, which is used
+and not stored.
 
 | Script | Purpose |
 |--------|---------|
 | `matrix-send-e2ee.py` | Send encrypted messages |
-| `matrix-read-e2ee.py` | Read/decrypt messages |
-| `matrix-edit-e2ee.py` | Edit messages (encrypted) |
-| `matrix-e2ee-verify.py` | Device verification |
+| `matrix-read-e2ee.py` | Read and decrypt messages |
+| `matrix-edit-e2ee.py` | Edit a message you sent |
+| `matrix-download-e2ee.py` | Download and decrypt attachments |
+| `matrix-e2ee-setup.py` | Create or remove the agent's device |
+| `matrix-e2ee-verify.py` | SAS emoji verification |
+| `matrix-fetch-keys.py` | Request missing room keys from your other devices |
+| `matrix-key-backup.py` | Restore room keys from the server-side backup |
+| `matrix-watchd.py` | The daemon that owns the store and follows rooms |
 
-*First run ~5-10s (key sync), subsequent runs faster.*
+First run takes ~2–5 s for the initial key sync; later runs are faster.
 
-⚠️ Using `access_token` fallback causes key sync conflicts - use dedicated device.
+### Never reuse a running client's access token
 
-**Device verification** (optional):
+Not from Element, Element X, FluffyChat or a browser session. A token carries a
+`device_id`, and E2EE state is per device: two clients on one device cannot read
+each other's messages, and the one that breaks is the client you use — it starts
+showing `[Unable to decrypt]` for its own messages. Nothing fails at the moment
+you paste it.
+
+Earlier versions of this documentation offered that as a fallback "if
+password-based setup isn't possible". That advice was wrong and is retracted. No
+password means no E2EE, and that is the answer.
+
+### Verification
+
 ```bash
-uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 120
-# Then start verification from Element: Settings → Security → Sessions
+C=skills/matrix-communication/scripts
+
+# You start it, aimed at one of your own devices
+uv run $C/matrix-e2ee-verify.py --list                      # find the device id
+uv run $C/matrix-e2ee-verify.py --request DEVICE --timeout 300
+
+# Or Element starts it and this side waits — needs --listen
+uv run $C/matrix-e2ee-verify.py --listen --timeout 300
+```
+
+Without `--request` **and** without `--listen` the script picks a device itself,
+which is rarely the one you are sitting in front of.
+
+Use Element Desktop or Element Android. Element X has an incompatible
+verification flow.
+
+### The matrix-nio pin
+
+The scripts pin `matrix-nio[e2e]<0.26`. 0.26 sends the SAS commitment in a
+format Element rejects, so no verification completes
+([matrix-nio#570](https://github.com/matrix-nio/matrix-nio/issues/570)), and the
+two releases write incompatible store formats — opening one with the other fails
+as `BAD_ACCOUNT_KEY`, which names a key that is not the problem.
+
+Moving the pin is a migration, not a version bump. The store cannot be
+converted:
+
+```bash
+uv run $C/matrix-e2ee-setup.py --logout && uv run $C/matrix-e2ee-setup.py
+uv run $C/matrix-key-backup.py --import-keys
+uv run $C/matrix-e2ee-verify.py --request DEVICE
 ```
 
 ## matrix-administration — Features
@@ -222,18 +301,28 @@ matrix-skill/
 │   ├── matrix-communication/    # Client-Server API, E2EE chat
 │   │   ├── SKILL.md
 │   │   ├── scripts/
-│   │   │   ├── matrix-send-e2ee.py      # Send (E2EE) — USE THIS
-│   │   │   ├── matrix-read-e2ee.py      # Read (E2EE) — USE THIS
+│   │   │   ├── _lib/                    # stdlib-only shared helpers
+│   │   │   ├── matrix-create-room.py    # Create a room
+│   │   │   ├── matrix-doctor.py         # Health check (python3, not uv run)
+│   │   │   ├── matrix-download-e2ee.py  # Download attachments (E2EE)
+│   │   │   ├── matrix-e2ee-setup.py     # Create or remove the agent device
+│   │   │   ├── matrix-e2ee-verify.py    # SAS emoji verification
 │   │   │   ├── matrix-edit-e2ee.py      # Edit (E2EE) — USE THIS
-│   │   │   ├── matrix-send.py           # Send (non-E2EE fallback)
-│   │   │   ├── matrix-read.py           # Read (non-E2EE fallback)
 │   │   │   ├── matrix-edit.py           # Edit (non-E2EE fallback)
+│   │   │   ├── matrix-fetch-keys.py     # Request missing room keys
+│   │   │   ├── matrix-invite.py         # Invite a user
+│   │   │   ├── matrix-key-backup.py     # Restore keys from server backup
+│   │   │   ├── matrix-power-level.py    # Read or set power levels
 │   │   │   ├── matrix-react.py          # React to messages
+│   │   │   ├── matrix-read-e2ee.py      # Read (E2EE) — USE THIS
+│   │   │   ├── matrix-read.py           # Read (non-E2EE fallback)
 │   │   │   ├── matrix-redact.py         # Delete messages
-│   │   │   ├── matrix-rooms.py          # List rooms
 │   │   │   ├── matrix-resolve.py        # Resolve aliases
-│   │   │   ├── matrix-e2ee-setup.py     # E2EE setup
-│   │   │   └── matrix-e2ee-verify.py    # Device verification
+│   │   │   ├── matrix-rooms.py          # List rooms
+│   │   │   ├── matrix-send-e2ee.py      # Send (E2EE) — USE THIS
+│   │   │   ├── matrix-send.py           # Send (non-E2EE fallback)
+│   │   │   ├── matrix-watch.py          # Follow a room's event log
+│   │   │   └── matrix-watchd.py         # Daemon: owns the store, follows rooms
 │   │   └── references/
 │   ├── matrix-administration/  # Synapse Admin API, server ops
 │   │   ├── SKILL.md
@@ -274,6 +363,10 @@ matrix-skill/
 │               ├── release-card.html     # 1200×630
 │               ├── weekly-digest.html    # 1200×1500
 │               └── comparison.html       # 1200×900
+├── docs/
+│   ├── ARCHITECTURE.md          # system design and distribution
+│   ├── specs/                   # design documents (OKF)
+│   └── exec-plans/              # implementation plans
 ├── LICENSE-MIT           # Code license (MIT)
 ├── LICENSE-CC-BY-SA-4.0  # Content license (CC-BY-SA-4.0)
 └── README.md

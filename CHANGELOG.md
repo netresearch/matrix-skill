@@ -6,6 +6,16 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Documentation
+
+- README, `AGENTS.md` and `docs/ARCHITECTURE.md` describe the watch daemon, the
+  `matrix-nio` pin and the store migration it forces.
+- The safety guide and `AGENTS.md` now state the confirmation gate per script:
+  `synapse-deactivate-user.py` refuses to run non-interactively without `--yes`,
+  `synapse-migrate-room.py` has no gate at all.
+- `skills/matrix-communication/README.md` points at the two license files that
+  exist; the `LICENSE` it linked never did.
+
 ## [2.0.0] - 2026-08-13
 
 ### Breaking
