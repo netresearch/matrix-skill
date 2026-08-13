@@ -122,6 +122,10 @@ def event_to_dict(room, event) -> dict | None:
         else None,
         "ts": getattr(event, "server_timestamp", None) or int(time.time() * 1000),
         "room_id": room.room_id,
+        # The curve25519 key of the device that encrypted this, which is the
+        # only thing that distinguishes our own messages from our human's -
+        # they share the account. Absent in an unencrypted room.
+        "sender_key": getattr(event, "sender_key", None),
     }
     if not base["event_id"] or not base["sender"]:
         return None
@@ -167,6 +171,7 @@ class Daemon:
         self.started = time.time()
         self.last_sync = None
         self.display_name = None
+        self.own_sender_key = None
         self.stopping = asyncio.Event()
         self.next_seq_by_room = {}
 
@@ -194,6 +199,7 @@ class Daemon:
             event=event_dict,
             own_user_id=self.credentials["user_id"],
             own_display_name=self.display_name,
+            own_sender_key=self.own_sender_key,
         )
         append_record(path, record)
         self.next_seq_by_room[room_id] = seq + 1
@@ -376,6 +382,12 @@ class Daemon:
 
         name = await self.client.get_displayname()
         self.display_name = getattr(name, "displayname", None)
+
+        # Our own device's curve25519 key, read once. Without it every record
+        # falls back to the account comparison, which cannot tell this device
+        # from the human's on the same account.
+        if self.client.olm:
+            self.own_sender_key = self.client.olm.account.identity_keys["curve25519"]
 
         await self.resolve_rooms()
         self.client.add_event_callback(self.on_event, object)
