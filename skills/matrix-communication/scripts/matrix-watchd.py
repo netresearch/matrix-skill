@@ -168,18 +168,35 @@ class Daemon:
         self.last_sync = None
         self.display_name = None
         self.stopping = asyncio.Event()
+        self.next_seq_by_room = {}
 
     # -- logging -----------------------------------------------------------
 
     def record_event(self, room_id: str, event_dict: dict) -> None:
+        """Append one event to its room's log.
+
+        The sequence number is read from the log once per room and then carried
+        in memory. Asking `next_seq` every time would re-read the whole log -
+        and its rotated generation - for every incoming message, which on a log
+        of tens of thousands of records means parsing megabytes per message in
+        a busy room.
+
+        Safe to cache because the daemon is the only writer: it holds the store
+        lock for its whole run, and nothing else appends to these logs.
+        """
         path = log_path(rooms_dir(), room_id)
+        seq = self.next_seq_by_room.get(room_id)
+        if seq is None:
+            seq = next_seq(path)
+
         record = build_record(
-            seq=next_seq(path),
+            seq=seq,
             event=event_dict,
             own_user_id=self.credentials["user_id"],
             own_display_name=self.display_name,
         )
         append_record(path, record)
+        self.next_seq_by_room[room_id] = seq + 1
 
     def announce(self, text: str) -> None:
         """Put a daemon-level message into every watched log.
