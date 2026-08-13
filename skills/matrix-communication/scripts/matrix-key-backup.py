@@ -460,6 +460,7 @@ async def main():
             await client.sync(timeout=5000)
 
             imported = 0
+            already_present = 0
             failed = 0
 
             # room_id is part of the megolm session identity, so it has to come
@@ -485,10 +486,22 @@ async def main():
                             room_id,
                             decrypted.get("forwarding_curve25519_key_chain") or [],
                         )
-                        client.olm.store.save_inbound_group_session(session)
 
-                        imported += 1
-                        if imported % 500 == 0:
+                        # Go through the in-memory store first, the way nio does
+                        # when it imports a key itself. add() returns False for a
+                        # session already held, and the database write is an
+                        # on_conflict_ignore insert - so counting every decrypted
+                        # session as imported would report writes that never
+                        # happened. Sessions loaded from the store at startup are
+                        # in that in-memory set, which is what makes this honest
+                        # on a re-import.
+                        if client.olm.inbound_group_store.add(session):
+                            client.olm.store.save_inbound_group_session(session)
+                            imported += 1
+                        else:
+                            already_present += 1
+
+                        if imported and imported % 500 == 0:
                             print(f"  Imported {imported} sessions...")
 
                     except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
@@ -498,8 +511,10 @@ async def main():
 
             print("\n=== Import Complete ===")
             print(f"Imported: {imported}")
+            if already_present:
+                print(f"Already in the store: {already_present}")
             print(f"Failed: {failed}")
-            if failed and not imported:
+            if failed and not imported and not already_present:
                 return 1
 
         finally:
