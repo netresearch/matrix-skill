@@ -1,6 +1,6 @@
 # Live Room Awareness Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** A daemon owns the E2EE store and streams decrypted room events to a per-room JSONL log, so an agent can follow a room while it works and can post and react without blocking.
 
@@ -44,7 +44,7 @@
 
 `event` is a plain dict with the keys the daemon extracts from nio: `event_id`, `sender`, `sender_display`, `type`, `body`, `ts` (epoch ms), optional `reply_to`, `thread_root`, `session_id`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 """Tests for `_lib.roomlog`.
@@ -84,53 +84,77 @@ class SlugTests(unittest.TestCase):
 
 class RecordTests(unittest.TestCase):
     def test_record_carries_seq_and_identity(self):
-        rec = build_record(seq=7, event=EVENT, own_user_id="@me:example.org",
-                           own_display_name="me")
+        rec = build_record(
+            seq=7, event=EVENT, own_user_id="@me:example.org", own_display_name="me"
+        )
         self.assertEqual(rec["seq"], 7)
         self.assertEqual(rec["event_id"], "$abc")
         self.assertFalse(rec["self"])
         self.assertFalse(rec["mentions_me"])
 
     def test_own_message_is_flagged(self):
-        rec = build_record(seq=1, event={**EVENT, "sender": "@me:example.org"},
-                           own_user_id="@me:example.org", own_display_name="me")
+        rec = build_record(
+            seq=1,
+            event={**EVENT, "sender": "@me:example.org"},
+            own_user_id="@me:example.org",
+            own_display_name="me",
+        )
         self.assertTrue(rec["self"])
 
     def test_localpart_in_body_counts_as_mention(self):
-        rec = build_record(seq=1, event={**EVENT, "body": "kann sebastian das sehen?"},
-                           own_user_id="@sebastian:example.org", own_display_name=None)
+        rec = build_record(
+            seq=1,
+            event={**EVENT, "body": "kann sebastian das sehen?"},
+            own_user_id="@sebastian:example.org",
+            own_display_name=None,
+        )
         self.assertTrue(rec["mentions_me"])
 
     def test_display_name_in_body_counts_as_mention(self):
-        rec = build_record(seq=1, event={**EVENT, "body": "Frag mal Basti"},
-                           own_user_id="@sebastian:example.org", own_display_name="Basti")
+        rec = build_record(
+            seq=1,
+            event={**EVENT, "body": "Frag mal Basti"},
+            own_user_id="@sebastian:example.org",
+            own_display_name="Basti",
+        )
         self.assertTrue(rec["mentions_me"])
 
     def test_substring_of_a_longer_word_is_not_a_mention(self):
         """'basti' inside 'bastion' must not trigger."""
-        rec = build_record(seq=1, event={**EVENT, "body": "der bastion host"},
-                           own_user_id="@sebastian:example.org", own_display_name="Basti")
+        rec = build_record(
+            seq=1,
+            event={**EVENT, "body": "der bastion host"},
+            own_user_id="@sebastian:example.org",
+            own_display_name="Basti",
+        )
         self.assertFalse(rec["mentions_me"])
 
     def test_text_is_the_display_line(self):
         """Asserted without the clock: %H:%M renders in local time, so pinning
         the digits would fail everywhere but the machine that wrote the test."""
-        rec = build_record(seq=1, event=EVENT, own_user_id="@me:example.org",
-                           own_display_name="me")
+        rec = build_record(
+            seq=1, event=EVENT, own_user_id="@me:example.org", own_display_name="me"
+        )
         self.assertRegex(rec["text"], r"^\[\d{2}:\d{2}\] tobias\.hein: Ihr seid cool$")
 
     def test_long_body_is_truncated_in_text_only(self):
-        rec = build_record(seq=1, event={**EVENT, "body": "x" * 500},
-                           own_user_id="@me:example.org", own_display_name="me")
+        rec = build_record(
+            seq=1,
+            event={**EVENT, "body": "x" * 500},
+            own_user_id="@me:example.org",
+            own_display_name="me",
+        )
         self.assertLess(len(rec["text"]), 260)
         self.assertTrue(rec["text"].endswith("…"))
         self.assertEqual(len(rec["body"]), 500)
 
     def test_undecryptable_event_still_renders(self):
-        rec = build_record(seq=1,
-                           event={**EVENT, "type": "encrypted", "body": None,
-                                  "session_id": "sess1"},
-                           own_user_id="@me:example.org", own_display_name="me")
+        rec = build_record(
+            seq=1,
+            event={**EVENT, "type": "encrypted", "body": None, "session_id": "sess1"},
+            own_user_id="@me:example.org",
+            own_display_name="me",
+        )
         self.assertIn("[unable to decrypt]", rec["text"])
         self.assertEqual(rec["session_id"], "sess1")
 
@@ -139,12 +163,12 @@ if __name__ == "__main__":
     unittest.main(verbosity=2)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 skills/matrix-communication/scripts/_lib/test_roomlog.py`
 Expected: FAIL — `ModuleNotFoundError: No module named 'roomlog'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 """Room event log: slugs, records, and the rendered display line.
@@ -200,8 +224,9 @@ def render_text(record: dict) -> str:
     return f"[{stamp}] {who}: {prefix}{body}"
 
 
-def build_record(*, seq: int, event: dict, own_user_id: str,
-                 own_display_name: str | None) -> dict:
+def build_record(
+    *, seq: int, event: dict, own_user_id: str, own_display_name: str | None
+) -> dict:
     """One log record from one event."""
     record = {
         "seq": seq,
@@ -223,12 +248,12 @@ def build_record(*, seq: int, event: dict, own_user_id: str,
     return record
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 skills/matrix-communication/scripts/_lib/test_roomlog.py`
 Expected: PASS, 9 tests
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 uvx --no-build ruff@0.16.0 check . && uvx --no-build ruff@0.16.0 format --check .
@@ -248,7 +273,7 @@ git commit -S --signoff -m "feat(roomlog): slug, record construction and display
 - Consumes: `build_record`, `room_slug` from Task 1.
 - Produces: `log_path(rooms_dir: Path, room_id: str) -> Path`, `next_seq(path: Path) -> int`, `append_record(path: Path, record: dict, max_bytes: int = 8_000_000) -> None`, `read_records(path: Path) -> Iterator[dict]`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 class AppendTests(unittest.TestCase):
@@ -259,9 +284,15 @@ class AppendTests(unittest.TestCase):
 
     def _append(self, n, start=1):
         for i in range(start, start + n):
-            append_record(self.path, build_record(
-                seq=i, event={**EVENT, "event_id": f"$e{i}"},
-                own_user_id="@me:example.org", own_display_name="me"))
+            append_record(
+                self.path,
+                build_record(
+                    seq=i,
+                    event={**EVENT, "event_id": f"$e{i}"},
+                    own_user_id="@me:example.org",
+                    own_display_name="me",
+                ),
+            )
 
     def test_next_seq_on_empty_log_is_one(self):
         self.assertEqual(next_seq(self.path), 1)
@@ -283,19 +314,23 @@ class AppendTests(unittest.TestCase):
     def test_rotation_keeps_seq_monotonic(self):
         """Rotation must not restart numbering - the cursor subtracts on it."""
         self._append(5)
-        append_record(self.path, build_record(
-            seq=6, event=EVENT, own_user_id="@me:example.org",
-            own_display_name="me"), max_bytes=10)
+        append_record(
+            self.path,
+            build_record(
+                seq=6, event=EVENT, own_user_id="@me:example.org", own_display_name="me"
+            ),
+            max_bytes=10,
+        )
         self.assertTrue(self.path.with_name(self.path.name + ".1").exists())
         self.assertEqual(next_seq(self.path), 7)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 skills/matrix-communication/scripts/_lib/test_roomlog.py -k Append`
 Expected: FAIL — `ImportError: cannot import name 'log_path'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 def log_path(rooms_dir, room_id: str):
@@ -347,12 +382,12 @@ def append_record(path, record: dict, max_bytes: int = 8_000_000) -> None:
 
 Add `import json` and `from pathlib import Path` at the top of `roomlog.py`; add `import json, pathlib, shutil, tempfile` and the new names to the test's imports.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 skills/matrix-communication/scripts/_lib/test_roomlog.py`
 Expected: PASS, 15 tests
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 uvx --no-build ruff@0.16.0 check . && uvx --no-build ruff@0.16.0 format --check .
@@ -372,7 +407,7 @@ git commit -S --signoff -m "feat(roomlog): append with monotonic seq and rotatio
 - Consumes: `read_records`, `log_path`.
 - Produces: `cursor_path(rooms_dir, room_id, name="default") -> Path`, `read_cursor(path) -> int`, `write_cursor(path, seq) -> None`, `summarize_since(log, seq) -> dict` returning `{"total": int, "mentions": int, "last_seq": int, "truncated": bool}`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 class CursorTests(unittest.TestCase):
@@ -382,9 +417,15 @@ class CursorTests(unittest.TestCase):
         self.log = log_path(self.dir, "!r:example.org")
         for i in range(1, 6):
             body = "hallo sebastian" if i in (2, 4) else "nichts"
-            append_record(self.log, build_record(
-                seq=i, event={**EVENT, "event_id": f"$e{i}", "body": body},
-                own_user_id="@sebastian:example.org", own_display_name=None))
+            append_record(
+                self.log,
+                build_record(
+                    seq=i,
+                    event={**EVENT, "event_id": f"$e{i}", "body": body},
+                    own_user_id="@sebastian:example.org",
+                    own_display_name=None,
+                ),
+            )
 
     def test_missing_cursor_reads_as_zero(self):
         self.assertEqual(read_cursor(cursor_path(self.dir, "!r:example.org")), 0)
@@ -419,20 +460,26 @@ class CursorTests(unittest.TestCase):
     def test_gap_older_than_the_log_is_marked_truncated(self):
         """Rotation dropped the records - report a lower bound, not a guess."""
         for i in range(6, 9):
-            append_record(self.log, build_record(
-                seq=i, event={**EVENT, "event_id": f"$e{i}"},
-                own_user_id="@sebastian:example.org", own_display_name=None),
-                max_bytes=1)
+            append_record(
+                self.log,
+                build_record(
+                    seq=i,
+                    event={**EVENT, "event_id": f"$e{i}"},
+                    own_user_id="@sebastian:example.org",
+                    own_display_name=None,
+                ),
+                max_bytes=1,
+            )
         summary = summarize_since(self.log, 2)
         self.assertTrue(summary["truncated"])
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 skills/matrix-communication/scripts/_lib/test_roomlog.py -k Cursor`
 Expected: FAIL — `ImportError: cannot import name 'cursor_path'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 def cursor_path(rooms_dir, room_id: str, name: str = "default"):
@@ -477,16 +524,20 @@ def summarize_since(log, seq: int) -> dict:
                 mentions += 1
 
     truncated = bool(seq and oldest_seen is not None and oldest_seen > seq + 1)
-    return {"total": total, "mentions": mentions, "last_seq": last_seq,
-            "truncated": truncated}
+    return {
+        "total": total,
+        "mentions": mentions,
+        "last_seq": last_seq,
+        "truncated": truncated,
+    }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 skills/matrix-communication/scripts/_lib/test_roomlog.py`
 Expected: PASS, 22 tests
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 uvx --no-build ruff@0.16.0 check . && uvx --no-build ruff@0.16.0 format --check .
@@ -506,7 +557,7 @@ git commit -S --signoff -m "feat(roomlog): cursor and since-summary with a lower
 - Consumes: nothing.
 - Produces: `socket_path() -> Path`, `daemon_request(payload: dict, timeout: float = 30.0) -> dict | None` returning `None` when no daemon answers.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 """Tests for `_lib.daemon_client`: the socket decides, not the lock."""
@@ -593,12 +644,12 @@ if __name__ == "__main__":
     unittest.main(verbosity=2)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python3 skills/matrix-communication/scripts/_lib/test_daemon_client.py`
 Expected: FAIL — `ModuleNotFoundError: No module named 'daemon_client'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 """Client side of the watch daemon's socket.
@@ -656,12 +707,12 @@ def daemon_request(payload: dict, timeout: float = 30.0) -> dict | None:
         sock.close()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python3 skills/matrix-communication/scripts/_lib/test_daemon_client.py`
 Expected: PASS, 4 tests
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 uvx --no-build ruff@0.16.0 check . && uvx --no-build ruff@0.16.0 format --check .
@@ -680,7 +731,7 @@ git commit -S --signoff -m "feat(daemon-client): socket round trip with fallback
 - Consumes: everything from Tasks 1–4.
 - Produces: the same names importable as `from _lib import …`.
 
-- [ ] **Step 1: Add the imports and `__all__` entries**
+- [x] **Step 1: Add the imports and `__all__` entries**
 
 Add to the import block, alphabetically within their own group:
 
@@ -702,7 +753,7 @@ from _lib.roomlog import (
 
 Add each name to `__all__`, keeping it sorted — `ruff` enforces `RUF022` and will fail CI otherwise.
 
-- [ ] **Step 2: Verify both import paths work**
+- [x] **Step 2: Verify both import paths work**
 
 Run:
 ```bash
@@ -710,7 +761,7 @@ cd skills/matrix-communication/scripts && python3 -c "from _lib import room_slug
 ```
 Expected: `a_b`
 
-- [ ] **Step 3: Lint and commit**
+- [x] **Step 3: Lint and commit**
 
 ```bash
 uvx --no-build ruff@0.16.0 check . && uvx --no-build ruff@0.16.0 format --check .
@@ -731,7 +782,7 @@ git commit -S --signoff -m "feat(lib): export roomlog and daemon client"
 
 No unit test: the module is argument parsing plus a tail loop over functions that are already tested. Task 8's smoke test covers it end to end.
 
-- [ ] **Step 1: Add `rooms_dir()` to `_lib/e2ee.py` and export it**
+- [x] **Step 1: Add `rooms_dir()` to `_lib/e2ee.py` and export it**
 
 The script below imports it, so it has to exist first.
 
@@ -745,7 +796,7 @@ def rooms_dir():
 
 Export it from `_lib/__init__.py` and add it to `__all__` in sorted position.
 
-- [ ] **Step 2: Write the script**
+- [x] **Step 2: Write the script**
 
 ```python
 #!/usr/bin/env python3
@@ -792,9 +843,14 @@ POLL_SECONDS = 0.5
 def main() -> int:
     parser = argparse.ArgumentParser(description="Follow a room's event log")
     parser.add_argument("room", help="Room name, alias or ID")
-    parser.add_argument("--cursor", default="default", help="Name this reader's position")
-    parser.add_argument("--no-summary", action="store_true",
-                        help="Skip the 'since last' line and start live")
+    parser.add_argument(
+        "--cursor", default="default", help="Name this reader's position"
+    )
+    parser.add_argument(
+        "--no-summary",
+        action="store_true",
+        help="Skip the 'since last' line and start live",
+    )
     args = parser.parse_args()
 
     config = load_config()
@@ -804,8 +860,10 @@ def main() -> int:
     cursor = cursor_path(directory, room_id, args.cursor)
 
     if not log.exists():
-        print(f"No log for {room_id}. Is matrix-watchd.py running and watching it?",
-              file=sys.stderr)
+        print(
+            f"No log for {room_id}. Is matrix-watchd.py running and watching it?",
+            file=sys.stderr,
+        )
         return 1
 
     seen = read_cursor(cursor)
@@ -813,8 +871,10 @@ def main() -> int:
         summary = summarize_since(log, seen)
         if summary["total"]:
             about = "at least " if summary["truncated"] else ""
-            print(f"since last: {about}{summary['total']} messages, "
-                  f"{summary['mentions']} mentioning you")
+            print(
+                f"since last: {about}{summary['total']} messages, "
+                f"{summary['mentions']} mentioning you"
+            )
 
     # Print the backlog we have not shown, then follow.
     for record in read_records(log):
@@ -858,12 +918,12 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 3: Verify the reader refuses cleanly with no log**
+- [x] **Step 3: Verify the reader refuses cleanly with no log**
 
 Run: `uv run skills/matrix-communication/scripts/matrix-watch.py '#nonexistent:example.org'`
 Expected: exit 1 with the "Is matrix-watchd.py running" message, no traceback
 
-- [ ] **Step 4: Lint and commit**
+- [x] **Step 4: Lint and commit**
 
 ```bash
 uvx --no-build ruff@0.16.0 check . && uvx --no-build ruff@0.16.0 format --check .
@@ -884,7 +944,7 @@ git commit -S --signoff -m "feat(watch): attach reader following a room log"
 
 The sync loop is not unit tested — it needs a live homeserver. Task 8 adds a smoke check that the daemon starts, answers `status`, and stops.
 
-- [ ] **Step 1: Write the daemon**
+- [x] **Step 1: Write the daemon**
 
 Key requirements, each of which the spec names:
 
@@ -922,7 +982,7 @@ against a stopped daemon behaves:
 5. `_serve(reader, writer)` — one JSON line in, one out; dispatch `send`/`react`/`redact` to the shared client, `status` to a dict of uptime, watched rooms and last sync time.
 6. `main()` — parse args; `--foreground` runs the loop, `--start` re-execs itself detached, `--stop` reads the pid file and sends SIGTERM, `--status` asks over the socket and prints, or says no daemon is running.
 
-- [ ] **Step 2: Verify it refuses a second instance**
+- [x] **Step 2: Verify it refuses a second instance**
 
 Run:
 ```bash
@@ -931,12 +991,12 @@ uv run skills/matrix-communication/scripts/matrix-watchd.py --foreground
 ```
 Expected: the second exits non-zero with `daemon already running (pid N)`
 
-- [ ] **Step 3: Verify `--status` with no daemon**
+- [x] **Step 3: Verify `--status` with no daemon**
 
 Run: `uv run skills/matrix-communication/scripts/matrix-watchd.py --status`
 Expected: `No daemon running.`, exit 0
 
-- [ ] **Step 4: Lint and commit**
+- [x] **Step 4: Lint and commit**
 
 ```bash
 uvx --no-build ruff@0.16.0 check . && uvx --no-build ruff@0.16.0 format --check .
@@ -957,41 +1017,43 @@ git commit -S --signoff -m "feat(watchd): daemon owning the store, streaming to 
 - Consumes: `daemon_request` from Task 4.
 - Produces: no new flags, no new output format.
 
-- [ ] **Step 1: Add the routing branch to `matrix-send-e2ee.py`**
+- [x] **Step 1: Add the routing branch to `matrix-send-e2ee.py`**
 
 Immediately before the client is constructed:
 
 ```python
-    # A daemon holds the store when one is running, so the send has to go
-    # through it. The signal is a socket that answers, not the store lock: a
-    # direct send holds that lock too, and deciding on it would route into a
-    # socket nobody serves.
-    response = daemon_request({
+# A daemon holds the store when one is running, so the send has to go
+# through it. The signal is a socket that answers, not the store lock: a
+# direct send holds that lock too, and deciding on it would route into a
+# socket nobody serves.
+response = daemon_request(
+    {
         "op": "send",
         "room": room_id,
         "body": message,
         "msgtype": msgtype,
         "reply_to": reply_to,
         "thread_root": thread_root,
-    })
-    if response is not None:
-        if not response.get("ok"):
-            print(f"Error: {response.get('error')}", file=sys.stderr)
-            return 1
-        print(response["event_id"])
-        return 0
+    }
+)
+if response is not None:
+    if not response.get("ok"):
+        print(f"Error: {response.get('error')}", file=sys.stderr)
+        return 1
+    print(response["event_id"])
+    return 0
 ```
 
-- [ ] **Step 2: Repeat for `matrix-react.py` with `{"op": "react", "room", "event_id", "key"}`**
+- [x] **Step 2: Repeat for `matrix-react.py` with `{"op": "react", "room", "event_id", "key"}`**
 
-- [ ] **Step 3: Repeat for `matrix-redact.py` with `{"op": "redact", "room", "event_id", "reason"}`**
+- [x] **Step 3: Repeat for `matrix-redact.py` with `{"op": "redact", "room", "event_id", "reason"}`**
 
-- [ ] **Step 4: Verify the fallback still works with no daemon**
+- [x] **Step 4: Verify the fallback still works with no daemon**
 
 Run: `set +H && uv run skills/matrix-communication/scripts/matrix-send-e2ee.py test "fallback check"`
 Expected: message sent through the direct path, event id printed
 
-- [ ] **Step 5: Smoke test the daemon path end to end**
+- [x] **Step 5: Smoke test the daemon path end to end**
 
 ```bash
 uv run skills/matrix-communication/scripts/matrix-watchd.py --start
@@ -1003,7 +1065,7 @@ uv run skills/matrix-communication/scripts/matrix-watchd.py --stop
 Expected: the sent message appears in the watch output, which proves the round
 trip — socket in, homeserver, sync, log, reader.
 
-- [ ] **Step 6: Lint and commit**
+- [x] **Step 6: Lint and commit**
 
 ```bash
 uvx --no-build ruff@0.16.0 check . && uvx --no-build ruff@0.16.0 format --check .
@@ -1020,7 +1082,7 @@ git commit -S --signoff -m "feat(commands): route through the daemon when one is
 - Modify: `skills/matrix-communication/references/e2ee-guide.md`
 - Modify: `AGENTS.md`
 
-- [ ] **Step 1: Add the commands to `SKILL.md`**
+- [x] **Step 1: Add the commands to `SKILL.md`**
 
 ```markdown
 # Live awareness (daemon holds the store; everything else routes through it)
@@ -1030,19 +1092,19 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watch.py ROOM [--cursor NAME]
 
 Add the config key to the Config section: `watch_rooms` — rooms the daemon logs.
 
-- [ ] **Step 2: Add a section to `references/e2ee-guide.md`**
+- [x] **Step 2: Add a section to `references/e2ee-guide.md`**
 
 Covering: what the daemon owns, why only one process may hold the store, that
 send/react fall back automatically when no daemon runs, and that
 `matrix-watch.py` never touches the store so it can run many times.
 
-- [ ] **Step 3: Add the rule to `AGENTS.md` under "Rules — matrix-communication"**
+- [x] **Step 3: Add the rule to `AGENTS.md` under "Rules — matrix-communication"**
 
 ```markdown
 - **One daemon owns the store**: `matrix-watchd.py` holds an exclusive lock for its whole run. Commands detect it by connecting to its socket — never by testing the lock, which a direct send holds too — and fall back to the direct path when nothing answers.
 ```
 
-- [ ] **Step 4: Lint and commit**
+- [x] **Step 4: Lint and commit**
 
 ```bash
 npx --yes markdownlint-cli2 "**/*.md" "!node_modules"
@@ -1059,3 +1121,31 @@ git commit -S --signoff -m "docs: daemon lifecycle, watch commands and the routi
 **Placeholders.** None: every code step carries the code, and Task 7's numbered list names each function with its exact behaviour rather than deferring it.
 
 **Type consistency.** `room_slug`, `log_path`, `next_seq`, `append_record`, `read_records`, `cursor_path`, `read_cursor`, `write_cursor`, `summarize_since`, `daemon_request`, `socket_path`, `rooms_dir` are spelled identically in every task that uses them. `summarize_since` returns `{"total", "mentions", "last_seq", "truncated"}` in Task 3 and is consumed with exactly those keys in Task 6.
+
+---
+
+## Status: implemented
+
+All nine tasks are in `main` via the branch that carries this plan. What the
+implementation added beyond the plan, and why:
+
+- **`socket_path()` tests the runtime directory instead of trusting the
+  variable.** `XDG_RUNTIME_DIR` is exported on this machine for a
+  `/run/user/1001` nobody created, and the daemon died in `mkdir` before doing
+  anything. Two tests cover it. The plan did not anticipate this; running the
+  code found it.
+- **`write_room_bundle` lives in `_lib/roomlog.py`, not in the daemon.** In the
+  daemon it needed nio to be importable and was therefore untestable for a
+  reason that had nothing to do with what it does. Six tests now check the OKF
+  shape.
+- **The `matrix-redact.py` example in SKILL.md was wrong** and had always been:
+  it showed a positional reason where the script takes `--reason`. Found by
+  running it.
+
+**Not verified on this machine:** the daemon's sync loop. The store here is on
+the vodozemac backend while the scripts pin `matrix-nio[e2e]<0.26`, so opening
+it reports the backend mismatch from #85 rather than syncing. That is a
+pre-existing condition of this store, not of this work, and the diagnosis
+appearing is itself evidence that path behaves. Everything either side of the
+sync - the socket round trip, the log, the reader, the routing decision and the
+fallback - was exercised against a fake listener and a synthetic log.
