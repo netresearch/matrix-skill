@@ -376,5 +376,29 @@ class SelfIsTheDeviceTests(unittest.TestCase):
         self.assertNotIn("(agent)", theirs["text"])
 
 
+class DisplayNameFallbackTests(unittest.TestCase):
+    """Regression for #92: an unknown display name showed the whole MXID.
+
+    Line width is what makes a busy room affordable to follow, and
+    `@bjoern.marten:netresearch.de` costs 18 characters more than the name it
+    stands for. Member state arrives lazily in large rooms, so "no display name
+    yet" is the normal case there, not an edge one.
+    """
+
+    def test_display_name_is_used_when_known(self):
+        rec = record(1, sender_display="Björn Marten")
+        self.assertIn("Björn Marten:", rec["text"])
+
+    def test_unknown_display_name_falls_back_to_the_localpart(self):
+        rec = record(1, sender="@bjoern.marten:netresearch.de", sender_display=None)
+        self.assertIn("bjoern.marten:", rec["text"])
+        self.assertNotIn("@bjoern.marten:netresearch.de", rec["text"])
+
+    def test_the_full_mxid_stays_in_the_record(self):
+        """Only the rendered line is shortened - the data keeps the identity."""
+        rec = record(1, sender="@bjoern.marten:netresearch.de", sender_display=None)
+        self.assertEqual(rec["sender"], "@bjoern.marten:netresearch.de")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

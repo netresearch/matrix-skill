@@ -17,7 +17,13 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from formatting import markdown_to_html, shorten_service_urls
+from formatting import (
+    build_mentions,
+    inject_pills,
+    markdown_to_html,
+    mention_pill,
+    shorten_service_urls,
+)
 
 
 class ShortenServiceUrlsTests(unittest.TestCase):
@@ -191,6 +197,63 @@ class MarkdownToHtmlLinkTests(unittest.TestCase):
         self.assertNotIn("](", html)
         # Sanity: no leftover bullet asterisks (would mean inline ate the bullet)
         self.assertNotIn("<li>*", html)
+
+
+class MentionTests(unittest.TestCase):
+    """Regression for #90: a plain @name notifies nobody.
+
+    Only m.mentions fires a notification on a modern client. The legacy push
+    rule matched the exact localpart and nothing else, so "@bjoern" never
+    reached "bjoern.marten" - which is how the case in the issue went unnoticed.
+    """
+
+    USER = "@bjoern.marten:example.org"
+
+    def test_pill_links_to_matrix_to(self):
+        pill = mention_pill(self.USER)
+        self.assertEqual(
+            pill, "[bjoern.marten](https://matrix.to/#/@bjoern.marten:example.org)"
+        )
+
+    def test_pill_takes_a_label(self):
+        self.assertIn("[Björn]", mention_pill(self.USER, "Björn"))
+
+    def test_mentions_block_carries_the_user_ids(self):
+        self.assertEqual(build_mentions([self.USER]), {"user_ids": [self.USER]})
+
+    def test_duplicate_mentions_are_collapsed(self):
+        self.assertEqual(
+            build_mentions([self.USER, self.USER])["user_ids"], [self.USER]
+        )
+
+    def test_room_mention_is_its_own_flag(self):
+        self.assertEqual(build_mentions([], room=True), {"room": True})
+
+    def test_empty_mentions_produce_an_empty_block(self):
+        self.assertEqual(build_mentions([]), {})
+
+    def test_a_bare_localpart_becomes_a_pill(self):
+        out = inject_pills("bjoern.marten schau mal", [self.USER])
+        self.assertIn("(https://matrix.to/#/@bjoern.marten:example.org)", out)
+
+    def test_an_at_prefixed_name_becomes_a_pill(self):
+        out = inject_pills("@bjoern.marten schau mal", [self.USER])
+        self.assertIn("[bjoern.marten](https://matrix.to/#/", out)
+
+    def test_a_name_that_is_not_in_the_text_is_not_inserted(self):
+        """m.mentions already notifies. Rewriting someone's message to add a
+        name they did not type is worse than a missing pill."""
+        out = inject_pills("nichts von belang", [self.USER])
+        self.assertEqual(out, "nichts von belang")
+
+    def test_an_existing_link_is_not_wrapped_again(self):
+        text = "[bjoern.marten](https://matrix.to/#/@bjoern.marten:example.org)"
+        self.assertEqual(inject_pills(text, [self.USER]), text)
+
+    def test_only_the_first_occurrence_is_pilled(self):
+        """One pill per mention reads as an address; four read as a stutter."""
+        out = inject_pills("bjoern.marten und nochmal bjoern.marten", [self.USER])
+        self.assertEqual(out.count("https://matrix.to/#/"), 1)
 
 
 if __name__ == "__main__":

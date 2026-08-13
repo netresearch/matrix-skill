@@ -58,11 +58,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
     add_bot_prefix,
+    build_mentions,
     check_e2ee_dependencies,
     clean_message,
     daemon_request,
     find_room_in_nio_client,
     get_store_path,
+    inject_pills,
     load_config,
     load_credentials,
     markdown_to_html,
@@ -93,6 +95,8 @@ async def send_message_e2ee(
     notice: bool = False,
     thread_id: str | None = None,
     reply_id: str | None = None,
+    mentions: list | None = None,
+    mention_room: bool = False,
     debug: bool = False,
 ) -> dict:
     """Send an E2EE-capable message to a Matrix room.
@@ -117,6 +121,8 @@ async def send_message_e2ee(
             "msgtype": msgtype,
             "reply_to": reply_id,
             "thread_root": thread_id,
+            "mentions": mentions,
+            "mention_room": mention_room,
         }
     )
     if response is not None:
@@ -329,8 +335,17 @@ async def send_message_e2ee(
             "body": message,
         }
 
-        # Add HTML formatting
-        html = markdown_to_html(message)
+        # m.mentions is what actually notifies (MSC3952). A plain @name in the
+        # body only ever matched the legacy push rule, and only on an exact
+        # localpart - "@bjoern" never reached "bjoern.marten".
+        mention_block = build_mentions(mentions, room=mention_room)
+        if mention_block:
+            content["m.mentions"] = mention_block
+
+        # Pills go into the HTML body only. The plain body keeps the bare name,
+        # which is what a client without HTML shows and what the legacy rule
+        # reads.
+        html = markdown_to_html(inject_pills(message, mentions))
         if html != message:
             content["format"] = "org.matrix.custom.html"
             content["formatted_body"] = html
@@ -390,6 +405,18 @@ def main():
     parser.add_argument(
         "--no-prefix", action="store_true", help="Don't add bot_prefix from config"
     )
+    parser.add_argument(
+        "--mention",
+        action="append",
+        metavar="@user:server",
+        help="Notify this user (repeatable). Sets m.mentions and pills the name "
+        "where it appears in the text",
+    )
+    parser.add_argument(
+        "--mention-room",
+        action="store_true",
+        help="Notify everyone in the room (@room)",
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
@@ -436,6 +463,8 @@ def main():
             notice=args.notice,
             thread_id=args.thread,
             reply_id=args.reply,
+            mentions=args.mention,
+            mention_room=args.mention_room,
             debug=args.debug,
         )
     )
