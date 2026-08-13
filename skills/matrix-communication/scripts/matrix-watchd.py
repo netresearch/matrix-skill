@@ -24,8 +24,6 @@ Rooms come from `watch_rooms` in ~/.config/matrix/config.json.
 import argparse
 import asyncio
 import contextlib
-import errno
-import fcntl
 import json
 import os
 import signal
@@ -50,6 +48,7 @@ from _lib import (
     restore_login_checked,
     rooms_dir,
     socket_path,
+    store_lock,
     suppress_nio_logging,
     write_room_bundle,
 )
@@ -80,32 +79,6 @@ def lock_file_path():
 
 def pid_file_path():
     return socket_path().parent / "daemon.pid"
-
-
-def take_store_lock():
-    """Hold the store for this process's whole life, or refuse to start.
-
-    Advisory `flock`, held open deliberately: releasing it would let a second
-    syncer in, and two syncers is the state this daemon exists to prevent.
-    """
-    path = lock_file_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle = open(path, "a+")  # noqa: SIM115  # held for the process lifetime
-    try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError as exc:
-        if exc.errno not in (errno.EACCES, errno.EAGAIN):
-            raise
-        handle.seek(0)
-        holder = handle.read().strip() or "unknown"
-        handle.close()
-        print(f"Error: the store is locked by pid {holder}", file=sys.stderr)
-        return None
-    handle.seek(0)
-    handle.truncate()
-    handle.write(str(os.getpid()))
-    handle.flush()
-    return handle
 
 
 def event_to_dict(room, event) -> dict | None:
@@ -268,6 +241,8 @@ class Daemon:
                 return await self.op_send(request)
             if op == "react":
                 return await self.op_react(request)
+            if op == "edit":
+                return await self.op_edit(request)
             if op == "redact":
                 return await self.op_redact(request)
             return {"ok": False, "error": f"unknown op: {op!r}"}
@@ -310,6 +285,35 @@ class Daemon:
                 "event_id": request["thread_root"],
             }
 
+        response = await self.client.room_send(
+            room_id=self.room_id_for(request["room"]),
+            message_type="m.room.message",
+            content=content,
+            ignore_unverified_devices=True,
+        )
+        return self._event_id_or_error(response)
+
+    async def op_edit(self, request: dict) -> dict:
+        """Replace an earlier message.
+
+        Routed like the others: an edit opens the store, and a second opener
+        beside the daemon is the state this whole design removes. Before this
+        existed, edits went direct and produced events the daemon could not
+        decrypt - holes in its own log where its corrections should be.
+        """
+        body = request["body"]
+        content = {
+            "msgtype": request.get("msgtype") or "m.text",
+            "body": f"* {body}",
+            "m.new_content": {
+                "msgtype": request.get("msgtype") or "m.text",
+                "body": body,
+            },
+            "m.relates_to": {
+                "rel_type": "m.replace",
+                "event_id": request["event_id"],
+            },
+        }
         response = await self.client.room_send(
             room_id=self.room_id_for(request["room"]),
             message_type="m.room.message",
@@ -462,8 +466,17 @@ class Daemon:
 
 
 def run_foreground(config: dict, credentials: dict) -> int:
-    lock = take_store_lock()
-    if lock is None:
+    # The same lock every direct command takes, held for the daemon's whole
+    # run. Going through the shared helper rather than a second implementation
+    # is what keeps the daemon from blocking on itself: flock is per open file
+    # description, so the daemon taking it twice on two descriptors would wait
+    # for a lock it already holds - which is precisely what happened when this
+    # had its own copy.
+    lock = store_lock(timeout=0)
+    try:
+        lock.__enter__()
+    except SystemExit as exc:
+        print(exc, file=sys.stderr)
         return 1
 
     pid_file = pid_file_path()
@@ -483,7 +496,8 @@ def run_foreground(config: dict, credentials: dict) -> int:
         loop.close()
         with contextlib.suppress(Exception):
             pid_file.unlink()
-        lock.close()
+        with contextlib.suppress(Exception):
+            lock.__exit__(None, None, None)
 
 
 def start_detached() -> int:

@@ -4,8 +4,14 @@ All functions use ONLY stdlib - no nio dependencies here.
 The actual E2EE functionality (using nio) is in the scripts themselves.
 """
 
+import atexit
+import contextlib
+import errno
+import fcntl
 import json
 import os
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -69,6 +75,87 @@ def save_credentials(user_id: str, device_id: str, access_token: str):
     os.chmod(creds_path, 0o600)
 
 
+LOCK_TIMEOUT = 30.0
+
+# How deep this process is inside store_lock(). flock is held per open file
+# description, so a process taking it twice on two descriptors blocks on
+# itself - which the daemon would do the moment it called a helper that locks.
+_LOCK_DEPTH = 0
+
+
+def store_lock_path():
+    """The file whose flock stands for the right to open the E2EE store."""
+    return get_store_path() / ".daemon.lock"
+
+
+@contextmanager
+def store_lock(timeout: float = LOCK_TIMEOUT):
+    """Hold the exclusive right to open the E2EE store, or refuse.
+
+    Two nio processes on one store corrupt it, and the corruption does not
+    announce itself - it surfaces later as an undecryptable message or a store
+    that no longer opens. The daemon holds this lock for its whole run; every
+    direct path takes it too, so the collision becomes a wait and then a clear
+    refusal instead of silent damage.
+
+    Blocking rather than failing at once: a direct send that arrives during
+    another command's couple of seconds should wait for it, not error. On
+    timeout the holder's pid is named, because the useful next question is
+    always "who has it".
+    """
+    global _LOCK_DEPTH
+
+    if _LOCK_DEPTH:
+        # Already ours. Re-entering is what happens when a locked command calls
+        # a helper that locks; the alternative is a process deadlocking itself.
+        _LOCK_DEPTH += 1
+        try:
+            yield
+        finally:
+            _LOCK_DEPTH -= 1
+        return
+
+    path = store_lock_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(path, "a+")  # noqa: SIM115  # released in the finally below
+    deadline = time.monotonic() + timeout
+
+    while True:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except OSError as exc:
+            if exc.errno not in (errno.EACCES, errno.EAGAIN):
+                handle.close()
+                raise
+            if time.monotonic() >= deadline:
+                handle.seek(0)
+                holder = handle.read().strip() or "unknown"
+                handle.close()
+                raise SystemExit(
+                    f"Error: the E2EE store is held by pid {holder}.\n"
+                    "\n"
+                    "That is normally matrix-watchd. Commands that route through "
+                    "it - send, react, redact, edit - work while it runs; this "
+                    "one does not yet. Stop the daemon for the duration:\n"
+                    "  matrix-watchd.py --stop && … && matrix-watchd.py --start"
+                ) from exc
+            time.sleep(0.2)
+
+    handle.seek(0)
+    handle.truncate()
+    handle.write(str(os.getpid()))
+    handle.flush()
+
+    _LOCK_DEPTH = 1
+    try:
+        yield
+    finally:
+        _LOCK_DEPTH = 0
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+
+
 def explain_store_error(exc: Exception) -> str | None:
     """Diagnose a store that cannot be opened, or return None.
 
@@ -109,12 +196,39 @@ def explain_store_error(exc: Exception) -> str | None:
     )
 
 
+def _hold_store_lock() -> None:
+    """Take the store lock for the rest of this process.
+
+    A CLI command opens the store once and exits; there is no point at which
+    releasing early would help, and holding to the end is what stops a second
+    process slipping in mid-run. The kernel releases it when the process ends,
+    including when it is killed.
+    """
+    if _LOCK_DEPTH:
+        return
+    context = store_lock()
+    context.__enter__()
+    atexit.register(_release_held_lock, context)
+
+
+def _release_held_lock(context) -> None:
+    with contextlib.suppress(Exception):
+        context.__exit__(None, None, None)
+
+
 def restore_login_checked(client, user_id: str, device_id: str, access_token: str):
-    """``client.restore_login`` that explains a store it cannot open.
+    """``client.restore_login`` that locks the store and explains what it cannot open.
+
+    Takes the store lock before opening, and keeps it: these are one-shot
+    commands, so "until the process exits" is exactly how long the store is in
+    use, and the lock is released by the kernel when the last descriptor closes.
+    Every path that opens the store therefore holds it, which is what makes
+    exclusivity enforced rather than agreed.
 
     Takes the client as a parameter rather than importing nio, keeping this
     module stdlib-only.
     """
+    _hold_store_lock()
     try:
         client.restore_login(
             user_id=user_id, device_id=device_id, access_token=access_token
