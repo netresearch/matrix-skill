@@ -24,11 +24,18 @@ CONNECT_TIMEOUT = 2.0
 def socket_path() -> Path:
     """Where the daemon listens.
 
-    The runtime directory when there is one: it is cleared on reboot, which is
-    exactly the lifetime a socket should have.
+    The runtime directory when it is usable: it is cleared on reboot, which is
+    exactly the lifetime a socket should have. `XDG_RUNTIME_DIR` being set is
+    not the same as it existing - on WSL and in containers it is routinely
+    exported for a `/run/user/<uid>` nobody created - so the directory is
+    tested rather than trusted, and the fall-back is the data directory the
+    rest of the skill already uses.
     """
     runtime = os.environ.get("XDG_RUNTIME_DIR")
-    base = Path(runtime) if runtime else Path.home() / ".local" / "share"
+    if runtime and os.path.isdir(runtime) and os.access(runtime, os.W_OK):
+        base = Path(runtime)
+    else:
+        base = Path.home() / ".local" / "share"
     return base / "matrix-skill" / "daemon.sock"
 
 

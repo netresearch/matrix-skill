@@ -205,3 +205,44 @@ def summarize_since(log, seq: int) -> dict:
         "last_seq": last_seq,
         "truncated": truncated,
     }
+
+
+def write_room_bundle(directory, rooms: dict) -> None:
+    """Describe the watched rooms as an OKF bundle.
+
+    Rooms are knowledge, not a stream, so they take the repository's normal
+    format: typed frontmatter per room and an index that lists them. This also
+    replaces what would otherwise be an ad-hoc slug-to-room mapping nobody
+    could read. See https://okf.md/.
+
+    Lives here rather than in the daemon so it can be tested without nio.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(tz=timezone.utc).isoformat()
+    entries = []
+
+    for room_id, label in sorted(rooms.items(), key=lambda item: item[1]):
+        slug = room_slug(room_id)
+        description = f"Matrix room {label}, watched by matrix-watchd."
+        (directory / f"{slug}.md").write_text(
+            "---\n"
+            "type: matrix-room\n"
+            f"title: {label}\n"
+            f"description: {description}\n"
+            f"resource: matrix:roomid/{room_id.lstrip('!')}\n"
+            "tags: [matrix, room, watched]\n"
+            f"timestamp: {stamp}\n"
+            "---\n\n"
+            f"# {label}\n\n"
+            f"Room ID `{room_id}`. Events are appended to `{slug}.jsonl`;\n"
+            "follow them with `matrix-watch.py`.\n",
+            encoding="utf-8",
+        )
+        entries.append(f"- [{label}]({slug}.md) - {description}")
+
+    (directory / "index.md").write_text(
+        "# Watched rooms\n\n"
+        "Written by `matrix-watchd.py`. Each room's events are in the "
+        "`.jsonl` file next to its page.\n\n" + "\n".join(entries) + "\n",
+        encoding="utf-8",
+    )

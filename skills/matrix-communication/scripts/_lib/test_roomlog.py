@@ -28,6 +28,7 @@ from roomlog import (
     room_slug,
     summarize_since,
     write_cursor,
+    write_room_bundle,
 )
 
 EVENT = {
@@ -255,6 +256,49 @@ class JsonShapeTests(unittest.TestCase):
     def test_record_is_json_serialisable(self):
         """Every field has to survive json.dumps or the append silently fails."""
         json.dumps(record(1))
+
+
+class RoomBundleTests(unittest.TestCase):
+    """The bundle is OKF: typed frontmatter per room, an index without any."""
+
+    def setUp(self):
+        self.dir = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        write_room_bundle(
+            self.dir,
+            {"!a:example.org": "#ops:example.org", "!b:example.org": "#it:example.org"},
+        )
+
+    def test_one_file_per_room(self):
+        self.assertTrue((self.dir / "a_example.org.md").exists())
+        self.assertTrue((self.dir / "b_example.org.md").exists())
+
+    def test_room_page_carries_the_mandatory_type(self):
+        text = (self.dir / "a_example.org.md").read_text()
+        self.assertTrue(text.startswith("---\n"))
+        self.assertIn("type: matrix-room", text)
+
+    def test_room_page_carries_the_recommended_fields(self):
+        text = (self.dir / "a_example.org.md").read_text()
+        for field in ("title:", "description:", "resource:", "tags:", "timestamp:"):
+            self.assertIn(field, text)
+
+    def test_index_has_no_frontmatter(self):
+        """OKF: 'an index.md contains no frontmatter'."""
+        text = (self.dir / "index.md").read_text()
+        self.assertFalse(text.startswith("---"))
+
+    def test_index_lists_every_room_with_its_description(self):
+        text = (self.dir / "index.md").read_text()
+        self.assertIn("(a_example.org.md)", text)
+        self.assertIn("(b_example.org.md)", text)
+        self.assertIn("watched by matrix-watchd", text)
+
+    def test_rewriting_the_bundle_does_not_duplicate_entries(self):
+        write_room_bundle(self.dir, {"!a:example.org": "#ops:example.org"})
+        text = (self.dir / "index.md").read_text()
+        self.assertEqual(text.count("(a_example.org.md)"), 1)
+        self.assertNotIn("(b_example.org.md)", text)
 
 
 if __name__ == "__main__":

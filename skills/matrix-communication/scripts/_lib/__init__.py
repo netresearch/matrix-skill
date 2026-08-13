@@ -52,6 +52,7 @@ from _lib.roomlog import (
     room_slug,
     summarize_since,
     write_cursor,
+    write_room_bundle,
 )
 
 # Room operations
@@ -111,4 +112,5 @@ __all__ = [
     "summarize_since",
     "suppress_nio_logging",
     "write_cursor",
+    "write_room_bundle",
 ]

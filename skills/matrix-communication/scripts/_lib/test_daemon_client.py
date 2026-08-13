@@ -109,13 +109,32 @@ class RoutingTests(unittest.TestCase):
 
 
 class SocketPathTests(unittest.TestCase):
-    def test_runtime_dir_is_preferred(self):
-        os.environ["XDG_RUNTIME_DIR"] = "/run/user/1234"
-        self.addCleanup(os.environ.pop, "XDG_RUNTIME_DIR", None)
+    def setUp(self):
+        self.previous = os.environ.get("XDG_RUNTIME_DIR")
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        if self.previous is None:
+            os.environ.pop("XDG_RUNTIME_DIR", None)
+        else:
+            os.environ["XDG_RUNTIME_DIR"] = self.previous
+
+    def test_an_existing_runtime_dir_is_preferred(self):
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory, True)
+        os.environ["XDG_RUNTIME_DIR"] = directory
         self.assertEqual(
             str(daemon_client.socket_path()),
-            "/run/user/1234/matrix-skill/daemon.sock",
+            f"{directory}/matrix-skill/daemon.sock",
         )
+
+    def test_a_runtime_dir_that_does_not_exist_is_not_used(self):
+        """WSL and containers export XDG_RUNTIME_DIR for a directory nobody
+        created. Trusting the variable crashed the daemon on startup."""
+        os.environ["XDG_RUNTIME_DIR"] = "/run/user/does-not-exist-99999"
+        path = daemon_client.socket_path()
+        self.assertNotIn("does-not-exist", str(path))
+        self.assertTrue(str(path).endswith("matrix-skill/daemon.sock"))
 
     def test_falls_back_when_there_is_no_runtime_dir(self):
         os.environ.pop("XDG_RUNTIME_DIR", None)
