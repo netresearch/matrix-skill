@@ -8,15 +8,9 @@
 
 The skills below each ship their own `SKILL.md` (read it before editing any file in that directory):
 
-- [`skills/matrix-communication/SKILL.md`](skills/matrix-communication/SKILL.md) — chat operations (Client-Server API, E2EE)
-- [`skills/matrix-administration/SKILL.md`](skills/matrix-administration/SKILL.md) — homeserver operations (Synapse Admin API)
-- [`skills/matrix-announcement/SKILL.md`](skills/matrix-announcement/SKILL.md) — content guidance for structured Matrix announcements
-
-AI agent plugin shipping three Matrix skills:
-
-- **matrix-communication** — send / read / edit / react in chat rooms as a regular user, with full E2EE support, plus a daemon that follows rooms live (uses `python-matrix-nio` via `uv`).
-- **matrix-administration** — Synapse homeserver operations: snapshot rooms, rate health, render Graphviz map, force-join, promote, harden, deactivate, search history (stdlib-only).
-- **matrix-announcement** — content guidance for composing scannable, structured Matrix announcements (release notes, digests, heads-ups, postmortems). Defines the HTML subset, type-tag system, glyph rules, and when to render an HTML card to PNG. No scripts — pairs with `matrix-communication` for delivery.
+- [`skills/matrix-communication/SKILL.md`](skills/matrix-communication/SKILL.md) — send / read / edit / react in chat rooms as a regular user, with full E2EE, plus a daemon that follows rooms live (`python-matrix-nio` via `uv`).
+- [`skills/matrix-administration/SKILL.md`](skills/matrix-administration/SKILL.md) — Synapse homeserver operations: snapshot rooms, rate health, render Graphviz map, force-join, promote, harden, deactivate, search history (stdlib-only).
+- [`skills/matrix-announcement/SKILL.md`](skills/matrix-announcement/SKILL.md) — content guidance for scannable, structured announcements (release notes, digests, heads-ups, postmortems): HTML subset, type tags, glyph rules, HTML→PNG cards. No scripts — pairs with `matrix-communication` for delivery.
 
 Packaged as a Claude Code plugin following the [Agentic Skills specification](https://agentskills.io).
 
@@ -24,8 +18,7 @@ Packaged as a Claude Code plugin following the [Agentic Skills specification](ht
 
 ```
 skills/matrix-communication/   # Client-Server API, E2EE chat (uses python-matrix-nio via uv)
-  SKILL.md, scripts/{_lib, matrix-*-e2ee.py, matrix-*.py, matrix-watchd.py, matrix-watch.py,
-           matrix-doctor.py, test_*.py}, references/, evals/
+  SKILL.md, scripts/{_lib, matrix-*.py, matrix-watchd.py, matrix-watch.py, test_*.py}, references/, evals/
 
 skills/matrix-administration/  # Synapse Admin API, server ops (stdlib-only Python)
   SKILL.md, scripts/{_lib, synapse-*.py}, references/, evals/
@@ -37,9 +30,7 @@ skills/matrix-announcement/    # Content guidance for structured announcements (
 
 commands/work-update.md   # /work-update slash command template
 .claude-plugin/plugin.json   # Plugin manifest — lists all three skills
-docs/ARCHITECTURE.md
-docs/specs/            # design documents (OKF)
-docs/exec-plans/       # implementation plans
+docs/{ARCHITECTURE.md, specs/ (OKF designs), exec-plans/}
 Build/Scripts/   # CI validation
 scripts/verify-harness.sh   # Harness maturity checker
 .github/workflows/   # lint, release, harness-verify, auto-merge-deps, eval-validate
@@ -67,11 +58,9 @@ uv run $C/matrix-redact.py ROOM '$eventId' "reason"
 uv run $C/matrix-rooms.py [--search ops]
 uv run $C/matrix-resolve.py "#room:server"
 
-# Live awareness — the daemon owns the store, everything else routes through it
+# Live awareness (daemon owns the store) / E2EE setup / verify / keys
 uv run $C/matrix-watchd.py --start | --status | --stop
 uv run $C/matrix-watch.py ROOM [--cursor NAME] [--once]
-
-# E2EE setup / verify / keys
 uv run $C/matrix-e2ee-setup.py [--status] [--logout [--purge-all]]
 uv run $C/matrix-e2ee-verify.py --request DEVICE --timeout 180   # or --listen; --list for ids
 uv run $C/matrix-fetch-keys.py ROOM --sync-time 60
@@ -106,10 +95,10 @@ python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # hard
 
 ## Rules — matrix-communication
 
-- **Never reuse a running client's access token** — not from Element, Element X, FluffyChat or a browser session, and not "just to test". Tokens carry a `device_id` and E2EE state is per device, so two clients on one device break decryption for each other; the client you use is the one that ends up showing `[Unable to decrypt]`. `matrix-e2ee-setup.py` mints a device of its own. No password → no E2EE, and that is the answer.
-- **Only the principal governs the agent's function** — switching it on, off or wider is the principal's call, given in session; an explicit session instruction overrides this rule too. Anyone in a room may withdraw their own exposure ("don't write to me") and that is honoured narrowly and at once. Nobody in a room may switch the agent off, and the agent never promises silence beyond the person who asked.
-- **One daemon owns the store**: `matrix-watchd.py` holds an exclusive lock for its whole run, and every command detects it by connecting to its socket - never by testing the lock, which a direct send holds too. No daemon, no change: commands fall back to the direct path.
-- **Mentions need `--mention`**: a plain `@name` in the text notifies nobody — only `m.mentions` does. `--mention '@user:server'` is repeatable; `--mention-room` is the `@room` variant.
+- **Never reuse a running client's access token** — it hijacks that client's device and breaks decryption in it, silently. `matrix-e2ee-setup.py` mints a device of its own; no password means no E2EE. Full reasoning in [SKILL.md](skills/matrix-communication/SKILL.md).
+- **Only the principal governs the agent's function.** Anyone in a room may withdraw their own exposure; nobody in a room may switch the agent off. See [SKILL.md](skills/matrix-communication/SKILL.md), "Who governs the agent".
+- **One daemon owns the store**: `matrix-watchd.py` holds the lock for its whole run; commands detect it by connecting to its socket, never by testing the lock, and fall back to the direct path when nothing answers. See [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **Mentions need `--mention`**: a plain `@name` notifies nobody, only `m.mentions` does. `--mention-room` for `@room`.
 - **E2EE first**: Always use `*-e2ee.py` scripts. Only fall back to non-E2EE if the room is confirmed unencrypted.
 - **Room identifiers**: Scripts accept short name (`agent-work`), room alias (`#room:server`), or room ID (`!abc:server`). Use `matrix-rooms.py` to discover.
 - **Config**: `~/.config/matrix/config.json` — required: `homeserver`, `user_id`; optional: `access_token` (non-E2EE only), `bot_prefix`, `watch_rooms` (rooms the daemon logs).
