@@ -48,8 +48,8 @@ uv run skills/matrix-communication/scripts/matrix-react.py "#dev:matrix.org" '$e
 
 ### Common Reaction Patterns
 
-Unified team vocabulary (2026-08-13; the it-maintenance skill's lifecycle
-reference carries the same table — keep them in sync):
+Unified team vocabulary (2026-08-13). Downstream copies of this table exist —
+when changing semantics here, keep them in sync:
 
 | Emoji | Meaning | Use Case |
 |-------|---------|----------|
