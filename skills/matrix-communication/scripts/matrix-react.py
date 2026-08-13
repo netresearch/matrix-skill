@@ -38,6 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
     clean_message,
+    daemon_request,
     find_room_by_name,
     load_config,
     matrix_request,
@@ -53,6 +54,19 @@ def send_reaction(config: dict, room_id: str, event_id: str, emoji: str) -> dict
 
     Reactions use the m.reaction event type with m.annotation relation.
     """
+    # A running daemon owns the account's credentials, so let it send. The
+    # signal is a socket that answers, never the store lock: a direct send holds
+    # that lock too, and routing on it would aim at a socket nobody serves.
+    # None means nothing is listening; an error response is an answer and is
+    # returned, because falling through on it would react twice.
+    response = daemon_request(
+        {"op": "react", "room": room_id, "event_id": event_id, "key": emoji}
+    )
+    if response is not None:
+        if response.get("ok"):
+            return {"event_id": response["event_id"]}
+        return {"error": response.get("error", "daemon refused the reaction")}
+
     txn_id = str(int(time.time() * 1000))
 
     content = {

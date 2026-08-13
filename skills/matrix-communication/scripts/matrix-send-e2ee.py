@@ -60,6 +60,7 @@ from _lib import (
     add_bot_prefix,
     check_e2ee_dependencies,
     clean_message,
+    daemon_request,
     find_room_in_nio_client,
     get_store_path,
     load_config,
@@ -100,6 +101,28 @@ async def send_message_e2ee(
     only one of `notice` or `emote`; the CLI enforces this via a mutually
     exclusive argument group.
     """
+
+    # A running daemon holds the store, so a direct open here would be the
+    # second one - the state that corrupts it. Delegate instead. The signal is
+    # a socket that answers, never the store lock: a direct send holds that
+    # lock too, so routing on it would aim at a socket nobody serves. None
+    # means nothing is listening; an error response is an answer and is
+    # returned, because falling through on it would send the message twice.
+    msgtype = "m.notice" if notice else ("m.emote" if emote else "m.text")
+    response = daemon_request(
+        {
+            "op": "send",
+            "room": room,
+            "body": message,
+            "msgtype": msgtype,
+            "reply_to": reply_id,
+            "thread_root": thread_id,
+        }
+    )
+    if response is not None:
+        if response.get("ok"):
+            return {"event_id": response["event_id"], "room_id": room}
+        return {"error": response.get("error", "daemon refused the message")}
 
     store_path = get_store_path()
 
