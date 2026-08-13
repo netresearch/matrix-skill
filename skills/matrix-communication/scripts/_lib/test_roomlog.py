@@ -301,5 +301,80 @@ class RoomBundleTests(unittest.TestCase):
         self.assertNotIn("(b_example.org.md)", text)
 
 
+class SelfIsTheDeviceTests(unittest.TestCase):
+    """`self` has to mean "this device", not "this account".
+
+    Regression for #93: an agent and the person it works for share one Matrix
+    account, so comparing the sender alone marks the human's messages as the
+    agent's own. An agent that skips its own messages then skips the person
+    addressing it; one that does not risks answering itself.
+    """
+
+    MINE = "curve25519-of-my-device"
+    THEIRS = "curve25519-of-their-element"
+    USER = "@shared:example.org"
+
+    def _record(self, sender_key, **extra):
+        return build_record(
+            seq=1,
+            event={**EVENT, "sender": self.USER, "sender_key": sender_key, **extra},
+            own_user_id=self.USER,
+            own_display_name=None,
+            own_sender_key=self.MINE,
+        )
+
+    def test_our_own_device_is_self(self):
+        rec = self._record(self.MINE)
+        self.assertTrue(rec["self"])
+        self.assertEqual(rec["self_basis"], "device")
+
+    def test_the_humans_device_on_the_same_account_is_not_self(self):
+        rec = self._record(self.THEIRS)
+        self.assertFalse(rec["self"])
+        self.assertEqual(rec["self_basis"], "device")
+
+    def test_another_account_is_never_self(self):
+        rec = build_record(
+            seq=1,
+            event={**EVENT, "sender": "@someone:example.org", "sender_key": self.MINE},
+            own_user_id=self.USER,
+            own_display_name=None,
+            own_sender_key=self.MINE,
+        )
+        self.assertFalse(rec["self"])
+
+    def test_without_a_sender_key_it_falls_back_to_the_account_and_says_so(self):
+        """An unencrypted room carries no sender_key. The account comparison is
+        then the only answer available, and the record must not pretend it is
+        the device one."""
+        rec = build_record(
+            seq=1,
+            event={**EVENT, "sender": self.USER},
+            own_user_id=self.USER,
+            own_display_name=None,
+            own_sender_key=self.MINE,
+        )
+        self.assertTrue(rec["self"])
+        self.assertEqual(rec["self_basis"], "account")
+
+    def test_without_our_own_key_it_falls_back_too(self):
+        rec = build_record(
+            seq=1,
+            event={**EVENT, "sender": self.USER, "sender_key": self.THEIRS},
+            own_user_id=self.USER,
+            own_display_name=None,
+            own_sender_key=None,
+        )
+        self.assertTrue(rec["self"])
+        self.assertEqual(rec["self_basis"], "account")
+
+    def test_own_device_lines_are_marked_in_the_text(self):
+        """The log is read by the agent that wrote half of it."""
+        mine = self._record(self.MINE)
+        theirs = self._record(self.THEIRS)
+        self.assertIn("(agent)", mine["text"])
+        self.assertNotIn("(agent)", theirs["text"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

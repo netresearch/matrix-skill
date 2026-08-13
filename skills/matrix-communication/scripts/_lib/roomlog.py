@@ -57,6 +57,11 @@ def render_text(record: dict) -> str:
     when = datetime.fromtimestamp(record["ts"] / 1000, tz=timezone.utc).astimezone()
     stamp = when.strftime("%H:%M")
     who = record.get("sender_display") or record["sender"]
+    if record.get("self") and record.get("self_basis") == "device":
+        # The log is read by the agent that wrote part of it. Without this the
+        # agent's own lines are indistinguishable from its human's, because the
+        # account and therefore the display name are the same.
+        who = f"{who} (agent)"
     body = " ".join((record.get("body") or "").split())
 
     if record["type"] == "encrypted":
@@ -74,8 +79,34 @@ def render_text(record: dict) -> str:
     return f"[{stamp}] {who}: {prefix}{body}"
 
 
-def build_record(*, seq: int, event: dict, own_user_id: str, own_display_name) -> dict:
+def _is_own_device(event: dict, own_user_id: str, own_sender_key) -> tuple[bool, str]:
+    """Did THIS device send the event, and on what evidence.
+
+    An agent and the person it works for share one Matrix account, so comparing
+    the sender is not enough: it marks the human's messages as the agent's own.
+    An agent that then skips "its own" messages skips the person addressing it,
+    and one that does not can answer itself.
+
+    A decrypted event carries `sender_key`, the curve25519 key of the device
+    that encrypted it, and that is the answer. An unencrypted room has no such
+    key; the account comparison is then all there is, and the second return
+    value says which of the two was possible so a caller never mistakes one for
+    the other.
+    """
+    if event["sender"] != own_user_id:
+        return False, "device" if event.get(
+            "sender_key"
+        ) and own_sender_key else "account"
+    if event.get("sender_key") and own_sender_key:
+        return event["sender_key"] == own_sender_key, "device"
+    return True, "account"
+
+
+def build_record(
+    *, seq: int, event: dict, own_user_id: str, own_display_name, own_sender_key=None
+) -> dict:
     """One log record from one event."""
+    is_self, basis = _is_own_device(event, own_user_id, own_sender_key)
     record = {
         "seq": seq,
         "ts": event["ts"],
@@ -87,7 +118,8 @@ def build_record(*, seq: int, event: dict, own_user_id: str, own_display_name) -
         "body": event.get("body"),
         "reply_to": event.get("reply_to"),
         "thread_root": event.get("thread_root"),
-        "self": event["sender"] == own_user_id,
+        "self": is_self,
+        "self_basis": basis,
         "mentions_me": _mentions(event.get("body"), own_user_id, own_display_name),
     }
     if event.get("session_id"):
