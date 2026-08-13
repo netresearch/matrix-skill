@@ -1,4 +1,4 @@
-"""Tests for `_lib.e2ee` store-error diagnosis.
+"""Tests for `_lib.e2ee`: store-error diagnosis and scoped credential deletion.
 
 The skill directory contains a hyphen (`matrix-communication`) so it is not
 importable as a package; run the file directly or use unittest discovery:
@@ -16,13 +16,23 @@ its own directory on sys.path, where `_lib/http.py` shadows the stdlib `http`
 package and breaks `urllib` on the way in.
 """
 
+import json
 import os
+import pathlib
+import shutil
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from e2ee import explain_store_error, restore_login_checked
+import e2ee
+from e2ee import (
+    delete_credentials,
+    explain_store_error,
+    restore_login_checked,
+    store_files_for,
+)
 
 
 class OlmAccountError(Exception):
@@ -84,6 +94,79 @@ class RestoreLoginCheckedTests(unittest.TestCase):
         client = FakeClient(raises=ValueError("something else"))
         with self.assertRaises(ValueError):
             restore_login_checked(client, "@u:example.org", "DEVICE", "syt_token")
+
+
+class StoreScopingTests(unittest.TestCase):
+    """--logout must take one device's files and leave every other device alone.
+
+    Regression for #81: the old code globbed `*.db` and `*_devices` across the
+    shared store directory, so logging one device out destroyed the megolm
+    history of all of them.
+    """
+
+    USER = "@user:example.org"
+    MINE = "DEVICEAAAA"
+    OTHER = "DEVICEBBBB"
+
+    def setUp(self):
+        self.store = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.store, True)
+        real = e2ee.get_store_path
+        e2ee.get_store_path = lambda: self.store
+        self.addCleanup(setattr, e2ee, "get_store_path", real)
+
+        for device in (self.MINE, self.OTHER):
+            for suffix in (
+                "db",
+                "blacklisted_devices",
+                "ignored_devices",
+                "trusted_devices",
+            ):
+                (self.store / f"{self.USER}_{device}.{suffix}").write_text("x")
+
+        # Not device-scoped, and the key import depends on it.
+        (self.store / "backup_key.json").write_text("{}")
+        (self.store / "credentials.json").write_text(
+            json.dumps({"user_id": self.USER, "device_id": self.MINE})
+        )
+
+    def _names(self):
+        return sorted(p.name for p in self.store.iterdir())
+
+    def test_store_files_for_selects_one_device(self):
+        names = sorted(p.name for p in store_files_for(self.USER, self.MINE))
+        self.assertEqual(len(names), 4)
+        self.assertTrue(all(self.MINE in n for n in names))
+
+    def test_store_files_for_does_not_match_a_prefix_device_id(self):
+        """A device id that is a prefix of another must not collect its files."""
+        (self.store / f"{self.USER}_{self.MINE}EXTRA.db").write_text("x")
+        names = [p.name for p in store_files_for(self.USER, self.MINE)]
+        self.assertNotIn(f"{self.USER}_{self.MINE}EXTRA.db", names)
+
+    def test_logout_removes_only_this_device(self):
+        removed = delete_credentials()
+
+        self.assertIn("credentials.json", removed)
+        self.assertEqual(len([n for n in removed if self.MINE in n]), 4)
+
+        left = self._names()
+        self.assertEqual(len([n for n in left if self.OTHER in n]), 4)
+        self.assertIn("backup_key.json", left)
+        self.assertNotIn("credentials.json", left)
+
+    def test_purge_all_removes_every_device(self):
+        delete_credentials(purge_all=True)
+        left = self._names()
+        self.assertEqual([n for n in left if n.endswith("_devices")], [])
+        self.assertEqual([n for n in left if n.endswith(".db")], [])
+        self.assertIn("backup_key.json", left)
+
+    def test_without_credentials_nothing_is_removed(self):
+        """No credentials means no device to scope by - deleting nothing is right."""
+        (self.store / "credentials.json").unlink()
+        self.assertEqual(delete_credentials(), [])
+        self.assertEqual(len(self._names()), 9)
 
 
 if __name__ == "__main__":

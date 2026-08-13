@@ -18,12 +18,17 @@ Usage:
     matrix-e2ee-setup.py PASSWORD     # Password as argument
     matrix-e2ee-setup.py --status
     matrix-e2ee-setup.py --logout
+    matrix-e2ee-setup.py --logout --purge-all
     matrix-e2ee-setup.py --help
 
 Options:
-    --status    Check if E2EE device is set up
-    --logout    Remove stored device credentials
-    --help      Show this help
+    --status      Check if E2EE device is set up
+    --logout      Remove the credentials and this device's store files
+    --purge-all   With --logout: wipe every other device's store files too
+    --help        Show this help
+
+--logout is scoped to the device in credentials.json. The store directory is
+shared by every device ever set up here, and their megolm history lives in it.
 """
 
 import asyncio
@@ -138,7 +143,15 @@ def main():
     )
     parser.add_argument("--status", action="store_true", help="Check E2EE setup status")
     parser.add_argument(
-        "--logout", action="store_true", help="Remove stored device credentials"
+        "--logout",
+        action="store_true",
+        help="Remove the stored credentials and this device's store files",
+    )
+    parser.add_argument(
+        "--purge-all",
+        action="store_true",
+        help="With --logout: also delete the store files of every OTHER device "
+        "in the store directory (destroys their megolm history)",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
@@ -169,11 +182,27 @@ def main():
     if args.logout:
         creds = load_credentials()
         if creds:
-            delete_credentials()
+            removed = delete_credentials(purge_all=args.purge_all)
             if args.json:
-                print(json.dumps({"success": True, "message": "Credentials removed"}))
+                print(
+                    json.dumps(
+                        {
+                            "success": True,
+                            "message": "Credentials removed",
+                            "device_id": creds.get("device_id"),
+                            "removed": removed,
+                        }
+                    )
+                )
             else:
-                print("E2EE device credentials removed.")
+                scope = (
+                    "every device in the store"
+                    if args.purge_all
+                    else f"device {creds.get('device_id')}"
+                )
+                print(f"E2EE credentials removed for {scope}:")
+                for name in removed:
+                    print(f"  {name}")
                 print("Note: The device still exists on the server.")
                 print("To fully remove it, go to Element > Settings > Sessions")
         else:
