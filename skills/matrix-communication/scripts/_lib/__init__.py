@@ -15,10 +15,11 @@ Usage:
 # Config
 from _lib.config import get_config_path, load_config
 
+# E2EE (only used by E2EE scripts, but still stdlib-only)
+from _lib.daemon_client import daemon_request, socket_path
+
 # Dependency checking
 from _lib.deps import check_e2ee_dependencies
-
-# E2EE (only used by E2EE scripts, but still stdlib-only)
 from _lib.e2ee import (
     delete_credentials,
     explain_store_error,
@@ -26,6 +27,7 @@ from _lib.e2ee import (
     get_store_path,
     load_credentials,
     restore_login_checked,
+    rooms_dir,
     save_credentials,
     store_files_for,
 )
@@ -39,6 +41,18 @@ from _lib.formatting import (
 
 # HTTP API
 from _lib.http import matrix_request
+from _lib.roomlog import (
+    append_record,
+    build_record,
+    cursor_path,
+    log_path,
+    next_seq,
+    read_cursor,
+    read_records,
+    room_slug,
+    summarize_since,
+    write_cursor,
+)
 
 # Room operations
 from _lib.rooms import (
@@ -60,35 +74,41 @@ from _lib.utils import (
 
 __all__ = [
     "add_bot_prefix",
-    # Deps
+    "append_record",
+    "build_record",
     "check_e2ee_dependencies",
-    # Utils
     "clean_message",
+    "cursor_path",
+    "daemon_request",
     "delete_credentials",
     "explain_store_error",
     "find_room_by_name",
     "find_room_in_nio_client",
     "format_timestamp",
-    # Config
     "get_config_path",
     "get_credentials_path",
     "get_room_info",
-    # E2EE
     "get_store_path",
     "list_joined_rooms",
     "load_config",
     "load_credentials",
+    "log_path",
     "markdown_to_html",
-    # HTTP
     "matrix_request",
+    "next_seq",
     "prefer_ipv4",
-    # Rooms
+    "read_cursor",
+    "read_records",
     "resolve_room_alias",
     "resolve_room_cli",
     "restore_login_checked",
+    "room_slug",
+    "rooms_dir",
     "save_credentials",
-    # Formatting
     "shorten_service_urls",
+    "socket_path",
     "store_files_for",
+    "summarize_since",
     "suppress_nio_logging",
+    "write_cursor",
 ]
