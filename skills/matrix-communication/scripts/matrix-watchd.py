@@ -47,12 +47,15 @@ from _lib import (
     markdown_to_html,
     next_seq,
     prefer_ipv4,
+    remember_subject,
     resolve_room_alias,
     restore_login_checked,
     rooms_dir,
     socket_path,
     store_lock,
+    subject_index,
     suppress_nio_logging,
+    target_of,
     write_room_bundle,
 )
 
@@ -142,9 +145,20 @@ def event_to_dict(room, event, known_names=None) -> dict | None:
     if isinstance(event, RoomMessageEmote):
         return {**base, "type": "m.emote", "body": event.body}
     if isinstance(event, ReactionEvent):
-        return {**base, "type": "reaction", "body": event.key}
+        return {
+            **base,
+            "type": "reaction",
+            "body": event.key,
+            "relates_to": event.reacts_to,
+        }
     if isinstance(event, RedactionEvent):
-        return {**base, "type": "redaction", "body": None}
+        return {
+            **base,
+            "type": "redaction",
+            "body": None,
+            "redacts": event.redacts,
+            "reason": event.reason,
+        }
     if isinstance(event, RoomMemberEvent):
         return {**base, "type": "membership", "body": event.membership}
     if isinstance(event, MegolmEvent):
@@ -170,6 +184,7 @@ class Daemon:
         self.known_names = {}
         self.stopping = asyncio.Event()
         self.next_seq_by_room = {}
+        self.subjects_by_room = {}
 
     # -- logging -----------------------------------------------------------
 
@@ -190,15 +205,27 @@ class Daemon:
         if seq is None:
             seq = next_seq(path)
 
+        # Bodies of recent events, so a reaction or a redaction can name what it
+        # applies to. Seeded from the log on first use for the same reason the
+        # sequence number is, and kept in memory afterwards: the daemon is the
+        # only writer, so nothing else can add an event it would miss.
+        subjects = self.subjects_by_room.get(room_id)
+        if subjects is None:
+            subjects = subject_index(path)
+            self.subjects_by_room[room_id] = subjects
+
         record = build_record(
             seq=seq,
             event=event_dict,
             own_user_id=self.credentials["user_id"],
             own_display_name=self.display_name,
             own_sender_key=self.own_sender_key,
+            subject=subjects.get(target_of(event_dict)),
         )
         append_record(path, record)
         self.next_seq_by_room[room_id] = seq + 1
+
+        remember_subject(subjects, record)
 
     def announce(self, text: str) -> None:
         """Put a daemon-level message into every watched log.

@@ -115,6 +115,14 @@ Each record carries `seq`, a timestamp, `event_id`, sender with display name, ty
 field instead of formatting an event, and it keeps the raw file readable to a
 human.
 
+An event that applies to another one also carries what it applies to: a reaction
+its `relates_to`, a redaction its `redacts` and `reason`. Without them a reader
+sees that something was reacted to or removed and cannot tell which, which is
+close enough to no information that it invites a wrong guess. The daemon keeps
+the last few hundred bodies per room so the display line can name the target;
+past that window the line says only that it happened, rather than printing an
+event id that identifies the target to nobody reading.
+
 `seq` is a per-room counter that only increases. It is what the cursor compares
 against, so counting what was missed is subtraction rather than a file scan —
 which also survives log rotation, where an `event_id`-only cursor would point

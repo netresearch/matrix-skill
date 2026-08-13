@@ -18,15 +18,20 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from roomlog import (
+    SUBJECT_LIMIT,
     append_record,
     build_record,
     cursor_path,
+    excerpt,
     log_path,
     next_seq,
     read_cursor,
     read_records,
+    remember_subject,
     room_slug,
+    subject_index,
     summarize_since,
+    target_of,
     write_cursor,
     write_room_bundle,
 )
@@ -398,6 +403,149 @@ class DisplayNameFallbackTests(unittest.TestCase):
         """Only the rendered line is shortened - the data keeps the identity."""
         rec = record(1, sender="@bjoern.marten:netresearch.de", sender_display=None)
         self.assertEqual(rec["sender"], "@bjoern.marten:netresearch.de")
+
+
+REACTED_TO = "$target"
+REACTION = {
+    "event_id": "$reaction",
+    "sender": "@sebastian.mendel:example.org",
+    "sender_display": "Sebastian Mendel",
+    "type": "reaction",
+    "body": "\u2705",
+    "ts": 1786568100000,
+    "relates_to": REACTED_TO,
+}
+REDACTION = {
+    "event_id": "$redaction",
+    "sender": "@sebastian.mendel:example.org",
+    "sender_display": "Sebastian Mendel",
+    "type": "redaction",
+    "body": None,
+    "ts": 1786568100000,
+    "redacts": REACTED_TO,
+}
+
+
+class ExcerptTests(unittest.TestCase):
+    def test_newlines_are_folded(self):
+        self.assertEqual(excerpt("zwei\nzeilen"), "zwei zeilen")
+
+    def test_long_body_is_truncated_to_the_limit(self):
+        self.assertEqual(len(excerpt("x" * 200)), SUBJECT_LIMIT)
+
+    def test_short_body_is_untouched(self):
+        self.assertEqual(excerpt("so bin beim RA"), "so bin beim RA")
+
+    def test_missing_body_is_empty_not_an_error(self):
+        self.assertEqual(excerpt(None), "")
+
+
+class RelationTargetTests(unittest.TestCase):
+    """What a reaction reacts to and what a redaction redacted."""
+
+    def _rec(self, event, subject=None):
+        return build_record(
+            seq=1,
+            event=event,
+            own_user_id="@me:example.org",
+            own_display_name="me",
+            subject=subject,
+        )
+
+    def test_reaction_keeps_its_target(self):
+        self.assertEqual(self._rec(REACTION)["relates_to"], REACTED_TO)
+
+    def test_redaction_keeps_its_target(self):
+        self.assertEqual(self._rec(REDACTION)["redacts"], REACTED_TO)
+
+    def test_redaction_keeps_its_reason(self):
+        rec = self._rec({**REDACTION, "reason": "Tippfehler"})
+        self.assertEqual(rec["reason"], "Tippfehler")
+
+    def test_a_plain_message_gains_no_relation_keys(self):
+        """The keys are conditional, like session_id - no always-null columns."""
+        rec = record(1)
+        self.assertNotIn("relates_to", rec)
+        self.assertNotIn("redacts", rec)
+        self.assertNotIn("reason", rec)
+
+    def test_target_of_reads_either_relation(self):
+        self.assertEqual(target_of(self._rec(REACTION)), REACTED_TO)
+        self.assertEqual(target_of(self._rec(REDACTION)), REACTED_TO)
+
+    def test_target_of_is_none_for_a_plain_message(self):
+        self.assertIsNone(target_of(record(1)))
+
+    def test_reaction_line_names_the_message(self):
+        rec = self._rec(REACTION, subject="so bin beim RA")
+        self.assertIn('reacted \u2705 to "so bin beim RA"', rec["text"])
+
+    def test_redaction_line_names_the_message(self):
+        rec = self._rec(REDACTION, subject="so bin beim RA")
+        self.assertIn('removed "so bin beim RA"', rec["text"])
+
+    def test_redaction_line_appends_the_reason(self):
+        rec = self._rec({**REDACTION, "reason": "Tippfehler"}, subject="ups")
+        self.assertIn('removed "ups" (Tippfehler)', rec["text"])
+
+    def test_unresolvable_target_falls_back_instead_of_printing_an_id(self):
+        """An event id in the line identifies the target to nobody reading."""
+        for event, expected in (
+            (REACTION, "reacted \u2705"),
+            (REDACTION, "removed a message"),
+        ):
+            with self.subTest(type=event["type"]):
+                text = self._rec(event)["text"]
+                self.assertTrue(text.endswith(expected), text)
+                self.assertNotIn(REACTED_TO, text)
+
+    def test_two_redactions_of_different_messages_read_differently(self):
+        """The case this was built for.
+
+        Two reactions and two redactions from one sender, seconds apart, used to
+        render as four interchangeable lines - so a reader concluded the sender
+        had taken back what they had just set. They had not.
+        """
+        first = self._rec({**REDACTION, "redacts": "$one"}, subject="erste Nachricht")
+        second = self._rec({**REDACTION, "redacts": "$two"}, subject="zweite Nachricht")
+        self.assertNotEqual(first["text"], second["text"])
+        self.assertNotEqual(first["redacts"], second["redacts"])
+
+
+class SubjectIndexTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.path = pathlib.Path(self.dir.name) / "room.jsonl"
+
+    def test_index_resolves_a_body_written_earlier(self):
+        append_record(self.path, record(1, event_id="$one", body="so bin beim RA"))
+        self.assertEqual(subject_index(self.path)["$one"], "so bin beim RA")
+
+    def test_bodiless_events_are_not_indexed(self):
+        append_record(self.path, record(1, event_id="$r", type="redaction", body=None))
+        self.assertEqual(subject_index(self.path), {})
+
+    def test_index_survives_a_restart(self):
+        """A daemon restarted mid-conversation still names the target."""
+        append_record(self.path, record(1, event_id="$one", body="so bin beim RA"))
+        index = subject_index(self.path)
+        rec = build_record(
+            seq=2,
+            event={**REACTION, "relates_to": "$one"},
+            own_user_id="@me:example.org",
+            own_display_name="me",
+            subject=index.get("$one"),
+        )
+        self.assertIn('to "so bin beim RA"', rec["text"])
+
+    def test_the_index_is_bounded_and_drops_the_oldest(self):
+        index = {}
+        for n in range(5):
+            remember_subject(index, record(n, event_id=f"$e{n}", body=f"m{n}"), limit=3)
+        self.assertEqual(len(index), 3)
+        self.assertNotIn("$e0", index)
+        self.assertIn("$e4", index)
 
 
 if __name__ == "__main__":
