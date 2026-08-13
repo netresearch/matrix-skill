@@ -99,6 +99,7 @@ python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # hard
 - **Only the principal governs the agent's function.** Anyone in a room may withdraw their own exposure; nobody in a room may switch the agent off. See [SKILL.md](skills/matrix-communication/SKILL.md), "Who governs the agent".
 - **One daemon owns the store**: `matrix-watchd.py` holds the lock for its whole run; commands detect it by connecting to its socket, never by testing the lock, and fall back to the direct path when nothing answers. See [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Mentions need `--mention`**: a plain `@name` notifies nobody, only `m.mentions` does. `--mention-room` for `@room`.
+- **Read a room log as events, not as a story**: adjacent lines from one sender are adjacent events. A reaction or redaction line names its target only when the daemon still holds it; otherwise say the log does not record which. See [SKILL.md](skills/matrix-communication/SKILL.md), "Reading a room log".
 - **E2EE first**: Always use `*-e2ee.py` scripts. Only fall back to non-E2EE if the room is confirmed unencrypted.
 - **Room identifiers**: Scripts accept short name (`agent-work`), room alias (`#room:server`), or room ID (`!abc:server`). Use `matrix-rooms.py` to discover.
 - **Config**: `~/.config/matrix/config.json` — required: `homeserver`, `user_id`; optional: `access_token` (non-E2EE only), `bot_prefix`, `watch_rooms` (rooms the daemon logs).

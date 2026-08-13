@@ -6,6 +6,13 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Documentation
+
+- `SKILL.md` and `AGENTS.md` say how to read a room log: adjacent lines from one
+  sender are adjacent events, and a reaction or redaction line names its target
+  only when the daemon still holds it. Written after a summary turned four
+  unrelated events into a story ([#104]).
+
 ## [3.0.0] - 2026-08-13
 
 ### Breaking
