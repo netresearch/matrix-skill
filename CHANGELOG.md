@@ -19,16 +19,31 @@ For the canonical narrative version of each release (rewritten after CI publishe
   `Refusing to run non-interactively without --yes` until they pass `--yes`.
   Aborting at the prompt exits `1` and leaves the room untouched.
 
+### Fixed
+
+- **The room log records what a reaction reacts to and what a redaction removed**
+  ([#104]). It recorded that they happened and nothing else, so a reader saw
+  `reacted ✅️` and `removed a message` with no way to tell which message, or
+  whether two such events were related. `matrix-watchd.py` dropped
+  `ReactionEvent.reacts_to`, `RedactionEvent.redacts` and its `reason`; records
+  now keep them, and the display line names the target when the daemon has it —
+  `reacted ✅️ to "so bin beim RA"`. Beyond the last few hundred messages of a
+  room the line falls back to its previous wording rather than printing an event
+  id.
+
 ### Documentation
 
 - README, `AGENTS.md` and `docs/ARCHITECTURE.md` describe the watch daemon, the
   `matrix-nio` pin and the store migration it forces.
+- The live-awareness spec describes the relation fields a record carries and the
+  window in which a target stays nameable.
 - The safety guide, `SKILL.md` and `AGENTS.md` describe the confirmation gate
   both destructive `synapse-*` scripts now have.
 - `skills/matrix-communication/README.md` points at the two license files that
   exist; the `LICENSE` it linked never did.
 
 [#102]: https://github.com/netresearch/matrix-skill/issues/102
+[#104]: https://github.com/netresearch/matrix-skill/issues/104
 
 ## [2.0.0] - 2026-08-13
 

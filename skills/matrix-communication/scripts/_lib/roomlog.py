@@ -18,6 +18,15 @@ from datetime import datetime, timezone
 TEXT_LIMIT = 220
 DEFAULT_MAX_BYTES = 8_000_000
 
+# How much of a referenced message is quoted when naming what a reaction or a
+# redaction applies to. Short on purpose: it identifies the target, it does not
+# reproduce it.
+SUBJECT_LIMIT = 40
+# How many recent bodies stay resolvable. A reaction usually lands within a few
+# messages of its target; beyond this the line falls back to naming no target,
+# which is what it did before any of them were resolvable.
+SUBJECT_INDEX_SIZE = 500
+
 
 def room_slug(room_id: str) -> str:
     """Filename-safe form of a room id.
@@ -56,12 +65,26 @@ def _localpart(user_id: str) -> str:
     return user_id.split(":")[0].lstrip("@")
 
 
-def render_text(record: dict) -> str:
+def excerpt(body) -> str:
+    """A message shortened to just enough to recognise it by."""
+    folded = " ".join((body or "").split())
+    if len(folded) > SUBJECT_LIMIT:
+        return folded[: SUBJECT_LIMIT - 1] + "…"
+    return folded
+
+
+def render_text(record: dict, subject: str | None = None) -> str:
     """The single line a reader prints, built once by the daemon.
 
     Whitespace is folded: the reader prints one record per line, so a body
     carrying newlines would otherwise arrive as several lines that no longer
     correspond to one event.
+
+    `subject` is the excerpt of the message a reaction or a redaction applies
+    to, resolved by the caller. Without it the line says only that something
+    was reacted to or removed, and a reader is left to guess which - so it is
+    omitted rather than replaced by a bare event id, which identifies the
+    target to nobody reading.
     """
     # Local time, said explicitly: the reader is a person looking at a clock on
     # the same machine. The conversion goes through UTC so the intent is in the
@@ -79,9 +102,13 @@ def render_text(record: dict) -> str:
     if record["type"] == "encrypted":
         return f"[{stamp}] {who}: [unable to decrypt]"
     if record["type"] == "reaction":
-        return f"[{stamp}] {who} reacted {body}".rstrip()
+        line = f"[{stamp}] {who} reacted {body}".rstrip()
+        return f'{line} to "{subject}"' if subject else line
     if record["type"] == "redaction":
-        return f"[{stamp}] {who} removed a message"
+        target = f'"{subject}"' if subject else "a message"
+        line = f"[{stamp}] {who} removed {target}"
+        reason = record.get("reason")
+        return f"{line} ({reason})" if reason else line
     if record["type"] == "membership":
         return f"[{stamp}] {who}: {body}".rstrip()
 
@@ -115,9 +142,21 @@ def _is_own_device(event: dict, own_user_id: str, own_sender_key) -> tuple[bool,
 
 
 def build_record(
-    *, seq: int, event: dict, own_user_id: str, own_display_name, own_sender_key=None
+    *,
+    seq: int,
+    event: dict,
+    own_user_id: str,
+    own_display_name,
+    own_sender_key=None,
+    subject: str | None = None,
 ) -> dict:
-    """One log record from one event."""
+    """One log record from one event.
+
+    `relates_to`, `redacts` and `reason` are written only for the event types
+    that have them, the way `session_id` is: they say what the event applies
+    to, which is the difference between "someone removed a message" and
+    knowing which one. `subject` renders that target into the line.
+    """
     is_self, basis = _is_own_device(event, own_user_id, own_sender_key)
     record = {
         "seq": seq,
@@ -136,8 +175,51 @@ def build_record(
     }
     if event.get("session_id"):
         record["session_id"] = event["session_id"]
-    record["text"] = render_text(record)
+    for key in ("relates_to", "redacts", "reason"):
+        if event.get(key):
+            record[key] = event[key]
+    record["text"] = render_text(record, subject=subject)
     return record
+
+
+def target_of(record: dict):
+    """The event a record applies to, or None if it applies to nothing.
+
+    A reaction points at what it reacts to, a redaction at what it removed.
+    Both are the same question for a caller resolving the subject line, so
+    they get one answer.
+    """
+    return record.get("relates_to") or record.get("redacts")
+
+
+def subject_index(path, limit: int = SUBJECT_INDEX_SIZE) -> dict:
+    """`event_id` -> excerpt for the most recent records that carry a body.
+
+    Seeds a restarted daemon so the first reaction after a restart still names
+    its target. Bounded, because a room's whole history is not worth holding to
+    caption a reaction.
+    """
+    index = {}
+    for record in read_records(path):
+        remember_subject(index, record, limit=limit)
+    return index
+
+
+def remember_subject(
+    index: dict, record: dict, limit: int = SUBJECT_INDEX_SIZE
+) -> None:
+    """Keep a record's body resolvable for a later reaction or redaction.
+
+    Oldest entry out once the index is full. One place owns that bound so the
+    daemon's live index and the one seeded from disk cannot disagree about how
+    far back a target stays nameable.
+    """
+    body, event_id = record.get("body"), record.get("event_id")
+    if not body or not event_id:
+        return
+    index[event_id] = excerpt(body)
+    if len(index) > limit:
+        del index[next(iter(index))]
 
 
 def log_path(rooms_dir, room_id: str):
