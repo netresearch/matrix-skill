@@ -153,6 +153,21 @@ Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-create-room.py`, `matrix-
 - **Using Element X** for verification — use Element Desktop or Android
 - **Hardcoding passwords** — use `MATRIX_PASSWORD` env var
 
+## Reading a room log
+
+**Report what the log records, not what two adjacent lines suggest.** The log
+is an event stream, not a narrative: consecutive lines from one sender are
+consecutive events, and nothing more. A reaction line names what it reacted to
+and a redaction line names what it removed — when the daemon still has that
+message. When it does not, the line says only that it happened, and that is the
+answer to pass on. "The log does not record which one" is complete, and it is
+what gets a missing field added instead of a wrong story repeated.
+
+Burned 2026-08-13: two reactions and two redactions from one sender within three
+seconds were reported as "took back the reactions just set". They were two
+different messages, and the log carried no relation at all — which is why it
+does now ([#104](https://github.com/netresearch/matrix-skill/issues/104)).
+
 ## No editorializing
 
 In messages and announcements, state what happened, not how good or careful the work is — no narrating expected results ("all tests green", "shipped") or self-praise ("clean", "the honest breaking change"). Judged by tone, not a wordlist. See `references/no-editorializing.md`.
