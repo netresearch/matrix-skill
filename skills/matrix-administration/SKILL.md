@@ -27,7 +27,7 @@ python3 $S/synapse-biggest-rooms.py [-n 10]
 python3 $S/synapse-join-room.py    '!room:srv' '@user:srv'
 python3 $S/synapse-make-admin.py   '!room:srv' '@user:srv'
 python3 $S/synapse-add-to-space.py '!room:srv' '!space:srv'
-python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!space:srv'
+python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!space:srv'   # DESTRUCTIVE, asks first
 
 python3 $S/synapse-deactivate-user.py   '@user:srv'   # DESTRUCTIVE
 python3 $S/synapse-user-rooms.py        '@user:srv'
@@ -75,7 +75,7 @@ python3 $S/synapse-search.py            '!room:srv' '@bot:srv' deploy
 The token is server-admin. Read [`references/safety-guide.md`](references/safety-guide.md) before any destructive op.
 
 - `synapse-deactivate-user.py` is irreversible.
-- `synapse-migrate-room.py` enables encryption (one-way) and restricts joins; power-level changes restored on exit including Ctrl-C.
+- `synapse-migrate-room.py` enables encryption (one-way) and restricts joins; it prints the plan and asks before the first write (`--yes` skips, and is required without a terminal). Power-level changes restored on exit including Ctrl-C.
 - `synapse-make-admin.py` raises PL 100 permanently.
 - `synapse-search.py` cannot read E2EE — empty ≠ no messages.
 - `rooms.json` exposes user IDs; never commit it.

@@ -17,10 +17,13 @@ Multi-step operation:
    with elevated permissions.
 
 WARNING: enabling encryption is irreversible.  Restricted joins remove
-discoverability for users outside the space.
+discoverability for users outside the space.  The script therefore reads the
+current state first, prints the steps it would take, and asks before the
+first one changes anything.  ``--yes`` skips the question and is required to
+run without a terminal.
 
 Usage:
-    synapse-migrate-room.py <ROOM_ID> [USER_ID] [SPACE_ID]
+    synapse-migrate-room.py <ROOM_ID> [USER_ID] [SPACE_ID] [-y]
 
 Falls back to ``$MATRIX_USER_ID`` / ``$MATRIX_SPACE_ID`` /
 ``default_space_id``.
@@ -45,6 +48,9 @@ from _lib import (
     red,
     yellow,
 )
+
+# Marks the one step in the pipeline that cannot be reversed.
+IRREVERSIBLE = "IRREVERSIBLE"
 
 
 def _state(config: dict, room_id: str) -> list[dict]:
@@ -106,11 +112,102 @@ def _restore_power_level(
         print(bold(green("✓ Power levels restored")))
 
 
+def plan_steps(
+    room_id: str,
+    space_id: str,
+    user_id: str,
+    already_child: bool,
+    room_info: dict,
+) -> list[tuple[bool, str, str]]:
+    """The steps the pipeline is about to take, as ``(pending, text, note)``.
+
+    Decided from state read before anything is written, so the operator sees
+    the same decisions the pipeline will make.  ``pending`` is False for a
+    step that is already satisfied and will be skipped.  ``note`` is empty
+    unless the step needs a warning next to it.
+    """
+    join_rules = (room_info.get("join_rules") or "").lower()
+    try:
+        version = int(room_info.get("version") or 0)
+    except (TypeError, ValueError):
+        version = 0
+
+    steps: list[tuple[bool, str, str]] = []
+
+    if already_child:
+        steps.append((False, f"Room is already a child of {space_id}", ""))
+    else:
+        steps.append((True, f"Add the room to {space_id}", "reversible"))
+
+    steps.append(
+        (True, f"Force-join {user_id} and raise to PL 100", "restored at the end")
+    )
+
+    if join_rules != "public":
+        steps.append((False, f"Join rules are already '{join_rules or 'unknown'}'", ""))
+    elif version > 9:
+        steps.append(
+            (
+                True,
+                "Switch join rules public → restricted",
+                "reversible, but hides the room from everyone outside the space",
+            )
+        )
+    else:
+        steps.append(
+            (False, f"Room version {version} is too low for restricted joins", "")
+        )
+
+    if room_info.get("encryption"):
+        steps.append((False, "Encryption is already enabled", ""))
+    else:
+        steps.append((True, "Enable Megolm encryption", IRREVERSIBLE))
+
+    return steps
+
+
+def print_plan(room_id: str, steps: list[tuple[bool, str, str]]) -> None:
+    print(bold(f"Plan for {room_id}:"))
+    for pending, text, note in steps:
+        if not pending:
+            print(f"  {green('·')} {text} — skipped")
+        elif note == IRREVERSIBLE:
+            print(f"  {bold(red('!'))} {text} — {bold(red('cannot be undone'))}")
+        else:
+            print(f"  {yellow('→')} {text}" + (f" — {note}" if note else ""))
+
+
+def confirm(assume_yes: bool) -> int | None:
+    """``None`` to proceed, otherwise the exit code to stop with.
+
+    Mirrors ``synapse-deactivate-user.py``: a terminal is asked, a pipe is
+    refused.  Refusing rather than defaulting to yes is the point — the
+    pipeline's last step cannot be undone.
+    """
+    if assume_yes:
+        return None
+    if not sys.stdin.isatty():
+        print(
+            bold(red("Refusing to run non-interactively without --yes.")),
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        answer = input("Type 'YES' to continue: ").strip()
+    except EOFError:
+        answer = ""
+    if answer != "YES":
+        print(yellow("Aborted."))
+        return 1
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("room_id")
     parser.add_argument("user_id", nargs="?", default=None)
     parser.add_argument("space_id", nargs="?", default=None)
+    parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation.")
     args = parser.parse_args()
 
     config = load_config()
@@ -137,7 +234,9 @@ def main() -> int:
     via_host = urlparse(config["homeserver"]).hostname
     via = [via_host] if via_host else []
 
-    # 1. Add to space if not already a child.
+    # Read-only inspection first: the plan below has to describe the same
+    # decisions the pipeline makes, and the operator has to see it while
+    # nothing has changed yet.
     space_state = _state(config, space_id)
     already_child = any(
         s.get("type") == "m.space.child"
@@ -145,6 +244,21 @@ def main() -> int:
         and (s.get("content") or {})
         for s in space_state
     )
+
+    room_info = admin_request(config, "GET", f"/v1/rooms/{args.room_id}")
+    if "error" in room_info:
+        print(red(f"✗ {room_info['error']}"), file=sys.stderr)
+        return 1
+
+    print_plan(
+        args.room_id,
+        plan_steps(args.room_id, space_id, user_id, already_child, room_info),
+    )
+    stop = confirm(args.yes)
+    if stop is not None:
+        return stop
+
+    # 1. Add to space if not already a child.
     if already_child:
         print(bold(green("✓ Room already in space")))
     else:
@@ -168,11 +282,7 @@ def main() -> int:
     else:
         print(bold(green("✓ Joined")))
 
-    # Inspect target room (needed for power-level snapshot before any change).
-    room_info = admin_request(config, "GET", f"/v1/rooms/{args.room_id}")
-    if "error" in room_info:
-        print(red(f"✗ {room_info['error']}"), file=sys.stderr)
-        return 1
+    # The room's own state needs membership, so it is read after the join.
     room_state = _state(config, args.room_id)
 
     pl_event = next(

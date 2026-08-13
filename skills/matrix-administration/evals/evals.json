@@ -57,7 +57,8 @@
       "assertions": [
         "Invokes synapse-migrate-room.py",
         "Passes the room, user and space IDs in the correct order",
-        "Surfaces that enabling encryption is irreversible"
+        "Surfaces that enabling encryption is irreversible",
+        "Does NOT silently pass --yes"
       ]
     },
     {

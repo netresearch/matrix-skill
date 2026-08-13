@@ -6,15 +6,29 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Changed
+
+- **`synapse-migrate-room.py` asks before it changes anything** ([#102]). It read
+  no state and asked no question: invoking it started a pipeline whose last step,
+  enabling Megolm encryption, cannot be undone. It now reads the room's current
+  state first, prints the steps it would take with the irreversible one marked,
+  and stops for confirmation before the first write. `-y` / `--yes` skips the
+  question, mirroring `synapse-deactivate-user.py`.
+
+  Callers that run it from a script or a pipe now exit `2` with
+  `Refusing to run non-interactively without --yes` until they pass `--yes`.
+  Aborting at the prompt exits `1` and leaves the room untouched.
+
 ### Documentation
 
 - README, `AGENTS.md` and `docs/ARCHITECTURE.md` describe the watch daemon, the
   `matrix-nio` pin and the store migration it forces.
-- The safety guide and `AGENTS.md` now state the confirmation gate per script:
-  `synapse-deactivate-user.py` refuses to run non-interactively without `--yes`,
-  `synapse-migrate-room.py` has no gate at all.
+- The safety guide, `SKILL.md` and `AGENTS.md` describe the confirmation gate
+  both destructive `synapse-*` scripts now have.
 - `skills/matrix-communication/README.md` points at the two license files that
   exist; the `LICENSE` it linked never did.
+
+[#102]: https://github.com/netresearch/matrix-skill/issues/102
 
 ## [2.0.0] - 2026-08-13
 

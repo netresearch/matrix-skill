@@ -90,7 +90,7 @@ matrix-administration/
 These scripts hold an admin token. **Read [`references/safety-guide.md`](references/safety-guide.md) before running anything new.** Highlights:
 
 - `synapse-deactivate-user.py` is irreversible.
-- `synapse-migrate-room.py` enables encryption — irreversible — and removes discoverability for users outside the parent space.
+- `synapse-migrate-room.py` enables encryption — irreversible — and removes discoverability for users outside the parent space. It prints the plan and asks before the first write; `--yes` skips the question and is required without a terminal.
 - `rooms.json` exposes user IDs / power levels for every room. Never commit it.
 
 ## License
