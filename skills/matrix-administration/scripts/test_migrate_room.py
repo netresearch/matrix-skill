@@ -60,7 +60,9 @@ class PlanTestCase(unittest.TestCase):
     def test_hardened_room_leaves_only_the_join_and_promote_step(self):
         steps = self._steps(True, HARDENED)
         pending = [text for pending, text, _ in steps if pending]
-        self.assertEqual(pending, [f"Force-join {USER} and raise to PL 100"])
+        self.assertEqual(
+            pending, [f"Force-join {USER}; raise to PL 100 if it is lower"]
+        )
 
     def test_low_room_version_skips_the_restricted_step(self):
         steps = self._steps(False, {**UNHARDENED, "version": "9"})

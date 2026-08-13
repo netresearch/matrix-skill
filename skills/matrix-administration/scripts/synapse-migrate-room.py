@@ -140,7 +140,11 @@ def plan_steps(
         steps.append((True, f"Add the room to {space_id}", "reversible"))
 
     steps.append(
-        (True, f"Force-join {user_id} and raise to PL 100", "restored at the end")
+        (
+            True,
+            f"Force-join {user_id}; raise to PL 100 if it is lower",
+            "power level restored at the end",
+        )
     )
 
     if join_rules != "public":
