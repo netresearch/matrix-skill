@@ -117,6 +117,39 @@ users it has marked as changed, and a new store has marked nobody — `--debug`
 reports `Keys query: No key query required.` while the device list is empty.
 Force one query for your own user before verifying.
 
+### Live awareness: one daemon owns the store
+
+`matrix-watchd.py` holds an exclusive lock on the store for its whole run,
+syncs, decrypts, and appends every event of a watched room to
+`~/.local/share/matrix-skill/rooms/<slug>.jsonl`. It is the only process that
+opens the store while it runs.
+
+```bash
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watchd.py --start
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watch.py '#room:server'
+```
+
+Rooms come from `watch_rooms` in the config. Alongside the logs the daemon
+writes an OKF bundle - `index.md` plus one typed page per room - so the mapping
+from slug to room is readable rather than an internal detail.
+
+`matrix-watch.py` reads a file and never opens the store, so any number can run
+at once and none of them can disturb a send.
+
+**Send, react and redact need no new flags.** They try the daemon's socket and
+fall back to the direct path when nothing answers. The signal is a socket that
+answers, never the store lock: a direct send holds that lock too for a couple
+of seconds, and deciding on it would route a command into a socket nobody
+serves.
+
+Two things worth knowing before relying on it:
+
+- The daemon is the account's syncer while it runs. That is the point - whoever
+  syncs consumes the to-device events, so having one owner is what keeps room
+  keys from landing wherever a race puts them.
+- A revoked token stops it, and it writes the reason into every watched log
+  first. A watcher that dies quietly is indistinguishable from a quiet room.
+
 ### The nio pin and the store belong together
 
 The scripts pin `matrix-nio[e2e]<0.26`. That is not cosmetic:

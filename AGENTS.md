@@ -100,6 +100,7 @@ python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # hard
 ## Rules — matrix-communication
 
 - **Never reuse a running client's access token** — not from Element, Element X, FluffyChat or a browser session, and not "just to test". Tokens carry a `device_id` and E2EE state is per device, so two clients on one device break decryption for each other; the client you use is the one that ends up showing `[Unable to decrypt]`. `matrix-e2ee-setup.py` mints a device of its own. No password → no E2EE, and that is the answer.
+- **One daemon owns the store**: `matrix-watchd.py` holds an exclusive lock for its whole run, and every command detects it by connecting to its socket - never by testing the lock, which a direct send holds too. No daemon, no change: commands fall back to the direct path.
 - **E2EE first**: Always use `*-e2ee.py` scripts. Only fall back to non-E2EE if the room is confirmed unencrypted.
 - **Room identifiers**: Scripts accept short name (`agent-work`), room alias (`#room:server`), or room ID (`!abc:server`). Use `matrix-rooms.py` to discover.
 - **Config**: `~/.config/matrix/config.json` — required: `homeserver`, `user_id`; optional: `access_token` (non-E2EE only), `bot_prefix`.

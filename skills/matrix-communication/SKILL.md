@@ -52,8 +52,12 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-download-e2ee.py ROOM '$eventId' --out
 
 # Edit / Delete / React
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-edit-e2ee.py ROOM '$eventId' "new text"
-uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-redact.py ROOM '$eventId' "reason"
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-redact.py ROOM '$eventId' --reason "reason"
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' "✅"
+
+# Live awareness — the daemon owns the store, everything else routes through it
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watchd.py --start | --status | --stop
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watch.py ROOM [--cursor NAME] [--once]
 
 # Rooms
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py
@@ -99,6 +103,8 @@ Other: `matrix-rooms.py`, `matrix-resolve.py`, `matrix-create-room.py`, `matrix-
 ## Config
 
 `~/.config/matrix/config.json` — required: `homeserver`, `user_id`. Optional: `access_token`
+
+`watch_rooms` lists the rooms `matrix-watchd.py` logs.
 
 `access_token` is for the non-E2EE scripts only. Copy it from the skill's own
 `credentials.json` (setup guide, Step 6) — never from a client you use.

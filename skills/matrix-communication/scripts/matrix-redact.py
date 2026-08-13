@@ -32,6 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
     clean_message,
+    daemon_request,
     find_room_by_name,
     load_config,
     matrix_request,
@@ -46,6 +47,16 @@ def redact_message(
     config: dict, room_id: str, event_id: str, reason: str | None = None
 ) -> dict:
     """Redact a message from a Matrix room."""
+    # A running daemon owns the account's credentials, so let it redact. See
+    # matrix-react.py for why the socket decides and not the store lock.
+    response = daemon_request(
+        {"op": "redact", "room": room_id, "event_id": event_id, "reason": reason}
+    )
+    if response is not None:
+        if response.get("ok"):
+            return {"event_id": response["event_id"]}
+        return {"error": response.get("error", "daemon refused the redaction")}
+
     txn_id = str(int(time.time() * 1000))
 
     data = {}
