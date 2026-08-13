@@ -45,6 +45,14 @@ Three roles, one of them long-lived.
 to a per-room JSONL log, and serves a Unix socket. It has no contact with any
 agent session and outlives all of them.
 
+Sync and socket run as two tasks on one asyncio event loop, sharing one client.
+This is not an implementation detail to settle later: a sync is a long poll of up
+to 30 seconds, so a daemon that served the socket only between syncs would answer
+a send after an arbitrary delay of up to that long — and a send that takes half a
+minute is not the "answer promptly" this exists for. One loop also keeps every
+store access single-threaded without a mutex, because nio's client is safe within
+one loop and not across threads.
+
 **The attach** is a thin reader over the JSONL. It never touches the store, so it
 can run any number of times in parallel, and it dies with the session that
 started it. Its stdout is one line per event, which is the input shape the
@@ -55,16 +63,30 @@ resolve a room name or alias to its slug, emit the one-line summary from the
 cursor before going live, and advance the cursor. After that it is a tail. If it
 grows a fourth job, that job belongs in the daemon.
 
-**The commands** — send, react, redact — are the existing scripts with one
-addition: they check the store lock. Held means a daemon is running and the
-operation goes over the socket. Free means no daemon and they take the lock
-themselves and work exactly as they do today. The skill therefore keeps working
-unchanged when no daemon runs, and no one has to remember two ways to send a
-message.
+It reads the file with stdlib `json` rather than piping through `jq`. The
+repository's helper library is stdlib-only on purpose, and a reader that is the
+first thing to require an external binary would make the feature conditional on
+that binary being installed.
 
-Ownership is enforced, not agreed: the daemon holds an advisory `flock` on the
-store directory, and every other script tests it. The failure mode this replaces
-was a convention that nothing checked.
+**The commands** — send, react, redact — are the existing scripts with one
+addition: they try to connect to the socket first. A connection that succeeds
+means a daemon is running and the operation goes over it. A refused connection or
+a missing socket means no daemon, and the command takes the store lock itself and
+works exactly as it does today. The skill therefore keeps working unchanged when
+no daemon runs, and no one has to remember two ways to send a message.
+
+**The routing signal is the socket, not the lock.** Deciding on the lock would be
+wrong in a way that is easy to miss: a direct `matrix-send-e2ee.py` holds the same
+lock for its couple of seconds, so a second command starting in that window would
+see a held lock, conclude "daemon", and try to talk to a socket that nobody is
+serving. The lock answers "may I open the store", which is a different question
+from "is there someone to delegate to", and only the socket answers the second
+one.
+
+Ownership itself is still enforced rather than agreed: the daemon holds an
+advisory `flock` on the store directory for its whole life, and every direct path
+takes the same lock before opening the store. The failure mode this replaces was a
+convention that nothing checked.
 
 ### Data flow
 
@@ -85,12 +107,23 @@ way it sent it.
 The slug is the room id without `!` and with `_` for `:`. Not cosmetic: a `!` in a
 filename is a hazard in every shell invocation.
 
-Each record carries a timestamp, `event_id`, sender with display name, type
+Each record carries `seq`, a timestamp, `event_id`, sender with display name, type
 (`m.text`, `m.notice`, `m.emote`, reaction, redaction, membership), body,
-`reply_to`, `thread_root`, a `self` flag for the agent's own messages, and a
-`text` field holding the finished display line — `[23:15] tobias.hein: Ihr seid
-cool`. The `text` field is what makes the attach `tail -F | jq -r .text` with no
-formatter of its own, and it keeps the raw file readable to a human.
+`reply_to`, `thread_root`, a `self` flag for the agent's own messages, a
+`mentions_me` flag, and a `text` field holding the finished display line —
+`[23:15] tobias.hein: Ihr seid cool`. The `text` field means the reader prints a
+field instead of formatting an event, and it keeps the raw file readable to a
+human.
+
+`seq` is a per-room counter that only increases. It is what the cursor compares
+against, so counting what was missed is subtraction rather than a file scan —
+which also survives log rotation, where an `event_id`-only cursor would point
+into a file that no longer exists.
+
+`mentions_me` is computed by the daemon, once, per event: the account's localpart
+or current display name appearing in the body, or the event being a reply to one
+of the agent's own events. Computing it in the reader would mean every attach
+re-deriving the same answer from a display name it would have to look up.
 
 JSONL rather than OKF is a deliberate exception to this repository's format
 preference, and it follows OKF's own scope: the specification defines one concept
@@ -108,10 +141,16 @@ JSON mapping.
 
 ### Cursor
 
-`<slug>.cursor` holds the last `event_id` an attach saw. On attach the reader
-counts what arrived since, prints one summary line — `since last: 47 messages, 3
+`<slug>.cursor` holds the last `seq` an attach saw. On attach the reader counts
+what arrived since, prints one summary line — `since last: 47 messages, 3
 mentioning you` — advances the cursor, and goes live. `--cursor NAME` separates
 sessions that follow the same room.
+
+Counting reads backwards from the end of the log until it passes the stored
+`seq`, so the cost is the size of the gap and not the size of the history. A
+cursor whose `seq` is older than the oldest record still in the log — because
+rotation dropped it — reports the count as a lower bound rather than pretending
+to a number it cannot know.
 
 ### Socket
 
