@@ -44,6 +44,18 @@ def _mentions(body, own_user_id: str, own_display_name) -> bool:
     return False
 
 
+def _localpart(user_id: str) -> str:
+    """`@name:server` without the decoration.
+
+    The fallback when no display name is known, which in a large room is the
+    normal case rather than an edge one: member state arrives lazily, so the
+    first events of a session routinely have nothing to render. The whole MXID
+    costs a third of a line, and line width is what keeps a busy room readable.
+    The record itself keeps the full id.
+    """
+    return user_id.split(":")[0].lstrip("@")
+
+
 def render_text(record: dict) -> str:
     """The single line a reader prints, built once by the daemon.
 
@@ -56,7 +68,7 @@ def render_text(record: dict) -> str:
     # code rather than in whatever the process default happens to be.
     when = datetime.fromtimestamp(record["ts"] / 1000, tz=timezone.utc).astimezone()
     stamp = when.strftime("%H:%M")
-    who = record.get("sender_display") or record["sender"]
+    who = record.get("sender_display") or _localpart(record["sender"])
     if record.get("self") and record.get("self_basis") == "device":
         # The log is read by the agent that wrote part of it. Without this the
         # agent's own lines are indistinguishable from its human's, because the

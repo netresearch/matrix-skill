@@ -35,13 +35,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
     append_record,
+    build_mentions,
     build_record,
     check_e2ee_dependencies,
     daemon_request,
     get_store_path,
+    inject_pills,
     load_config,
     load_credentials,
     log_path,
+    markdown_to_html,
     next_seq,
     prefer_ipv4,
     resolve_room_alias,
@@ -81,7 +84,28 @@ def pid_file_path():
     return socket_path().parent / "daemon.pid"
 
 
-def event_to_dict(room, event) -> dict | None:
+def _display_name(room, event, known_names):
+    """The sender's display name, remembered once it has been seen.
+
+    `room.user_name()` answers from member state, and in a large room that
+    state arrives lazily - the first events of a session have nothing to render
+    even for people the room has known for years. Caching what it does answer
+    means one unnamed line per sender instead of every line for the length of
+    the run. A membership event carrying a new name overwrites the entry.
+    """
+    sender = getattr(event, "sender", None)
+    if not sender:
+        return None
+    name = room.user_name(sender)
+    if known_names is None:
+        return name
+    if name:
+        known_names[sender] = name
+        return name
+    return known_names.get(sender)
+
+
+def event_to_dict(room, event, known_names=None) -> dict | None:
     """Map a nio event onto the plain dict `build_record` consumes.
 
     Returns None for event types the log does not carry, so the caller can tell
@@ -90,9 +114,7 @@ def event_to_dict(room, event) -> dict | None:
     base = {
         "event_id": getattr(event, "event_id", None),
         "sender": getattr(event, "sender", None),
-        "sender_display": room.user_name(event.sender)
-        if getattr(event, "sender", None)
-        else None,
+        "sender_display": _display_name(room, event, known_names),
         "ts": getattr(event, "server_timestamp", None) or int(time.time() * 1000),
         "room_id": room.room_id,
         # The curve25519 key of the device that encrypted this, which is the
@@ -145,6 +167,7 @@ class Daemon:
         self.last_sync = None
         self.display_name = None
         self.own_sender_key = None
+        self.known_names = {}
         self.stopping = asyncio.Event()
         self.next_seq_by_room = {}
 
@@ -202,7 +225,7 @@ class Daemon:
     async def on_event(self, room, event) -> None:
         if room.room_id not in self.rooms:
             return
-        event_dict = event_to_dict(room, event)
+        event_dict = event_to_dict(room, event, self.known_names)
         if event_dict:
             self.record_event(room.room_id, event_dict)
 
@@ -268,11 +291,22 @@ class Daemon:
         raise ValueError(f"cannot resolve room {room!r}")
 
     async def op_send(self, request: dict) -> dict:
+        body = request["body"]
+        mentions = request.get("mentions")
         content = {
             "msgtype": request.get("msgtype") or "m.text",
-            "body": request["body"],
+            "body": body,
         }
-        if request.get("formatted_body"):
+
+        mention_block = build_mentions(mentions, room=bool(request.get("mention_room")))
+        if mention_block:
+            content["m.mentions"] = mention_block
+
+        html = markdown_to_html(inject_pills(body, mentions))
+        if html != body:
+            content["format"] = "org.matrix.custom.html"
+            content["formatted_body"] = html
+        elif request.get("formatted_body"):
             content["format"] = "org.matrix.custom.html"
             content["formatted_body"] = request["formatted_body"]
         if request.get("reply_to"):

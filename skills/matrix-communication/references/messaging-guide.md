@@ -232,3 +232,41 @@ Reactions can serve as lightweight polls. Post a message with options and ask us
 1. Send a message with options (e.g., "React with your lunch preference: 🍕 Pizza, 🍔 Burger, 🥗 Salad")
 2. Read reactions with `--json` and group by emoji `key`
 3. Count unique senders per emoji to tally votes
+
+## Mentions
+
+A plain `@name` in the body notifies nobody. It only ever matched the legacy
+`contains_user_name` push rule, and only on the exact localpart — `@bjoern`
+never reached `bjoern.marten`. What notifies a modern client is `m.mentions`
+(MSC3952).
+
+```bash
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM \
+  "bjoern.marten, schaust du drauf?" --mention '@bjoern.marten:server'
+
+# everyone in the room
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "Wartung 22:00" --mention-room
+```
+
+`--mention` is repeatable and does two things:
+
+- sets `content["m.mentions"]["user_ids"]`, which is what fires the notification
+- turns the first occurrence of that localpart in the text into a pill, in the
+  **HTML body only**
+
+The plain body keeps the bare name on purpose: it is what a client without HTML
+shows, and what the legacy push rule reads.
+
+A name that does not appear in the text is not inserted. The mention still
+notifies; silently rewriting a message to add a name the author did not type is
+worse than a missing pill. A name already written as a `matrix.to` link is left
+alone rather than wrapped twice.
+
+By hand, without the flag:
+
+```markdown
+[bjoern.marten](https://matrix.to/#/@bjoern.marten:server)
+```
+
+That renders a pill and keeps the localpart in the plain body — but `m.mentions`
+stays absent, so it looks like a mention and does not notify.

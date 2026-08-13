@@ -305,3 +305,51 @@ def add_bot_prefix(message: str, prefix: str) -> str:
     else:
         # Prepend prefix to message
         return f"{prefix} {message}"
+
+
+MATRIX_TO = "https://matrix.to/#/"
+
+
+def mention_pill(user_id: str, label: str | None = None) -> str:
+    """Markdown link that a Matrix client renders as a mention pill."""
+    return f"[{label or user_id.split(':')[0].lstrip('@')}]({MATRIX_TO}{user_id})"
+
+
+def build_mentions(user_ids, room: bool = False) -> dict:
+    """The `m.mentions` block (MSC3952).
+
+    This is what actually fires a notification on a modern client. A plain
+    `@name` in the body does not: it only ever matched the legacy
+    `contains_user_name` push rule, and only when the text happened to contain
+    the exact localpart - `@bjoern` never notified `bjoern.marten`.
+    """
+    mentions = {}
+    if user_ids:
+        mentions["user_ids"] = list(dict.fromkeys(user_ids))
+    if room:
+        mentions["room"] = True
+    return mentions
+
+
+def inject_pills(markdown: str, user_ids) -> str:
+    """Turn a plain `@localpart` into a pill link, for the HTML body only.
+
+    The plain-text body is left alone on purpose: it keeps the bare localpart,
+    which is what the legacy push rule reads, and it is what a client without
+    HTML shows. A name that does not appear in the text is not inserted -
+    `m.mentions` already carries the notification, and silently rewriting
+    someone's message is worse than a missing pill.
+    """
+    for user_id in user_ids or []:
+        if f"{MATRIX_TO}{user_id}" in markdown:
+            # Already pilled by hand. Wrapping the link text again produces a
+            # link inside a link, which renders as neither.
+            continue
+        localpart = user_id.split(":")[0].lstrip("@")
+        pattern = re.compile(rf"(?<!\]\()@?{re.escape(localpart)}\b")
+
+        def replace(match, user_id=user_id, localpart=localpart):
+            return mention_pill(user_id, localpart)
+
+        markdown = pattern.sub(replace, markdown, count=1)
+    return markdown

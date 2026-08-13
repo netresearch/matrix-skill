@@ -37,7 +37,10 @@ from _lib.e2ee import (
 # Formatting
 from _lib.formatting import (
     add_bot_prefix,
+    build_mentions,
+    inject_pills,
     markdown_to_html,
+    mention_pill,
     shorten_service_urls,
 )
 
@@ -78,6 +81,7 @@ from _lib.utils import (
 __all__ = [
     "add_bot_prefix",
     "append_record",
+    "build_mentions",
     "build_record",
     "check_e2ee_dependencies",
     "clean_message",
@@ -92,12 +96,14 @@ __all__ = [
     "get_credentials_path",
     "get_room_info",
     "get_store_path",
+    "inject_pills",
     "list_joined_rooms",
     "load_config",
     "load_credentials",
     "log_path",
     "markdown_to_html",
     "matrix_request",
+    "mention_pill",
     "next_seq",
     "prefer_ipv4",
     "read_cursor",
