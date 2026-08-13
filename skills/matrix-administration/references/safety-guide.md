@@ -37,7 +37,7 @@ The hardening pipeline is **partially irreversible**:
 
 The room version must be > 9 for `restricted` joins; otherwise the script prints a red ❌ for that step. Switching to `restricted` removes discoverability for users not in the parent space.
 
-Unlike `synapse-deactivate-user.py`, this script has no `--yes` and asks nothing: it runs the pipeline as soon as it is invoked. Confirm with the operator first — see step 4 above.
+Like `synapse-deactivate-user.py`, the script reads the room's current state, prints the steps it would take — marking the encryption step as one that cannot be undone — and then asks. `--yes` skips the question and is required without a terminal. The question comes before the first write, so aborting leaves the room untouched.
 
 ### `synapse-make-admin.py` / `synapse-join-room.py`
 

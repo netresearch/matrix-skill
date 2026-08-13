@@ -88,7 +88,7 @@ python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # hard
 
 - **Admin token required**: All `synapse-*` scripts read `~/.config/matrix/config.json` and need `admin_token` (preferred) or `access_token` of a Synapse server-admin.
 - **No homeserver-specific defaults baked in**: pass `--space` / `--server` on the CLI or set `home_space_ids` / `room_filter` / `default_space_id` in the config.
-- **Surface destructive ops** before running: `synapse-deactivate-user.py` is irreversible and refuses to run non-interactively without `--yes` — never pass it silently. `synapse-migrate-room.py` has no such gate and encryption is one-way, so surfacing it is entirely on you.
+- **Surface destructive ops** before running: `synapse-deactivate-user.py` and `synapse-migrate-room.py` both print what they are about to do and refuse to run non-interactively without `--yes`. Never pass it silently — deactivation is irreversible and so is enabling encryption.
 - **Local vs live**: `synapse-rate-rooms.py`, `synapse-graph.py`, `synapse-user-*-rooms.py` read `rooms.json` — re-run `synapse-fetch-rooms.py` if stale.
 - **Never commit** `rooms.json` / `rooms.dot` / `rooms.svg` — they expose every indexed room.
 - **E2EE search caveat**: `synapse-search.py` only sees plaintext; tell the user that empty results ≠ no messages.
