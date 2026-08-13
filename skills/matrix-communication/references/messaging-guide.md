@@ -48,14 +48,22 @@ uv run skills/matrix-communication/scripts/matrix-react.py "#dev:matrix.org" '$e
 
 ### Common Reaction Patterns
 
+Unified team vocabulary (2026-08-13). Downstream copies of this table exist —
+when changing semantics here, keep them in sync:
+
 | Emoji | Meaning | Use Case |
 |-------|---------|----------|
+| ▶️ | Actively working NOW | Set on the claim message; REDACT it when work stops — a lingering ▶️ reads as "still busy" |
 | ✅ | Done/Complete | Mark task as finished |
-| 👍 | Acknowledged | Confirm receipt |
-| 👀 | Looking into it | Started investigating |
+| ⏳ | Waiting/queued | Nobody actively on it (NOT "in progress" — that is ▶️) |
 | 🚀 | Deployed/Shipped | Indicate release |
-| ⏳ | In progress | Working on it |
-| ❌ | Failed/Blocked | Indicate problem |
+| ❌ | Attempt failed | Distinct from 👎 (declining) and ↩️ (questions) |
+| 👀 | Looking at it | No commitment to work on it |
+| ↩️ | Back to reporter | Went back with questions |
+| 💡 | Helpful | This message taught me something |
+| 🤖 | Agent read-receipt | The agent read it and tries to heed it |
+| 👍 | Agreement, I'm in | NOT a receipt acknowledgement (that is 🤖) |
+| 👎 | Count me out | Rather not |
 
 **Workflow example:** Send "Going to reboot server" then later add checkmark reaction when complete.
 
