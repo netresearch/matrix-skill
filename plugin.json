@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "matrix-communication",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Agentic Skills for Matrix: client-side chat (matrix-communication), Synapse homeserver administration (matrix-administration), and structured announcement composition (matrix-announcement). Works with any Matrix/Synapse homeserver.",
   "author": {
     "name": "Netresearch DTT GmbH",

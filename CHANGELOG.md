@@ -6,7 +6,9 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
-### Changed
+## [3.0.0] - 2026-08-13
+
+### Breaking
 
 - **`synapse-migrate-room.py` asks before it changes anything** ([#102]). It read
   no state and asked no question: invoking it started a pipeline whose last step,
@@ -256,7 +258,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/netresearch/matrix-skill/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/netresearch/matrix-skill/compare/v1.28.0...v2.0.0
 [1.28.0]: https://github.com/netresearch/matrix-skill/compare/v1.27.1...v1.28.0
 [1.27.1]: https://github.com/netresearch/matrix-skill/compare/v1.27.0...v1.27.1
