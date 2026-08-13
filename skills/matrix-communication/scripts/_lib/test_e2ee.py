@@ -16,10 +16,12 @@ its own directory on sys.path, where `_lib/http.py` shadows the stdlib `http`
 package and breaks `urllib` on the way in.
 """
 
+import contextlib
 import json
 import os
 import pathlib
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -32,6 +34,7 @@ from e2ee import (
     explain_store_error,
     restore_login_checked,
     store_files_for,
+    store_lock,
 )
 
 
@@ -78,6 +81,22 @@ class FakeClient:
 
 
 class RestoreLoginCheckedTests(unittest.TestCase):
+    """These cover the error translation. Locking has its own test below - if
+    they took the real lock they would queue behind a running daemon, which is
+    the correct behaviour and a useless thing to wait 30 seconds for here."""
+
+    def setUp(self):
+        real = e2ee._hold_store_lock
+        e2ee._hold_store_lock = lambda: None
+        self.addCleanup(setattr, e2ee, "_hold_store_lock", real)
+
+    def test_the_store_lock_is_taken_before_opening(self):
+        """The whole point of #96: no path opens the store unlocked."""
+        taken = []
+        e2ee._hold_store_lock = lambda: taken.append(True)
+        restore_login_checked(FakeClient(), "@u:example.org", "D", "t")
+        self.assertEqual(taken, [True])
+
     def test_success_passes_the_credentials_through(self):
         client = FakeClient()
         restore_login_checked(client, "@u:example.org", "DEVICE", "syt_token")
@@ -167,6 +186,61 @@ class StoreScopingTests(unittest.TestCase):
         (self.store / "credentials.json").unlink()
         self.assertEqual(delete_credentials(), [])
         self.assertEqual(len(self._names()), 9)
+
+
+class StoreLockTests(unittest.TestCase):
+    """Exclusivity has to be enforced, not agreed.
+
+    Regression for #96: the spec said every direct path takes the lock; only
+    the daemon did, so nothing prevented a second process from opening the
+    store beside it. That is the condition that produces an undecryptable
+    message today and a corrupt store tomorrow.
+    """
+
+    def setUp(self):
+        self.store = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.store, True)
+        real = e2ee.get_store_path
+        e2ee.get_store_path = lambda: self.store
+        self.addCleanup(setattr, e2ee, "get_store_path", real)
+
+    def test_the_lock_is_granted_when_free(self):
+        with store_lock(timeout=1):
+            self.assertTrue(e2ee.store_lock_path().exists())
+
+    def test_it_is_released_on_the_way_out(self):
+        with store_lock(timeout=1):
+            pass
+        with store_lock(timeout=1):
+            pass
+
+    def test_it_is_released_even_when_the_body_raises(self):
+        """A command that dies mid-send must not leave the store locked for
+        everyone else."""
+        with contextlib.suppress(RuntimeError), store_lock(timeout=1):
+            raise RuntimeError("boom")
+        with store_lock(timeout=1):
+            pass
+
+    def test_a_held_lock_refuses_and_names_the_holder(self):
+        script = (
+            "import fcntl, sys, time\n"
+            f"h = open({str(e2ee.store_lock_path())!r}, 'a+')\n"
+            "fcntl.flock(h.fileno(), fcntl.LOCK_EX)\n"
+            "h.seek(0); h.truncate(); h.write('4242'); h.flush()\n"
+            "sys.stdout.write('held\\n'); sys.stdout.flush()\n"
+            "time.sleep(20)\n"
+        )
+        holder = subprocess.Popen(
+            [sys.executable, "-c", script], stdout=subprocess.PIPE, text=True
+        )
+        self.addCleanup(holder.kill)
+        self.assertEqual(holder.stdout.readline().strip(), "held")
+
+        with self.assertRaises(SystemExit) as caught, store_lock(timeout=1):
+            pass
+        self.assertIn("4242", str(caught.exception))
+        self.assertIn("matrix-watchd", str(caught.exception))
 
 
 if __name__ == "__main__":

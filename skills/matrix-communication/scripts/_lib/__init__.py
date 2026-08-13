@@ -30,6 +30,8 @@ from _lib.e2ee import (
     rooms_dir,
     save_credentials,
     store_files_for,
+    store_lock,
+    store_lock_path,
 )
 
 # Formatting
@@ -109,6 +111,8 @@ __all__ = [
     "shorten_service_urls",
     "socket_path",
     "store_files_for",
+    "store_lock",
+    "store_lock_path",
     "summarize_since",
     "suppress_nio_logging",
     "write_cursor",
