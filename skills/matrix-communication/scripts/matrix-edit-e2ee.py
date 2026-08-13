@@ -34,6 +34,7 @@ from _lib import (
     add_bot_prefix,
     check_e2ee_dependencies,
     clean_message,
+    daemon_request,
     find_room_in_nio_client,
     get_store_path,
     load_config,
@@ -61,6 +62,22 @@ sys.stderr.reconfigure(line_buffering=True)
 async def edit_message_e2ee(
     config: dict, room: str, event_id: str, message: str, debug: bool = False
 ) -> dict:
+    # A running daemon holds the store; opening it here would be the second
+    # opener. Before this branch existed, edits went direct and produced events
+    # the daemon could not decrypt - holes in its own log. See #95.
+    response = daemon_request(
+        {
+            "op": "edit",
+            "room": room,
+            "event_id": event_id,
+            "body": message,
+        }
+    )
+    if response is not None:
+        if response.get("ok"):
+            return {"event_id": response["event_id"], "room_id": room}
+        return {"error": response.get("error", "daemon refused the edit")}
+
     store_path = get_store_path()
     stored_creds = load_credentials()
 
