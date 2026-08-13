@@ -1,0 +1,532 @@
+#!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["matrix-nio[e2e]<0.26"]
+# ///
+"""Watch daemon: the only process that holds the E2EE store.
+
+Syncs, decrypts, appends every event of a watched room to that room's log, and
+serves send/react/redact over a Unix socket. Everything else in the skill either
+reads those logs or talks to this socket.
+
+Why a daemon at all: two nio processes on one store corrupt it, and whichever
+process syncs consumes the account's to-device events - the room keys and
+verification requests - for every other process. One owner removes both failure
+modes by construction rather than by convention. See
+docs/specs/2026-08-13-live-room-awareness.md.
+
+Usage:
+    matrix-watchd.py --start | --stop | --status | --foreground
+
+Rooms come from `watch_rooms` in ~/.config/matrix/config.json.
+"""
+
+import argparse
+import asyncio
+import contextlib
+import errno
+import fcntl
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _lib import (
+    append_record,
+    build_record,
+    check_e2ee_dependencies,
+    daemon_request,
+    get_store_path,
+    load_config,
+    load_credentials,
+    log_path,
+    next_seq,
+    prefer_ipv4,
+    resolve_room_alias,
+    restore_login_checked,
+    rooms_dir,
+    socket_path,
+    suppress_nio_logging,
+    write_room_bundle,
+)
+
+check_e2ee_dependencies()
+
+from nio import (  # nio must not be imported before the dependency check
+    AsyncClient,
+    AsyncClientConfig,
+    MegolmEvent,
+    ReactionEvent,
+    RedactionEvent,
+    RoomMemberEvent,
+    RoomMessageEmote,
+    RoomMessageNotice,
+    RoomMessageText,
+)
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
+SYNC_TIMEOUT_MS = 30000
+
+
+def lock_file_path():
+    return get_store_path() / ".daemon.lock"
+
+
+def pid_file_path():
+    return socket_path().parent / "daemon.pid"
+
+
+def take_store_lock():
+    """Hold the store for this process's whole life, or refuse to start.
+
+    Advisory `flock`, held open deliberately: releasing it would let a second
+    syncer in, and two syncers is the state this daemon exists to prevent.
+    """
+    path = lock_file_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(path, "a+")  # noqa: SIM115  # held for the process lifetime
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        if exc.errno not in (errno.EACCES, errno.EAGAIN):
+            raise
+        handle.seek(0)
+        holder = handle.read().strip() or "unknown"
+        handle.close()
+        print(f"Error: the store is locked by pid {holder}", file=sys.stderr)
+        return None
+    handle.seek(0)
+    handle.truncate()
+    handle.write(str(os.getpid()))
+    handle.flush()
+    return handle
+
+
+def event_to_dict(room, event) -> dict | None:
+    """Map a nio event onto the plain dict `build_record` consumes.
+
+    Returns None for event types the log does not carry, so the caller can tell
+    "nothing to write" from "something went wrong".
+    """
+    base = {
+        "event_id": getattr(event, "event_id", None),
+        "sender": getattr(event, "sender", None),
+        "sender_display": room.user_name(event.sender)
+        if getattr(event, "sender", None)
+        else None,
+        "ts": getattr(event, "server_timestamp", None) or int(time.time() * 1000),
+        "room_id": room.room_id,
+    }
+    if not base["event_id"] or not base["sender"]:
+        return None
+
+    if isinstance(event, RoomMessageText):
+        source = event.source.get("content", {})
+        relates = source.get("m.relates_to", {}) or {}
+        return {
+            **base,
+            "type": "m.text",
+            "body": event.body,
+            "reply_to": (relates.get("m.in_reply_to") or {}).get("event_id"),
+            "thread_root": relates.get("event_id")
+            if relates.get("rel_type") == "m.thread"
+            else None,
+        }
+    if isinstance(event, RoomMessageNotice):
+        return {**base, "type": "m.notice", "body": event.body}
+    if isinstance(event, RoomMessageEmote):
+        return {**base, "type": "m.emote", "body": event.body}
+    if isinstance(event, ReactionEvent):
+        return {**base, "type": "reaction", "body": event.key}
+    if isinstance(event, RedactionEvent):
+        return {**base, "type": "redaction", "body": None}
+    if isinstance(event, RoomMemberEvent):
+        return {**base, "type": "membership", "body": event.membership}
+    if isinstance(event, MegolmEvent):
+        return {
+            **base,
+            "type": "encrypted",
+            "body": None,
+            "session_id": event.session_id,
+        }
+    return None
+
+
+class Daemon:
+    def __init__(self, config: dict, credentials: dict):
+        self.config = config
+        self.credentials = credentials
+        self.client = None
+        self.rooms = {}
+        self.started = time.time()
+        self.last_sync = None
+        self.display_name = None
+        self.stopping = asyncio.Event()
+        self.next_seq_by_room = {}
+
+    # -- logging -----------------------------------------------------------
+
+    def record_event(self, room_id: str, event_dict: dict) -> None:
+        """Append one event to its room's log.
+
+        The sequence number is read from the log once per room and then carried
+        in memory. Asking `next_seq` every time would re-read the whole log -
+        and its rotated generation - for every incoming message, which on a log
+        of tens of thousands of records means parsing megabytes per message in
+        a busy room.
+
+        Safe to cache because the daemon is the only writer: it holds the store
+        lock for its whole run, and nothing else appends to these logs.
+        """
+        path = log_path(rooms_dir(), room_id)
+        seq = self.next_seq_by_room.get(room_id)
+        if seq is None:
+            seq = next_seq(path)
+
+        record = build_record(
+            seq=seq,
+            event=event_dict,
+            own_user_id=self.credentials["user_id"],
+            own_display_name=self.display_name,
+        )
+        append_record(path, record)
+        self.next_seq_by_room[room_id] = seq + 1
+
+    def announce(self, text: str) -> None:
+        """Put a daemon-level message into every watched log.
+
+        A watcher that dies quietly is indistinguishable from a quiet room, so
+        the reason has to travel the same path the messages do.
+        """
+        for room_id in self.rooms:
+            self.record_event(
+                room_id,
+                {
+                    "event_id": f"$daemon-{int(time.time() * 1000)}",
+                    "sender": self.credentials["user_id"],
+                    "sender_display": "matrix-watchd",
+                    "type": "m.notice",
+                    "body": text,
+                    "ts": int(time.time() * 1000),
+                    "room_id": room_id,
+                },
+            )
+
+    # -- callbacks ---------------------------------------------------------
+
+    async def on_event(self, room, event) -> None:
+        if room.room_id not in self.rooms:
+            return
+        event_dict = event_to_dict(room, event)
+        if event_dict:
+            self.record_event(room.room_id, event_dict)
+
+    # -- socket ------------------------------------------------------------
+
+    async def handle_client(self, reader, writer) -> None:
+        try:
+            line = await reader.readline()
+            if not line:
+                return
+            try:
+                request = json.loads(line)
+            except ValueError:
+                response = {"ok": False, "error": "malformed request"}
+            else:
+                response = await self.dispatch(request)
+            writer.write(json.dumps(response).encode("utf-8") + b"\n")
+            await writer.drain()
+        finally:
+            writer.close()
+            with contextlib.suppress(Exception):
+                await writer.wait_closed()
+
+    async def dispatch(self, request: dict) -> dict:
+        op = request.get("op")
+        try:
+            if op == "status":
+                return {
+                    "ok": True,
+                    "pid": os.getpid(),
+                    "uptime_seconds": int(time.time() - self.started),
+                    "rooms": list(self.rooms),
+                    "last_sync": self.last_sync,
+                }
+            if op == "send":
+                return await self.op_send(request)
+            if op == "react":
+                return await self.op_react(request)
+            if op == "redact":
+                return await self.op_redact(request)
+            return {"ok": False, "error": f"unknown op: {op!r}"}
+        except Exception as exc:  # noqa: BLE001  # a bad request must not kill the daemon
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+    async def op_send(self, request: dict) -> dict:
+        content = {
+            "msgtype": request.get("msgtype") or "m.text",
+            "body": request["body"],
+        }
+        if request.get("formatted_body"):
+            content["format"] = "org.matrix.custom.html"
+            content["formatted_body"] = request["formatted_body"]
+        if request.get("reply_to"):
+            content["m.relates_to"] = {
+                "m.in_reply_to": {"event_id": request["reply_to"]}
+            }
+        elif request.get("thread_root"):
+            content["m.relates_to"] = {
+                "rel_type": "m.thread",
+                "event_id": request["thread_root"],
+            }
+
+        response = await self.client.room_send(
+            room_id=request["room"],
+            message_type="m.room.message",
+            content=content,
+            ignore_unverified_devices=True,
+        )
+        return self._event_id_or_error(response)
+
+    async def op_react(self, request: dict) -> dict:
+        response = await self.client.room_send(
+            room_id=request["room"],
+            message_type="m.reaction",
+            content={
+                "m.relates_to": {
+                    "rel_type": "m.annotation",
+                    "event_id": request["event_id"],
+                    "key": request["key"],
+                }
+            },
+            ignore_unverified_devices=True,
+        )
+        return self._event_id_or_error(response)
+
+    async def op_redact(self, request: dict) -> dict:
+        response = await self.client.room_redact(
+            room_id=request["room"],
+            event_id=request["event_id"],
+            reason=request.get("reason"),
+        )
+        return self._event_id_or_error(response)
+
+    @staticmethod
+    def _event_id_or_error(response) -> dict:
+        event_id = getattr(response, "event_id", None)
+        if event_id:
+            return {"ok": True, "event_id": event_id}
+        return {"ok": False, "error": str(response)}
+
+    # -- lifecycle ---------------------------------------------------------
+
+    async def resolve_rooms(self) -> None:
+        for entry in self.config.get("watch_rooms", []):
+            room_id = entry
+            if entry.startswith("#"):
+                room_id = resolve_room_alias(self.config, entry) or entry
+            label = entry if entry.startswith("#") else room_id
+            self.rooms[room_id] = label
+        write_room_bundle(rooms_dir(), self.rooms)
+
+    async def run(self) -> int:
+
+        client_config = AsyncClientConfig(
+            store_sync_tokens=True, encryption_enabled=True
+        )
+        self.client = AsyncClient(
+            homeserver=self.config["homeserver"],
+            user=self.config["user_id"],
+            device_id=self.credentials["device_id"],
+            store_path=str(get_store_path()),
+            config=client_config,
+        )
+        restore_login_checked(
+            self.client,
+            self.config["user_id"],
+            self.credentials["device_id"],
+            self.credentials["access_token"],
+        )
+        if self.client.store:
+            self.client.load_store()
+
+        name = await self.client.get_displayname()
+        self.display_name = getattr(name, "displayname", None)
+
+        await self.resolve_rooms()
+        self.client.add_event_callback(self.on_event, object)
+
+        path = socket_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            path.unlink()
+        server = await asyncio.start_unix_server(self.handle_client, str(path))
+        os.chmod(path, 0o600)
+
+        print(f"watching {len(self.rooms)} room(s), socket at {path}")
+
+        sync_task = asyncio.create_task(self.sync_loop())
+        stop_task = asyncio.create_task(self.stopping.wait())
+        done, _ = await asyncio.wait(
+            [sync_task, stop_task], return_when=asyncio.FIRST_COMPLETED
+        )
+
+        server.close()
+        with contextlib.suppress(Exception):
+            await server.wait_closed()
+        with contextlib.suppress(Exception):
+            path.unlink()
+        await self.client.close()
+
+        for task in done:
+            if task is sync_task:
+                return task.result()
+        sync_task.cancel()
+        return 0
+
+    async def sync_loop(self) -> int:
+        """Sync until told to stop, or until the credential is gone.
+
+        A revoked token is terminal and is announced into every log first: the
+        alternative is a stream that simply stops, which reads as a quiet room.
+        """
+        backoff = 1
+        while not self.stopping.is_set():
+            try:
+                response = await self.client.sync(timeout=SYNC_TIMEOUT_MS)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001  # transport errors are retried
+                print(f"sync error: {exc}", file=sys.stderr)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 60)
+                continue
+
+            message = str(getattr(response, "message", "") or "")
+            status = getattr(response, "status_code", "")
+            if "M_UNKNOWN_TOKEN" in f"{status} {message}":
+                self.announce(
+                    "matrix-watchd stopped: the access token was rejected "
+                    "(M_UNKNOWN_TOKEN). Run matrix-e2ee-setup.py to mint a new device."
+                )
+                print("access token rejected, stopping", file=sys.stderr)
+                return 1
+
+            self.last_sync = int(time.time())
+            backoff = 1
+        return 0
+
+
+def run_foreground(config: dict, credentials: dict) -> int:
+    lock = take_store_lock()
+    if lock is None:
+        return 1
+
+    pid_file = pid_file_path()
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+    pid_file.write_text(str(os.getpid()))
+
+    daemon = Daemon(config, credentials)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, daemon.stopping.set)
+
+    try:
+        return loop.run_until_complete(daemon.run())
+    finally:
+        loop.close()
+        with contextlib.suppress(Exception):
+            pid_file.unlink()
+        lock.close()
+
+
+def start_detached() -> int:
+    existing = daemon_request({"op": "status"})
+    if existing and existing.get("ok"):
+        print(f"Already running (pid {existing['pid']}).")
+        return 0
+
+    process = subprocess.Popen(
+        [sys.executable, os.path.abspath(__file__), "--foreground"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    print(f"Started matrix-watchd (pid {process.pid}).")
+    return 0
+
+
+def stop_daemon() -> int:
+    pid_file = pid_file_path()
+    try:
+        pid = int(pid_file.read_text().strip())
+    except (OSError, ValueError):
+        print("No daemon running.")
+        return 0
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        print("No daemon running (stale pid file removed).")
+        with contextlib.suppress(OSError):
+            pid_file.unlink()
+        return 0
+    print(f"Stopped matrix-watchd (pid {pid}).")
+    return 0
+
+
+def show_status() -> int:
+    status = daemon_request({"op": "status"})
+    if not status:
+        print("No daemon running.")
+        return 0
+    print(f"pid:      {status['pid']}")
+    print(f"uptime:   {status['uptime_seconds']}s")
+    print(f"rooms:    {', '.join(status['rooms']) or 'none'}")
+    print(f"last sync: {status['last_sync'] or 'never'}")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Matrix watch daemon")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--start", action="store_true", help="Start in the background")
+    group.add_argument("--stop", action="store_true", help="Stop a running daemon")
+    group.add_argument("--status", action="store_true", help="Ask a running daemon")
+    group.add_argument("--foreground", action="store_true", help="Run in this terminal")
+    args = parser.parse_args()
+
+    prefer_ipv4()
+    suppress_nio_logging()
+
+    if args.status:
+        return show_status()
+    if args.stop:
+        return stop_daemon()
+    if args.start:
+        return start_detached()
+
+    config = load_config(require_user_id=True)
+    credentials = load_credentials()
+    if not credentials:
+        print("No E2EE credentials. Run matrix-e2ee-setup.py first.", file=sys.stderr)
+        return 1
+    if not config.get("watch_rooms"):
+        print(
+            'No rooms to watch. Add "watch_rooms": ["#room:server"] to '
+            "~/.config/matrix/config.json.",
+            file=sys.stderr,
+        )
+        return 1
+    return run_foreground(config, credentials)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

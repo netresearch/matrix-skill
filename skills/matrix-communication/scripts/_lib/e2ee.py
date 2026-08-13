@@ -20,6 +20,18 @@ def get_store_path() -> Path:
     return store_path
 
 
+def rooms_dir() -> Path:
+    """Directory holding the per-room event logs and the room bundle.
+
+    A sibling of the E2EE store rather than a child: nothing in here is
+    device-scoped, and `--logout` must not carry a room's history away with the
+    device it was recorded on.
+    """
+    path = get_store_path().parent / "rooms"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def get_credentials_path() -> Path:
     """Get path for stored E2EE device credentials."""
     return get_store_path() / "credentials.json"
