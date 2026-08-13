@@ -6,6 +6,80 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-13
+
+### Breaking
+
+- **`matrix-nio` is pinned below 0.26, and the pin is tied to the E2EE store.**
+  0.26 sends the SAS commitment as a hex digest where 0.25 sent unpadded base64,
+  so Element rejects every verification before it renders emoji
+  ([matrix-nio#570](https://github.com/matrix-nio/matrix-nio/issues/570)). The
+  two releases also use different crypto backends and write incompatible stores:
+  opening one with the other fails as `OlmAccountError: BAD_ACCOUNT_KEY`, which
+  names a key that was never the problem. An installation whose store was
+  written by 0.26 must recreate it — the store cannot be migrated:
+
+  ```bash
+  matrix-e2ee-setup.py --logout && matrix-e2ee-setup.py
+  matrix-key-backup.py --import-keys
+  matrix-e2ee-verify.py --request DEVICE
+  ```
+
+- **Every path that opens the store now takes an exclusive lock.** Commands that
+  previously ran beside each other, or beside the daemon, now wait and then
+  refuse with the holder's pid. That is the point: two nio processes on one
+  store corrupt it, and until now nothing stopped them. Commands routed through
+  the daemon — send, react, redact, edit — keep working while it runs.
+
+- **`matrix-e2ee-setup.py --logout` deletes only its own device's store files.**
+  It globbed `*.db` and `*_devices` across the shared store directory, so
+  logging one device out destroyed the megolm history of every other. Use
+  `--purge-all` for the old behaviour.
+
+### Added
+
+- **Live room awareness.** `matrix-watchd.py` holds the E2EE store, syncs,
+  decrypts and appends every event of a watched room to
+  `rooms/<slug>.jsonl`; `matrix-watch.py` follows that log without touching the
+  store, so any number of readers can run at once. Send, react, redact and edit
+  route through the daemon's Unix socket when it is running and fall back to the
+  direct path when it is not — no new flags, no second way to send a message.
+  Rooms come from `watch_rooms` in the config. Design and plan in
+  `docs/specs/` and `docs/exec-plans/completed/`.
+- **Real mentions.** `--mention '@user:server'` (repeatable) and `--mention-room`
+  set `m.mentions` (MSC3952), which is what notifies a modern client; a plain
+  `@name` only ever matched the legacy push rule on an exact localpart. The pill
+  goes into the HTML body, the plain body keeps the bare name.
+- **A governance section in `SKILL.md`** on who turns the agent's function on,
+  off or wider, and what a third party in a room may and may not decide.
+- **A CI job that runs the unit tests.** They existed and nothing executed them.
+
+### Fixed
+
+- **`matrix-key-backup.py --import-keys` imported nothing.** It decrypted every
+  session, discarded it, and counted it as imported. Three further defects sat
+  in front of that: the AES-CBC IV was read off the ciphertext instead of the
+  HKDF output, the MAC check rejected every backup written by a libolm client,
+  and the backup key the script itself stores "for future use" had no code path
+  that read it back.
+- **`matrix-doctor.py` verified only the first token it found** and never asked
+  the homeserver about the E2EE credential at all, so a deleted device reported
+  `[OK] e2ee_setup` while every E2EE call failed with `Room not found`.
+- **A fresh device could not verify.** nio cannot build a verification for a
+  device it has no keys for, and the resulting error named the transaction
+  rather than the missing device.
+- **`self` in the event log marked the account, not the device.** An agent and
+  the person it works for share one account, so the flag was true for both —
+  useless for the one thing it exists for.
+- **The E2EE guide recommended reusing a running client's access token.** That
+  hijacks the client's device and breaks decryption in it, silently.
+
+### Changed
+
+- The event log renders an unknown display name as the localpart rather than the
+  whole MXID, and the daemon remembers a name once it has seen it.
+- `ruff` in `.pre-commit-config.yaml` matches the version CI runs.
+
 ## [1.28.0] - 2026-08-08
 
 ### Fixed
@@ -143,7 +217,11 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v1.25.0...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/netresearch/matrix-skill/compare/v1.28.0...v2.0.0
+[1.28.0]: https://github.com/netresearch/matrix-skill/compare/v1.27.1...v1.28.0
+[1.27.1]: https://github.com/netresearch/matrix-skill/compare/v1.27.0...v1.27.1
+[1.27.0]: https://github.com/netresearch/matrix-skill/compare/v1.26.0...v1.27.0
 [1.25.0]: https://github.com/netresearch/matrix-skill/compare/v1.24.0...v1.25.0
 [1.24.0]: https://github.com/netresearch/matrix-skill/compare/v1.23.0...v1.24.0
 [1.23.0]: https://github.com/netresearch/matrix-skill/compare/v1.22.0...v1.23.0

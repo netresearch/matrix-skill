@@ -5,7 +5,7 @@ license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Pairs with matrix-communication for sending. Optional: Chromium for HTML-card rendering."
 metadata:
   author: Netresearch DTT GmbH
-  version: "1.28.0"
+  version: "2.0.0"
   repository: https://github.com/netresearch/matrix-skill
 allowed-tools: Bash(chromium:*) Bash(curl:*) Bash(jq:*) Read Write
 ---
