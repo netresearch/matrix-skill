@@ -5,6 +5,10 @@
     "MD013": false,
     "MD022": false,
     "MD024": false,
+    // OKF documents (docs/specs/) carry a `title` in frontmatter AND an H1 in
+    // the body - the format's own example does. Empty front_matter_title stops
+    // MD025 counting the frontmatter as the first H1; two real H1s still error.
+    "MD025": { "front_matter_title": "" },
     "MD026": false,
     "MD029": false,
     "MD031": false,
