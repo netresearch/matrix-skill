@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
     cursor_path,
+    daemon_request,
     load_config,
     log_path,
     read_cursor,
@@ -130,9 +131,27 @@ def main() -> int:
     cursor = cursor_path(directory, room_id, args.cursor)
 
     if not log.exists():
+        # A missing log has two very different causes, and saying the wrong one
+        # sends people to restart a daemon that is already running.
+        status = daemon_request({"op": "status"})
+        if status and status.get("ok") and room_id in status.get("rooms", []):
+            print(
+                f"Watching {room_id}, nothing logged yet.\n"
+                "The log starts at the first event after the daemon began "
+                "watching; a sync does not replay history.",
+                file=sys.stderr,
+            )
+            return 0
+        if status and status.get("ok"):
+            print(
+                f"The daemon is running but not watching {room_id}.\n"
+                'Add it to "watch_rooms" in ~/.config/matrix/config.json and '
+                "restart it.",
+                file=sys.stderr,
+            )
+            return 1
         print(
-            f"No log for {room_id}.\n"
-            "Start the daemon and add the room to watch_rooms:\n"
+            f"No log for {room_id}, and no daemon is running.\n"
             "  matrix-watchd.py --start",
             file=sys.stderr,
         )

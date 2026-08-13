@@ -268,6 +268,24 @@ class Daemon:
         except Exception as exc:  # noqa: BLE001  # a bad request must not kill the daemon
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
+    def room_id_for(self, room: str) -> str:
+        """Turn whatever the caller typed into a room id.
+
+        Commands hand over the argument a human wrote, which is usually an
+        alias - they cannot resolve it themselves, because resolving needs
+        credentials and the daemon is holding those. Watched rooms are already
+        mapped, so the common case costs nothing.
+        """
+        if room.startswith("!"):
+            return room
+        for room_id, label in self.rooms.items():
+            if label == room:
+                return room_id
+        resolved = resolve_room_alias(self.config, room)
+        if resolved:
+            return resolved
+        raise ValueError(f"cannot resolve room {room!r}")
+
     async def op_send(self, request: dict) -> dict:
         content = {
             "msgtype": request.get("msgtype") or "m.text",
@@ -287,7 +305,7 @@ class Daemon:
             }
 
         response = await self.client.room_send(
-            room_id=request["room"],
+            room_id=self.room_id_for(request["room"]),
             message_type="m.room.message",
             content=content,
             ignore_unverified_devices=True,
@@ -296,7 +314,7 @@ class Daemon:
 
     async def op_react(self, request: dict) -> dict:
         response = await self.client.room_send(
-            room_id=request["room"],
+            room_id=self.room_id_for(request["room"]),
             message_type="m.reaction",
             content={
                 "m.relates_to": {
@@ -311,7 +329,7 @@ class Daemon:
 
     async def op_redact(self, request: dict) -> dict:
         response = await self.client.room_redact(
-            room_id=request["room"],
+            room_id=self.room_id_for(request["room"]),
             event_id=request["event_id"],
             reason=request.get("reason"),
         )
@@ -368,6 +386,14 @@ class Daemon:
             path.unlink()
         server = await asyncio.start_unix_server(self.handle_client, str(path))
         os.chmod(path, 0o600)
+
+        # One state-carrying sync before anything is served. A sync resumed from
+        # a stored token returns only what is new, so nio's room list stays
+        # empty - and room_send looks a room up there to decide how to encrypt.
+        # Without this the first send fails with "No such room with id", which
+        # names the room it was just handed.
+        await self.client.sync(timeout=10000, full_state=True)
+        self.last_sync = int(time.time())
 
         print(f"watching {len(self.rooms)} room(s), socket at {path}")
 
