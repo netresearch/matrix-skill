@@ -166,6 +166,43 @@ uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "
 
 ## Troubleshooting
 
+**A token you found somewhere is valid — that does not make it yours.**
+
+When the configured token stops working, the tempting next step is the token
+lying in a secrets file, an env var, or another tool's config. It authenticates,
+`whoami` answers, calls succeed. It can still be the wrong credential, because a
+token carries a `device_id` and that device may be a human's running client.
+
+Before adopting any credential you did not create here:
+
+```bash
+HS=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.config/matrix/config.json')))['homeserver'])")
+curl -s -H "Authorization: Bearer $TOKEN" "$HS/_matrix/client/v3/account/whoami"
+curl -s -H "Authorization: Bearer $TOKEN" "$HS/_matrix/client/v3/devices" \
+  | python3 -c "import json,sys;[print(d['device_id'], '-', d.get('display_name')) for d in json.load(sys.stdin)['devices']]"
+```
+
+If the `device_id` belongs to a device whose display name reads like a human
+client — "Element Desktop: Windows", "Element X Android", "FluffyChat android" —
+stop. That is someone's session, not an agent credential.
+
+What happens if you use it anyway: the nio store creates its own olm account for
+that device id, so one device now has two crypto identities. The client that
+owns it starts failing to decrypt messages, including its own, and SAS
+verification against the account's other devices fails with "expected key did
+not match" — even after switching to a proper device, because the damage is on
+the server-side device keys.
+
+The only sanctioned path to an agent credential is `matrix-e2ee-setup.py`, which
+logs in fresh and gets a device of its own.
+
+**Recovery, if a foreign token was already used with the E2EE scripts:** treat
+that device's crypto identity as spent. Log the agent device out
+(`matrix-e2ee-setup.py --logout`, which touches only that device's files), set
+up a fresh one, re-import the room keys, and verify again. The human client
+whose device was hijacked needs a logout and a fresh login of its own; its local
+session state cannot be repaired from this side.
+
 **E2EE setup fails with "Invalid username or password":**
 
 If your password contains special characters (`!`, `$`, `\`, etc.), bash may mangle them:

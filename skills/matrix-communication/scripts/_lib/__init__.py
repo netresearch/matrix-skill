@@ -27,6 +27,7 @@ from _lib.e2ee import (
     load_credentials,
     restore_login_checked,
     save_credentials,
+    store_files_for,
 )
 
 # Formatting
@@ -88,5 +89,6 @@ __all__ = [
     "save_credentials",
     # Formatting
     "shorten_service_urls",
+    "store_files_for",
     "suppress_nio_logging",
 ]

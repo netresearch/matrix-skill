@@ -114,15 +114,52 @@ def restore_login_checked(client, user_id: str, device_id: str, access_token: st
         raise SystemExit(f"Error: {hint}") from exc
 
 
-def delete_credentials():
-    """Remove stored device credentials and key store files."""
+def store_files_for(user_id: str, device_id: str) -> list[Path]:
+    """Every store file belonging to one device.
+
+    nio names them ``{user_id}_{device_id}.<suffix>`` - the database plus the
+    blacklisted/ignored/trusted device lists. The trailing dot matters: without
+    it a device id that is a prefix of another would collect the other's files
+    too.
+    """
+    prefix = f"{user_id}_{device_id}."
+    return sorted(p for p in get_store_path().iterdir() if p.name.startswith(prefix))
+
+
+def delete_credentials(purge_all: bool = False) -> list[str]:
+    """Remove the stored credentials and the store files of THAT device.
+
+    Returns the names of the files removed, so the caller can say what it did.
+
+    The store directory is shared by every device ever set up here. Globbing
+    ``*.db`` and ``*_devices`` across it - which this did - means logging one
+    device out destroys the megolm history of all the others. That happened:
+    a logout of a broken device took a months-old 25 MB store with it, and only
+    a server-side key backup made the rooms readable again.
+
+    ``purge_all`` restores the old sweep for the case where you do want the
+    directory emptied. ``backup_key.json`` is never touched either way; it is
+    not device-scoped and re-importing keys depends on it.
+    """
+    removed: list[str] = []
+    creds = load_credentials()
     creds_path = get_credentials_path()
+
+    if purge_all:
+        store_path = get_store_path()
+        targets = sorted([*store_path.glob("*.db"), *store_path.glob("*_devices")])
+    elif creds and creds.get("user_id") and creds.get("device_id"):
+        targets = store_files_for(creds["user_id"], creds["device_id"])
+    else:
+        # No credentials to scope by. Removing nothing beats removing everything.
+        targets = []
+
+    for path in targets:
+        path.unlink()
+        removed.append(path.name)
+
     if creds_path.exists():
         creds_path.unlink()
+        removed.append(creds_path.name)
 
-    # Also remove key store databases
-    store_path = get_store_path()
-    for db_file in store_path.glob("*.db"):
-        db_file.unlink()
-    for key_file in store_path.glob("*_devices"):
-        key_file.unlink()
+    return removed
