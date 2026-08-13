@@ -23,7 +23,8 @@ answer, without a second process ever touching the encryption state.
 - **Send messages** to any joined Matrix room
 - **Rich formatting** — bold, italic, code, strikethrough, spoilers, lists, blockquotes
 - **Real mentions** — `--mention '@user:server'` sets `m.mentions`, which is what
-  notifies a client; a plain `@name` in the text does not
+  notifies a client, and renders that name in your text as a pill; a plain
+  `@name` without `--mention` does neither
 - **Smart link shortening** — Jira, GitHub, GitLab URLs become readable links
 - **Room links** — `#room:server` becomes a clickable room link
 - **Code blocks** — syntax-highlighted multi-line code
