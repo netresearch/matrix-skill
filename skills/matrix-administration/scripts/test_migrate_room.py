@@ -41,7 +41,7 @@ HARDENED = {
 
 class PlanTestCase(unittest.TestCase):
     def _steps(self, already_child, room_info):
-        return migrate.plan_steps(ROOM, SPACE, USER, already_child, room_info)
+        return migrate.plan_steps(SPACE, USER, already_child, room_info)
 
     def test_unhardened_room_has_every_step_pending(self):
         steps = self._steps(False, UNHARDENED)

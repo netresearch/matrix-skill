@@ -113,7 +113,6 @@ def _restore_power_level(
 
 
 def plan_steps(
-    room_id: str,
     space_id: str,
     user_id: str,
     already_child: bool,
@@ -256,7 +255,7 @@ def main() -> int:
 
     print_plan(
         args.room_id,
-        plan_steps(args.room_id, space_id, user_id, already_child, room_info),
+        plan_steps(space_id, user_id, already_child, room_info),
     )
     stop = confirm(args.yes)
     if stop is not None:
