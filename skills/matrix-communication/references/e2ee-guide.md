@@ -318,15 +318,22 @@ The verification script supports waiting for incoming verification requests:
 
 ```bash
 # Listen for incoming verification requests (e.g., from Element)
-uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 180
+uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --listen --timeout 180
 
 # The script will:
 # 1. Sync with server
-# 2. Auto-detect Element devices
-# 3. Initiate or accept verification
-# 4. Display emoji for comparison
-# 5. Write emojis to /tmp/matrix_verification_emojis.txt for agent polling
+# 2. Wait for the other client to start the verification
+# 3. Accept the request and display emoji for comparison
+# 4. Write emojis to /tmp/matrix_verification_emojis.txt for agent polling
 ```
+
+Prefer `--listen` over `--request` whenever the account has several active
+client sessions (`--list` showing more than one "Element Desktop" entry is the
+typical case): with `--request` you would have to guess which device to
+target — a request sent to a session that is not open just times out — while
+with `--listen` the user starts the verification in Element from exactly the
+session they are sitting in (Settings → Sessions → the agent's device →
+Verify session).
 
 **Element X compatibility:** Element X uses different verification flows that may not be fully compatible. Use Element Desktop or Element Android for verification.
 
