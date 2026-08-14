@@ -19,7 +19,7 @@ Content rules for Matrix announcements: HTML subset, type tags, glyphs, `m.text`
 1. **One headline, one purpose.**
 2. **`formatted_body` in the HTML subset, not Markdown.** `body` is the plaintext fallback — clients aren't required to parse Markdown.
 3. **Lists beat paragraphs.** Enumerable items — findings, projects, failures, tickets — are a `<ul>`, however long each item runs. A paragraph opening with a bold word is emphasis, not structure.
-4. **Wrap code.** Commands, paths, versions, IDs, env vars in `<code>`; multi-line in `<pre><code class="language-…">`.
+4. **Wrap code — and name the thing itself.** Commands, paths, versions, IDs, env vars in `<code>`; multi-line in `<pre><code class="language-…">`. Prefer the concrete identifier over an abstract noun standing in for it: "<code>b13/container</code> auf <code>^4.0.2</code> gehoben", not "Constraint auf 4.x angehoben" — the abstraction drops the searchable name AND (in German prose) smuggles in an anglicism.
 5. **Layout > words → render an HTML card to PNG.** Comparisons, dashboards, multi-row tables die in `formatted_body`.
 
 ## Type tags (pick one — never stack)

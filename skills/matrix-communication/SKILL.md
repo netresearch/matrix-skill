@@ -14,6 +14,8 @@ allowed-tools: Bash(python3:*) Bash(uv:*) Read Write
 
 Matrix rooms: send, read, download media. **Always use `*-e2ee.py` scripts.**
 
+**Composing anything longer than a single line? Load `matrix-announcement` first — before writing, and for edits too.** It owns the content rules: every named entity (repo, MR/PR, ticket, pipeline) a link, identifiers and filenames in `code`, blank lines between thoughts. "It's just a short status note" is not an exemption — a two-sentence note naming three repos is exactly the case its checklist exists for; one such note shipped with zero links and had to be corrected by hand.
+
 > ## ⛔ NEVER reuse a running client's access token
 >
 > Not from Element, Element X, FluffyChat or a browser session. Not in
