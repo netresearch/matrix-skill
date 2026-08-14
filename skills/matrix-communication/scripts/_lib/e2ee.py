@@ -188,11 +188,16 @@ def explain_store_error(exc: Exception) -> str | None:
         "the olm account in libolm's format and 0.26 in vodozemac's, and neither "
         "can read the other's. The store was written by the other one.\n"
         "\n"
+        "The usual writer is a script copy from an OLDER skill version - a plugin\n"
+        "cache directory or a stale checkout - whose unpinned dependency resolves\n"
+        "the newest matrix-nio. Find and stop that source first (do NOT fall back\n"
+        "to it as a workaround), or the store flips back after every re-setup.\n"
+        "\n"
         "Run every script on the same pin. If the pin has moved, the store has to "
         "be recreated - it cannot be migrated:\n"
         "  matrix-e2ee-setup.py --logout && matrix-e2ee-setup.py\n"
         "  matrix-key-backup.py --import-keys\n"
-        "  matrix-e2ee-verify.py --request DEVICE"
+        "  matrix-e2ee-verify.py --listen   # or --request DEVICE with a single Element session"
     )
 
 
