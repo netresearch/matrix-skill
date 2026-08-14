@@ -242,7 +242,7 @@ brew install gcc@12
 export CC=/opt/homebrew/bin/gcc-12
 export CXX=/opt/homebrew/bin/g++-12
 export CMAKE_POLICY_VERSION_MINIMUM=3.5   # clears the CMake < 3.5 error
-pip install 'matrix-nio[e2e]'             # GCC sidesteps the Clang 17 const error
+pip install 'matrix-nio[e2e]<0.26'         # GCC sidesteps the Clang 17 const error
 ```
 
 **Upstream status:** `libolm` is archived and deprecated in favor of `vodozemac` (https://github.com/matrix-nio/matrix-nio/issues/518). The real fix — replacing olm with vodozemac in `matrix-nio` — is in progress as open PR https://github.com/matrix-nio/matrix-nio/pull/555; until it ships, macOS installs need one of the workarounds above. Related: https://github.com/matrix-nio/matrix-nio/issues/560 (macOS install) and https://github.com/matrix-nio/matrix-nio/issues/541 (CMake error). Tracking here: https://github.com/netresearch/matrix-skill/issues/43

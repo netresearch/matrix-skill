@@ -31,9 +31,9 @@ def check_e2ee_dependencies() -> None:
             print("Error: matrix-nio library not found.", file=sys.stderr)
             print(file=sys.stderr)
             print("Install with (try in order):", file=sys.stderr)
-            print("  uvx pip install 'matrix-nio[e2e]'", file=sys.stderr)
-            print("  pip install 'matrix-nio[e2e]'", file=sys.stderr)
-            print("  pip3 install 'matrix-nio[e2e]'", file=sys.stderr)
+            print("  uvx pip install 'matrix-nio[e2e]<0.26'", file=sys.stderr)
+            print("  pip install 'matrix-nio[e2e]<0.26'", file=sys.stderr)
+            print("  pip3 install 'matrix-nio[e2e]<0.26'", file=sys.stderr)
         else:
             print(f"Error: Missing dependency: {e}", file=sys.stderr)
 
