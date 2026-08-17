@@ -6,6 +6,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-08-17
+
 ### Fixed
 
 - The fallback install hints in `_lib/deps.py` and the macOS workaround in the
@@ -290,7 +292,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.1...HEAD
+[3.1.1]: https://github.com/netresearch/matrix-skill/compare/v3.0.0...v3.1.1
 [3.0.0]: https://github.com/netresearch/matrix-skill/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/netresearch/matrix-skill/compare/v1.28.0...v2.0.0
 [1.28.0]: https://github.com/netresearch/matrix-skill/compare/v1.27.1...v1.28.0
