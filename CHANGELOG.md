@@ -21,8 +21,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 - `matrix-communication` gates multi-line sends on `matrix-announcement`, so
   structured posts get its content rules before delivery ([#110]).
-- Device verification prefers `--listen`; `--request` is for the single-Element-
-  session case ([#112]).
+- Device verification prefers `--listen`; `--request` is for the case of a
+  single Element session ([#112]).
 
 [#109]: https://github.com/netresearch/matrix-skill/issues/109
 [#110]: https://github.com/netresearch/matrix-skill/issues/110
