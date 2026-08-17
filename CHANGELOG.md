@@ -6,6 +6,29 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Fixed
+
+- The fallback install hints in `_lib/deps.py` and the macOS workaround in the
+  setup guide now pin `matrix-nio[e2e]<0.26` like the nine E2EE scripts and the
+  doctor already did. Following the unpinned hints landed on 0.26/vodozemac, and
+  the next `uv run` script then failed to open the store ([#109]).
+- The backend-mismatch hint names the likely store rewriter: a script copy from
+  an older skill version whose unpinned dependency resolves the newest
+  matrix-nio. The generic hint had invited exactly that copy as a workaround
+  ([#113]).
+
+### Documentation
+
+- `matrix-communication` gates multi-line sends on `matrix-announcement`, so
+  structured posts get its content rules before delivery ([#110]).
+- Device verification prefers `--listen`; `--request` is for the case of a
+  single Element session ([#112]).
+
+[#109]: https://github.com/netresearch/matrix-skill/issues/109
+[#110]: https://github.com/netresearch/matrix-skill/issues/110
+[#112]: https://github.com/netresearch/matrix-skill/issues/112
+[#113]: https://github.com/netresearch/matrix-skill/issues/113
+
 ## [3.1.0] - 2026-08-13
 
 ### Documentation
