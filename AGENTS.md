@@ -120,13 +120,8 @@ Use the `#test` room (or a room named `test`) for all testing. Never test in pro
 
 ### matrix-communication
 - [SKILL.md](skills/matrix-communication/SKILL.md) — skill definition and quick reference
-- [Command Reference](skills/matrix-communication/references/command-reference.md) — every script and flag, script selection, config
-- [Troubleshooting](skills/matrix-communication/references/troubleshooting.md)
-- [Agent governance](skills/matrix-communication/references/agent-governance.md) — who may change the agent's function; reading a room log
-- [Setup Guide](skills/matrix-communication/references/setup-guide.md)
-- [E2EE Guide](skills/matrix-communication/references/e2ee-guide.md)
-- [Messaging Guide](skills/matrix-communication/references/messaging-guide.md)
-- [API Reference](skills/matrix-communication/references/api-reference.md)
+- [Command Reference](skills/matrix-communication/references/command-reference.md) — every script and flag, script selection, config · [Troubleshooting](skills/matrix-communication/references/troubleshooting.md) · [Agent governance](skills/matrix-communication/references/agent-governance.md)
+- [Setup Guide](skills/matrix-communication/references/setup-guide.md) · [E2EE Guide](skills/matrix-communication/references/e2ee-guide.md) · [Messaging Guide](skills/matrix-communication/references/messaging-guide.md) · [API Reference](skills/matrix-communication/references/api-reference.md)
 
 ### matrix-administration
 - [SKILL.md](skills/matrix-administration/SKILL.md) — skill definition and quick reference
