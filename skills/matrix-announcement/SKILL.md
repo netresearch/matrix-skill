@@ -12,28 +12,21 @@ allowed-tools: Bash(chromium:*) Bash(curl:*) Bash(jq:*) Read Write
 
 # Matrix Announcement
 
-Content rules for Matrix announcements: HTML subset, type tags, glyphs, `m.text`/`m.notice`, PNG-card threshold. `matrix-communication` does the sending.
+Content rules for Matrix announcements. `matrix-communication` does the sending.
 
 ## The five rules
 
 1. **One headline, one purpose.**
 2. **`formatted_body` in the HTML subset, not Markdown.** `body` is the plaintext fallback — clients aren't required to parse Markdown.
-3. **Lists beat paragraphs.** Enumerable items — findings, projects, failures, tickets — are a `<ul>`, however long each item runs. A paragraph opening with a bold word is emphasis, not structure.
-4. **Wrap code — and name the thing itself.** Commands, paths, versions, IDs, env vars in `<code>`; multi-line in `<pre><code class="language-…">`. Prefer the concrete identifier over an abstract noun standing in for it: "<code>b13/container</code> auf <code>^4.0.2</code> gehoben", not "Constraint auf 4.x angehoben" — the abstraction drops the searchable name AND (in German prose) smuggles in an anglicism.
-5. **Layout > words → render an HTML card to PNG.** Comparisons, dashboards, multi-row tables die in `formatted_body`.
+3. **Lists beat paragraphs.** Enumerable items — findings, projects, failures, tickets — are a `<ul>`, however long each runs. A bold-led paragraph is emphasis, not structure.
+4. **Wrap code — and name the thing itself.** Commands, paths, versions, IDs, env vars in `<code>`; multi-line in `<pre><code class="language-…">`. Name the identifier, not a category standing in for it (`html-subset.md`).
+5. **Layout > words → render an HTML card to PNG.** Comparisons, dashboards and multi-row tables die in `formatted_body`.
 
 ## Type tags (pick one — never stack)
 
-- `New skill` — first public release
-- `Release` — feature version
-- `Patch` — bugfix-only
-- `Digest` — weekly / multi-skill roundup
-- `Heads-up` — breaking change, deprecation
-- `Postmortem` — incident summary
-- `Findings` — result of an investigation or audit
-- `RFC` — proposal seeking feedback
+`New skill` first release · `Release` feature version · `Patch` bugfix-only · `Digest` weekly roundup · `Heads-up` breaking change or deprecation · `Postmortem` incident · `Findings` investigation or audit · `RFC` proposal seeking feedback
 
-Findings reports group by category of finding (`Errors found`, `No error, expected behavior`), never by who was wrong (`Real errors`, `Corrections`).
+Findings reports group by category of finding, never by who was wrong (`structure.md`).
 
 ## Glyphs
 
@@ -41,30 +34,22 @@ One leading glyph at most. **Never** trailing decoration, multi-emoji ladders, �
 
 ## Pre-send checklist
 
-- [ ] One-line title, Element at 1280px.
-- [ ] Opens with the change, not "we're excited to".
+- [ ] One-line title at 1280px, opening with the change — not "we're excited to".
 - [ ] URLs wrapped in `<a>`, destination as text.
 - [ ] Every entity is a link: issue keys (even mid-sentence), versions → release page, MRs/PRs (`project/path!N` / `org/repo#N`), pipelines, commits. Status updates: one item per line, linked key first, blank lines between.
-- [ ] Enumerable items in a `<ul>`, not bold-led paragraphs (rule 3).
+- [ ] Rules 3–5 applied: list structure, code wrapped, one glyph at most.
 - [ ] Findings headings name the category, not the person.
-- [ ] Code wrapped (rule 4).
-- [ ] Glyph OK (rules above).
 - [ ] `body` reads standalone, not stripped HTML.
-- [ ] `msgtype` = `m.notice` for unattended automation, `m.text` otherwise.
-- [ ] No `@room` unless it is an outage.
-- [ ] Image card if layout-heavy (rule 5).
-- [ ] Length under 3000 chars or split into a thread.
+- [ ] `m.notice` for unattended automation, `m.text` otherwise; no `@room` unless it is an outage.
+- [ ] Under 3000 chars, or threaded; image card if layout-heavy.
 
 ## References
 
-- [html-subset.md](references/html-subset.md) — allowed/banned tags, `data-mx-*` attributes
-- [structure.md](references/structure.md) — skeleton, type-tag examples, length budget, `m.text` vs `m.notice`
-- [glyphs.md](references/glyphs.md) — glyph table, banned set
-- [image-cards.md](references/image-cards.md) — chromium → upload → `m.image` recipe
-- [threading.md](references/threading.md) — threads, mentions, edits, redactions
-- [anti-patterns.md](references/anti-patterns.md) — wall-of-text, emoji ladder, mention storm
-- [text-templates.md](references/text-templates.md) — drop-in skeletons per type tag
-- [templates/](references/templates/) — three HTML card templates
-- [gallery.html](references/gallery.html) — visual preview of rules and templates
+In `references/`:
 
-Sending: `matrix-communication` ships it (`${CLAUDE_SKILL_DIR}/../matrix-communication/scripts/matrix-send-e2ee.py "$ROOM" "$MARKDOWN" [--notice]`), converting markdown to HTML per `html-subset.md`. `--notice` marks automation, exclusive of `--emote`. Hand-crafted `formatted_body`/`m.image`: call the homeserver API — recipe in `image-cards.md`.
+- `html-subset.md` — allowed/banned tags, `data-mx-*`, naming the identifier
+- `structure.md` — skeleton, length budget, `m.text` vs `m.notice`, **how to send**
+- `glyphs.md` · `anti-patterns.md` — glyph table; wall-of-text, emoji ladder, mention storm
+- `image-cards.md` — chromium → upload → `m.image`
+- `threading.md` — threads, mentions, edits, redactions
+- `text-templates.md` · `templates/` · `gallery.html` — skeletons, HTML cards, preview

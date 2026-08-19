@@ -117,3 +117,24 @@ If you blow past the hard limit, you have a digest, not an announcement. Split i
 | --- | --- | --- |
 | `m.notice` | Unattended automation: release announcements, CI summaries, scheduled digests, alert pings | Clients render it visually distinct (usually muted) and **bots are forbidden from auto-replying** to it — prevents bot-on-bot loops |
 | `m.text` | Agent posting on behalf of a human who reviewed it (or a real human typing) | Default; replies welcome |
+
+## Findings reports: group by finding, not by who was wrong
+
+Headings name the category of finding (`Errors found`, `No error, expected
+behavior`), never the person or side that held the wrong view (`Real errors`,
+`Corrections`). The report is about the system under investigation; a heading
+that sorts by who was mistaken turns it into something else, and readers who
+were named remember that instead of the finding.
+
+## Sending an announcement
+
+`matrix-communication` ships it and converts markdown to HTML per
+`html-subset.md`:
+
+```bash
+${CLAUDE_SKILL_DIR}/../matrix-communication/scripts/matrix-send-e2ee.py "$ROOM" "$MARKDOWN" [--notice]
+```
+
+`--notice` marks automation and is exclusive of `--emote`. For a hand-crafted
+`formatted_body` or an `m.image` event, call the homeserver API directly — the
+recipe is in `image-cards.md`.
