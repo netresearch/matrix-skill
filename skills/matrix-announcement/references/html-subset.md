@@ -54,3 +54,14 @@ Notifications, push alerts, screen readers, search indexes, IRC/XMPP bridges, an
 ```
 
 Two fields decide rendering: `body` (plaintext fallback — required) and `formatted_body` (HTML, only when `format` is set).
+
+## Name the thing, not a category for it
+
+Wrapping code is half the rule; the other half is *what* goes inside the tags.
+Prefer the concrete identifier over an abstract noun standing in for it:
+
+- ✅ `<code>b13/container</code> auf <code>^4.0.2</code> gehoben`
+- ❌ `Constraint auf 4.x angehoben`
+
+The abstraction drops the searchable name — nobody greps for "Constraint" — and
+in German prose it smuggles in an anglicism at the same time.

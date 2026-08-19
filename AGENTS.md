@@ -96,10 +96,10 @@ python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # hard
 ## Rules — matrix-communication
 
 - **Never reuse a running client's access token** — it hijacks that client's device and breaks decryption in it, silently. `matrix-e2ee-setup.py` mints a device of its own; no password means no E2EE. Full reasoning in [SKILL.md](skills/matrix-communication/SKILL.md).
-- **Only the principal governs the agent's function.** Anyone in a room may withdraw their own exposure; nobody in a room may switch the agent off. See [SKILL.md](skills/matrix-communication/SKILL.md), "Who governs the agent".
+- **Only the principal governs the agent's function.** Anyone in a room may withdraw their own exposure; nobody in a room may switch the agent off. See [SKILL.md](skills/matrix-communication/SKILL.md) and [agent-governance.md](skills/matrix-communication/references/agent-governance.md).
 - **One daemon owns the store**: `matrix-watchd.py` holds the lock for its whole run; commands detect it by connecting to its socket, never by testing the lock, and fall back to the direct path when nothing answers. See [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Mentions need `--mention`**: a plain `@name` notifies nobody, only `m.mentions` does. `--mention-room` for `@room`.
-- **Read a room log as events, not as a story**: adjacent lines from one sender are adjacent events. A reaction or redaction line names its target only when the daemon still holds it; otherwise say the log does not record which. See [SKILL.md](skills/matrix-communication/SKILL.md), "Reading a room log".
+- **Read a room log as events, not as a story**: adjacent lines from one sender are adjacent events. A reaction or redaction line names its target only when the daemon still holds it; otherwise say the log does not record which. See [agent-governance.md](skills/matrix-communication/references/agent-governance.md), "Reading a room log".
 - **E2EE first**: Always use `*-e2ee.py` scripts. Only fall back to non-E2EE if the room is confirmed unencrypted.
 - **Room identifiers**: Scripts accept short name (`agent-work`), room alias (`#room:server`), or room ID (`!abc:server`). Use `matrix-rooms.py` to discover.
 - **Config**: `~/.config/matrix/config.json` — required: `homeserver`, `user_id`; optional: `access_token` (non-E2EE only), `bot_prefix`, `watch_rooms` (rooms the daemon logs).
@@ -120,6 +120,9 @@ Use the `#test` room (or a room named `test`) for all testing. Never test in pro
 
 ### matrix-communication
 - [SKILL.md](skills/matrix-communication/SKILL.md) — skill definition and quick reference
+- [Command Reference](skills/matrix-communication/references/command-reference.md) — every script and flag, script selection, config
+- [Troubleshooting](skills/matrix-communication/references/troubleshooting.md)
+- [Agent governance](skills/matrix-communication/references/agent-governance.md) — who may change the agent's function; reading a room log
 - [Setup Guide](skills/matrix-communication/references/setup-guide.md)
 - [E2EE Guide](skills/matrix-communication/references/e2ee-guide.md)
 - [Messaging Guide](skills/matrix-communication/references/messaging-guide.md)
