@@ -6,6 +6,16 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [3.1.2] - 2026-08-27
+
+### Fixed
+
+- AGENTS.md kept under the 150-line index limit
+
+### Documentation
+
+- matrix-communication and matrix-announcement SKILL.md brought under the word cap
+
 ## [3.1.1] - 2026-08-17
 
 ### Fixed
