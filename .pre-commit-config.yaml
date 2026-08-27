@@ -54,7 +54,7 @@ repos:
   # nothing enforces the pairing, so a hook older than CI passes locally and
   # fails in CI on rules the older ruff does not have yet. See issue #75.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.4
+    rev: v0.16.5
     hooks:
       - id: ruff
       - id: ruff-format
