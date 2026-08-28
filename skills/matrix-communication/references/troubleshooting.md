@@ -21,6 +21,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 | `Invalid password` | special characters eaten by the shell | `MATRIX_PASSWORD="pass" uv run …` |
 | `libolm not found` | missing native dependency | Linux: `apt install libolm-dev`; macOS 26+ is unsupported, see `setup-guide.md` |
 | `matrix-nio not found` | Python dependency missing | `python3 …/matrix-doctor.py --install` |
+| `The E2EE store cannot be opened by the installed matrix-nio (0.25.x)` | **backend mismatch, not a broken store**: the store was written by nio ≥ 0.26 (vodozemac format), the installed nio is < 0.26 (libolm), or the reverse. The error says so in its first lines — read them before claiming the store is defective | pin nio to the version that wrote the store, or re-create the device with `matrix-e2ee-setup.py` and re-import keys |
 
 Two of these look like the same error and are not: `M_UNKNOWN_TOKEN` says the
 token is dead, while `Room not found` on a room you are demonstrably in says the
@@ -28,6 +29,16 @@ token is dead, while `Room not found` on a room you are demonstrably in says the
 faster than reasoning about it.
 
 ## Mistakes that cost the most time
+
+**Calling the store "broken" from the tail of an error.** A session in 2026-08 read
+the last line of the store error, matched it against an old memory note and reported
+the E2EE store as defective — the message had named the real cause (nio 0.25 cannot
+read a vodozemac store) in its first two lines, and the user had already fixed exactly
+that once. Before any such claim: read the whole error; then measure on a **copy** of
+the store which nio opens it (`uv run --with "matrix-nio==0.25.2" … --status` vs
+`--with "matrix-nio>=0.26"`); only then say which side is wrong. A store that one
+version opens is not broken.
+
 
 - **Reusing a running client's access token.** The one mistake here that damages
   something outside this skill — it hijacks that client's device and breaks
