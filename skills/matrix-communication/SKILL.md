@@ -7,7 +7,7 @@ metadata:
   author: Netresearch DTT GmbH
   version: "3.1.2"
   repository: https://github.com/netresearch/matrix-skill
-allowed-tools: Bash(python3:*) Bash(uv:*) Read Write
+allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*) Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*) Bash(uv run skills/matrix-communication/scripts/*) Bash(python3 skills/matrix-communication/scripts/*) Read Write
 ---
 
 # Matrix Communication
@@ -37,14 +37,13 @@ Send, read and download media in Matrix rooms. **Always use `*-e2ee.py`.**
 **Prepend `set +H &&` when an argument contains `!`.**
 
 ```bash
-S=${CLAUDE_SKILL_DIR}/scripts
-set +H && uv run $S/matrix-send-e2ee.py ROOM "message"
-set +H && uv run $S/matrix-send-e2ee.py ROOM "text" --mention '@user:server'   # only this notifies
-uv run $S/matrix-read-e2ee.py ROOM --limit 10 [--json]
-uv run $S/matrix-rooms.py [--search ops]
-uv run $S/matrix-watchd.py --start | --status | --stop
-uv run $S/matrix-e2ee-setup.py --status
-python3 $S/matrix-doctor.py --install      # python3, not uv run
+set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "message"
+set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "text" --mention '@user:server'   # only this notifies
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 10 [--json]
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py [--search ops]
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watchd.py --start | --status | --stop
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py --status
+python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install      # python3, not uv run
 ```
 
 Threads, replies, emote/notice, media, edit, redact, react, rooms, invites, power

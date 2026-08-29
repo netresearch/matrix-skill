@@ -7,7 +7,7 @@ metadata:
   author: Netresearch DTT GmbH
   version: "3.1.2"
   repository: https://github.com/netresearch/matrix-skill
-allowed-tools: Bash(python3:*) Bash(uv:*) Bash(dot:*) Read Write
+allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*) Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*) Bash(python3 skills/matrix-administration/scripts/*) Bash(dot:*) Read Write
 ---
 
 # Matrix Administration
@@ -19,21 +19,21 @@ Stdlib-only Python wrappers around the Synapse [Admin API](https://element-hq.gi
 ```bash
 S=skills/matrix-administration/scripts
 
-python3 $S/synapse-fetch-rooms.py [--server :example.com]
-python3 $S/synapse-rate-rooms.py --space '!home:srv' [--language de]
-python3 $S/synapse-graph.py --space '!home:srv'
-python3 $S/synapse-biggest-rooms.py [-n 10]
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-fetch-rooms.py [--server :example.com]
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-rate-rooms.py --space '!home:srv' [--language de]
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-graph.py --space '!home:srv'
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-biggest-rooms.py [-n 10]
 
-python3 $S/synapse-join-room.py    '!room:srv' '@user:srv'
-python3 $S/synapse-make-admin.py   '!room:srv' '@user:srv'
-python3 $S/synapse-add-to-space.py '!room:srv' '!space:srv'
-python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!space:srv'   # DESTRUCTIVE, asks first
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-join-room.py    '!room:srv' '@user:srv'
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-make-admin.py   '!room:srv' '@user:srv'
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-add-to-space.py '!room:srv' '!space:srv'
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-migrate-room.py '!room:srv' '@admin:srv' '!space:srv'   # DESTRUCTIVE, asks first
 
-python3 $S/synapse-deactivate-user.py   '@user:srv'   # DESTRUCTIVE
-python3 $S/synapse-user-rooms.py        '@user:srv'
-python3 $S/synapse-user-admin-rooms.py  '@user:srv'
-python3 $S/synapse-room-member-flow.py  '!room:srv'
-python3 $S/synapse-search.py            '!room:srv' '@bot:srv' deploy
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-deactivate-user.py   '@user:srv'   # DESTRUCTIVE
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-user-rooms.py        '@user:srv'
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-user-admin-rooms.py  '@user:srv'
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-room-member-flow.py  '!room:srv'
+python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-search.py            '!room:srv' '@bot:srv' deploy
 ```
 
 ## Scripts
