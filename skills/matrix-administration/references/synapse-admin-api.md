@@ -24,8 +24,8 @@ Upstream docs: <https://element-hq.github.io/synapse/latest/usage/administration
 | `GET /v2/users/{user_id}` | `synapse-deactivate-user.py` | Profile + admin status. |
 | `GET /v2/users/{user_id}/joined_rooms` | `synapse-deactivate-user.py` | Returns `joined_rooms` array. |
 | `POST /v1/deactivate/{user_id}` | `synapse-deactivate-user.py` | Body `{"erase": true}` for GDPR removal of message bodies. |
-| `POST /v1/users/{user_id}/login` | (ad-hoc token minting) | Returns `access_token` for that user **without their password**. Empty body `{}` mints a non-expiring token; `{"valid_until_ms": N}` bounds it. Creates a new device on the target account. |
-| `GET /v2/users/{user_id}/devices` | (ad-hoc token diagnosis) | Lists the user's devices. A token that has stopped working and whose device is gone from this list was invalidated by a logout or a device deletion, not by expiry. |
+| `POST /v1/users/{user_id}/login` | (ad-hoc token minting) | Returns `access_token` for that user **without their password**. Empty body `{}` mints a non-expiring token; `{"valid_until_ms": N}` bounds it. Generates **no device** — see below. Cannot be used to log in as yourself. Disabled under Matrix Authentication Service. |
+| `GET /v2/users/{user_id}/devices` | (ad-hoc token diagnosis) | Lists the user's devices. Only device-bound tokens (an ordinary `/login`) appear here; a token minted by the endpoint above never does. |
 
 ## Statistics
 
@@ -45,25 +45,40 @@ The admin user must be a member of the target room for state writes.
 | `GET /rooms/{room_id}/context/{event_id}?filter=...&limit=1` | `synapse-room-member-flow.py` | Used to recover the previous state event a leave/kick replaced. |
 | `POST /search` | `synapse-search.py` | Body: room-event search payload, paginated via `next_batch`. |
 
-## A service token belongs to a service account, not to a person
+## Minting a token for automation, and what it is actually bound to
 
-`POST /v1/users/{user_id}/login` is the way to give a pipeline, cron job or
-script its own credential: as a server admin you mint a token for any user
-without knowing their password, so a dedicated account can hold the credential
-that automation uses.
+`POST /v1/users/{user_id}/login` gives a pipeline, cron job or script its own
+credential: as a server admin you mint a token for any user without knowing
+their password. Two constraints before reaching for it — **it is disabled when
+Matrix Authentication Service integration is enabled** (mint a MAS *personal
+session* through the MAS Admin API instead), and it refuses to log a user in as
+themselves, so an admin cannot use it to mint extra tokens for their own account.
 
-Put it on a dedicated account rather than a personal one. A personal token dies
-whenever that person logs out, rotates a session, or has a device cleaned up —
-none of which is an event anyone connects to a pipeline. A scheduled job at
-Netresearch failed 17 consecutive nights on `401 M_UNKNOWN_TOKEN` after exactly
-that; nothing had changed in the code, and the account that had owned the token
-no longer had the device.
+**The token is bound to the minting admin, not to the target account.** Upstream
+is explicit: the token expires if *the admin* calls `/logout/all` from any of
+their devices, and does **not** expire when the target user does the same. So
+putting the credential on a dedicated account removes the target's sessions as a
+failure mode — worth doing — but the admin who minted it remains one. Mint from
+an account whose sessions are stable, and record who minted it, because that is
+the person whose `/logout/all` will take the pipeline down. To retire a token
+deliberately, call the ordinary `/logout` with it.
 
-Diagnosing such a token is two calls and no writes: `GET
-/_matrix/client/v3/account/whoami` says whether it is valid *and* whose it is,
-and `GET /v2/users/{user_id}/devices` says whether the device behind it still
-exists. `whoami` proves validity, never admin rights — for those, probe an
-admin endpoint such as `GET /v1/rooms?limit=1` separately.
+**It generates no device.** The token does not appear in the target's `/devices`
+list and `whoami` returns no `device_id` for it — by design, so the target user
+cannot tell they have been logged in as. The practical consequence is a
+diagnosis that does not work: `GET /v2/users/{user_id}/devices` says nothing
+about a token minted this way, and an empty or unchanged device list is not
+evidence either way. That check applies only to device-bound tokens from an
+ordinary `/login`.
+
+**What does diagnose it, in one call and no writes:** `GET
+/_matrix/client/v3/account/whoami` — a valid token answers `200` with the
+`user_id` it belongs to, an invalid one `401 M_UNKNOWN_TOKEN`. That proves
+validity and ownership, never admin rights; for those, probe an admin endpoint
+such as `GET /v1/rooms?limit=1` separately. A Netresearch scheduled job failed 17
+consecutive nights on `401 M_UNKNOWN_TOKEN` with no code change in four months;
+`whoami` on the stored credential settled it immediately, while the device list
+had nothing to say.
 
 ## Room-ID gotcha: newer rooms have no `:server` suffix
 
