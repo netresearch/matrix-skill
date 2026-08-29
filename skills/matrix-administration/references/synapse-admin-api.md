@@ -24,6 +24,8 @@ Upstream docs: <https://element-hq.github.io/synapse/latest/usage/administration
 | `GET /v2/users/{user_id}` | `synapse-deactivate-user.py` | Profile + admin status. |
 | `GET /v2/users/{user_id}/joined_rooms` | `synapse-deactivate-user.py` | Returns `joined_rooms` array. |
 | `POST /v1/deactivate/{user_id}` | `synapse-deactivate-user.py` | Body `{"erase": true}` for GDPR removal of message bodies. |
+| `POST /v1/users/{user_id}/login` | (ad-hoc token minting) | Returns `access_token` for that user **without their password**. Empty body `{}` mints a non-expiring token; `{"valid_until_ms": N}` bounds it. Creates a new device on the target account. |
+| `GET /v2/users/{user_id}/devices` | (ad-hoc token diagnosis) | Lists the user's devices. A token that has stopped working and whose device is gone from this list was invalidated by a logout or a device deletion, not by expiry. |
 
 ## Statistics
 
@@ -42,6 +44,26 @@ The admin user must be a member of the target room for state writes.
 | `POST /rooms/{room_id}/join` | `synapse-migrate-room.py` | Joins the calling user. |
 | `GET /rooms/{room_id}/context/{event_id}?filter=...&limit=1` | `synapse-room-member-flow.py` | Used to recover the previous state event a leave/kick replaced. |
 | `POST /search` | `synapse-search.py` | Body: room-event search payload, paginated via `next_batch`. |
+
+## A service token belongs to a service account, not to a person
+
+`POST /v1/users/{user_id}/login` is the way to give a pipeline, cron job or
+script its own credential: as a server admin you mint a token for any user
+without knowing their password, so a dedicated account can hold the credential
+that automation uses.
+
+Put it on a dedicated account rather than a personal one. A personal token dies
+whenever that person logs out, rotates a session, or has a device cleaned up —
+none of which is an event anyone connects to a pipeline. A scheduled job at
+Netresearch failed 17 consecutive nights on `401 M_UNKNOWN_TOKEN` after exactly
+that; nothing had changed in the code, and the account that had owned the token
+no longer had the device.
+
+Diagnosing such a token is two calls and no writes: `GET
+/_matrix/client/v3/account/whoami` says whether it is valid *and* whose it is,
+and `GET /v2/users/{user_id}/devices` says whether the device behind it still
+exists. `whoami` proves validity, never admin rights — for those, probe an
+admin endpoint such as `GET /v1/rooms?limit=1` separately.
 
 ## Room-ID gotcha: newer rooms have no `:server` suffix
 
