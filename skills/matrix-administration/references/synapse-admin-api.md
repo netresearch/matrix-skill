@@ -64,9 +64,11 @@ the person whose `/logout/all` will take the pipeline down. To retire a token
 deliberately, call the ordinary `/logout` with it.
 
 **It generates no device.** The token does not appear in the target's `/devices`
-list and `whoami` returns no `device_id` for it — by design, so the target user
-cannot tell they have been logged in as. The practical consequence is a
-diagnosis that does not work: `GET /v2/users/{user_id}/devices` says nothing
+list and `whoami` returns no `device_id` for it. Upstream puts the intent no
+higher than "in general the target user *should not* be able to tell they have
+been logged in as" — so treat the guarantee as covering the device list, not as
+invisibility: actions taken with the token are ordinary events in the rooms the
+target is in. The practical consequence is a diagnosis that does not work: `GET /v2/users/{user_id}/devices` says nothing
 about a token minted this way, and an empty or unchanged device list is not
 evidence either way. That check applies only to device-bound tokens from an
 ordinary `/login`.
@@ -75,10 +77,14 @@ ordinary `/login`.
 /_matrix/client/v3/account/whoami` — a valid token answers `200` with the
 `user_id` it belongs to, an invalid one `401 M_UNKNOWN_TOKEN`. That proves
 validity and ownership, never admin rights; for those, probe an admin endpoint
-such as `GET /v1/rooms?limit=1` separately. A Netresearch scheduled job failed 17
-consecutive nights on `401 M_UNKNOWN_TOKEN` with no code change in four months;
-`whoami` on the stored credential settled it immediately, while the device list
-had nothing to say.
+such as `GET /v1/rooms?limit=1` separately. **Send the token under test
+explicitly** — `admin_request()` resolves `config["admin_token"] or
+config["access_token"]`, so a probe run through the usual config answers for the
+configured admin token and not for the token you are asking about, and it answers
+`200` either way. Pass a config carrying only the minted token, or issue the
+request by hand. A Netresearch scheduled job failed 17 consecutive nights on
+`401 M_UNKNOWN_TOKEN` with no code change in four months; `whoami` on the stored
+credential settled it immediately, while the device list had nothing to say.
 
 ## Room-ID gotcha: newer rooms have no `:server` suffix
 
