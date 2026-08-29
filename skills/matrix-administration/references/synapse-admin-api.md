@@ -78,7 +78,7 @@ ordinary `/login`.
 `user_id` it belongs to, an invalid one `401 M_UNKNOWN_TOKEN`. That proves
 validity and ownership, never admin rights; for those, probe an admin endpoint
 such as `GET /v1/rooms?limit=1` separately. **Send the token under test
-explicitly** — `admin_request()` resolves `config["admin_token"] or
+explicitly** — `admin_request()` resolves `config.get("admin_token") or
 config["access_token"]`, so a probe run through the usual config answers for the
 configured admin token and not for the token you are asking about, and it answers
 `200` either way. Pass a config carrying only the minted token, or issue the
