@@ -36,9 +36,9 @@ RUN --mount=type=secret,id=matrix_token \
 }
 EOF
 
-RUN python3 scripts/synapse-fetch-rooms.py
-RUN LANGUAGE=en python3 scripts/synapse-graph.py && mv rooms.svg rooms.en.svg
-RUN LANGUAGE=de python3 scripts/synapse-graph.py && mv rooms.svg rooms.de.svg
+RUN python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-fetch-rooms.py
+RUN LANGUAGE=en python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-graph.py && mv rooms.svg rooms.en.svg
+RUN LANGUAGE=de python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-graph.py && mv rooms.svg rooms.de.svg
 
 # Runtime: any tiny static-file server
 FROM ghcr.io/thedevminertv/gostatic:1.5.2
