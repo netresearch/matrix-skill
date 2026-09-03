@@ -16,9 +16,12 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ### Documentation
 
-- `matrix-administration`: minting and diagnosing service tokens; `admin_request`'s token resolution quoted verbatim; the invisibility claim bounded and the probe trap named
+- `matrix-administration`: minting and diagnosing service tokens;
+  `admin_request`'s token resolution quoted verbatim; the invisibility claim
+  bounded and the probe trap named
 - `matrix-announcement`: a maintenance-progress template, from a window that had none
-- `troubleshooting`: backfill after a watcher gap; a store that "cannot be opened" is a backend mismatch
+- `troubleshooting`: backfill after a watcher gap; a store that "cannot be
+  opened" is a backend mismatch
 - Output escaping, and two limits on the recovery recipe
 
 ## [3.1.2] - 2026-08-27
