@@ -5,7 +5,7 @@ license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "python3 (stdlib only) + a Matrix access token belonging to a Synapse server-admin user. Optional: graphviz `dot` for SVG. Synapse 1.x with admin API enabled."
 metadata:
   author: Netresearch DTT GmbH
-  version: "3.1.2"
+  version: "3.1.3"
   repository: https://github.com/netresearch/matrix-skill
 allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*) Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*) Bash(python3 skills/matrix-administration/scripts/*) Bash(dot:*) Read Write
 ---

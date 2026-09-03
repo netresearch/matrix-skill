@@ -1,6 +1,6 @@
 {
   "name": "matrix-communication",
-  "version": "3.1.2",
+  "version": "3.1.3",
   "description": "Agentic Skills for Matrix: client-side chat (matrix-communication), Synapse homeserver administration (matrix-administration), and structured announcement composition (matrix-announcement). Works with any Matrix/Synapse homeserver.",
   "author": {
     "name": "Netresearch DTT GmbH",
