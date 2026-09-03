@@ -91,6 +91,43 @@ For more than ~6 lines of releases, render `templates/weekly-digest.html` to PNG
 <p><strong>Help:</strong> <a href="{thread-or-issue}">{ticket-id}</a></p>
 ```
 
+## Maintenance progress (one per phase, incident and resolution)
+
+A window room is read by people who are not in your terminal. They need to know,
+per message: which ticket, what state, whether it affects them, and what happens
+next. In that order, and skimmable in about five seconds.
+
+```html
+<p>{🔧|✅|⛔|↩️} <a href="{ticket-url}">{TICKET-KEY}</a> — <strong>{RUNNING|DONE|BLOCKED|ROLLED BACK}</strong>: {what, in one clause}</p>
+<p><strong>Impact:</strong> {who notices what, or "none"}.</p>
+<p><strong>Next:</strong> {the next step and roughly when}.</p>
+<p><strong>Output:</strong></p>
+<pre><code>{gate output, HTML-escaped, trimmed to the lines that carry the verdict}</code></pre>
+```
+
+No `<details>`: it is not on the Matrix allow-list (`html-subset.md`) and clients strip it silently. Trim the output instead of hiding it.
+
+**Escape the output before it goes into `formatted_body`.** `<`, `&` and a literal `</pre>` in a log line are parsed as markup and break the block — and gate output is exactly where those appear. The plaintext `body` fallback stays unescaped.
+
+Every ticket, MR and tag is a link. A bare key is a lookup you have handed to
+the reader; one window produced six messages naming 26 keys with zero links.
+
+Anti-patterns this template exists to prevent, all observed in one window:
+
+- **Opening with a tool tally.** `PLAY RECAP … ok=14 changed=2` as line one tells
+  a colleague nothing. The state token does.
+- **The 3000-character wall.** If it does not fit the shape above, it is a
+  ticket comment, not a room message — post the comment and link it.
+- **Silence between the announcement and the result.** A phase that starts gets
+  a message; the same phase ending gets another. The room was silent through
+  56 % of that session, including the riskiest action of the night.
+- **Announcing an expected state.** Say what you measured. One announcement
+  claimed a service was live on its new path; the measurement that contradicted
+  it arrived 1h46m later.
+- **Correcting yourself in a new message.** Edit the original
+  (`matrix-edit-e2ee.py`) so a reader arriving later sees one true version
+  rather than reconstructing which of two stands.
+
 ## Postmortem
 
 ```html

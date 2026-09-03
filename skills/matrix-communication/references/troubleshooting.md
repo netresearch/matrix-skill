@@ -28,6 +28,63 @@ token is dead, while `Room not found` on a room you are demonstrably in says the
 **E2EE credential** is dead. `matrix-doctor.py` distinguishes them, which is
 faster than reasoning about it.
 
+## A repaired watcher is not a recovered history
+
+Fixing the transport and reading the room again are two jobs, and doing only the
+first leaves a hole exactly where the interesting messages are — the ones sent
+while the watcher was down.
+
+Measured in one maintenance window: four colleague messages were identified as
+unread, said out loud to be unread, and never fetched. The daemon was restarted,
+the room was declared "watched again", and the gap stayed empty for the rest of
+the night.
+
+So the recovery is two steps, always:
+
+```bash
+# 1. transport — and check the room is in watch_rooms, not just that the daemon runs
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watchd.py --status
+
+# 2. the gap it was down for — this is the step that gets skipped
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 50
+```
+
+**A running daemon is not a watched room.** Rooms come from `watch_rooms` in
+`~/.config/matrix/config.json`; if this one is not in that list, `--start`
+changes nothing — add the room and restart the daemon, then backfill.
+
+Read back to the last message you actually saw, not to the last message the
+daemon logged: those differ by exactly the outage. **This read is best-effort
+recent history**: `matrix-read-e2ee.py` issues a single `room_messages` request
+with no pagination, so a gap longer than `--limit` is silently truncated. Raise
+the limit past the number of messages you expect, and if the outage is long
+enough that you cannot bound it, say the history is partial rather than
+implying it is complete.
+
+**Liveness is not a one-time check.** A daemon that was running an hour ago
+tells you nothing now. Before reporting anything as "no news from the room", ask
+its status in the same breath — silence from a dead watcher looks identical to
+silence from a quiet room, and only one of them is true.
+
+## "No access" is a claim about you, not about the service
+
+Three times in one session this skill's transport was reported as unreachable
+and the work parked. All three were self-inflicted: a stale token in
+`config.json` while a working one sat in the skill's own store, a wrong path,
+and one that was never tried at all.
+
+Before saying a room, a token or the homeserver is unavailable:
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py            # what the skill itself thinks is wrong
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py --status
+```
+
+`matrix-doctor.py` reads the credentials the skill stores; a token rejected from
+`~/.config/matrix/config.json` while the store holds a working one is a stale
+config, not a lost credential — and the fix is a repair, not a new token. Say
+"I have not got access" only after the tool has said so too.
+
 ## Mistakes that cost the most time
 
 **Calling the store "broken" from the tail of an error.** A session in 2026-08 read
