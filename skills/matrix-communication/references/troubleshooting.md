@@ -42,15 +42,24 @@ the night.
 So the recovery is two steps, always:
 
 ```bash
-# 1. transport
-uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watchd.py --status      # or --start
+# 1. transport — and check the room is in watch_rooms, not just that the daemon runs
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watchd.py --status
 
 # 2. the gap it was down for — this is the step that gets skipped
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 50
 ```
 
+**A running daemon is not a watched room.** Rooms come from `watch_rooms` in
+`~/.config/matrix/config.json`; if this one is not in that list, `--start`
+changes nothing — add the room and restart the daemon, then backfill.
+
 Read back to the last message you actually saw, not to the last message the
-daemon logged: those differ by exactly the outage.
+daemon logged: those differ by exactly the outage. **This read is best-effort
+recent history**: `matrix-read-e2ee.py` issues a single `room_messages` request
+with no pagination, so a gap longer than `--limit` is silently truncated. Raise
+the limit past the number of messages you expect, and if the outage is long
+enough that you cannot bound it, say the history is partial rather than
+implying it is complete.
 
 **Liveness is not a one-time check.** A daemon that was running an hour ago
 tells you nothing now. Before reporting anything as "no news from the room", ask

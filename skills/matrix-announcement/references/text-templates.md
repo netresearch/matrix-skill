@@ -102,10 +102,12 @@ next. In that order, and skimmable in about five seconds.
 <p><strong>Impact:</strong> {who notices what, or "none"}.</p>
 <p><strong>Next:</strong> {the next step and roughly when}.</p>
 <p><strong>Output:</strong></p>
-<pre><code>{gate output, if any — trim to the lines that carry the verdict}</code></pre>
+<pre><code>{gate output, HTML-escaped, trimmed to the lines that carry the verdict}</code></pre>
 ```
 
 No `<details>`: it is not on the Matrix allow-list (`html-subset.md`) and clients strip it silently. Trim the output instead of hiding it.
+
+**Escape the output before it goes into `formatted_body`.** `<`, `&` and a literal `</pre>` in a log line are parsed as markup and break the block — and gate output is exactly where those appear. The plaintext `body` fallback stays unescaped.
 
 Every ticket, MR and tag is a link. A bare key is a lookup you have handed to
 the reader; one window produced six messages naming 26 keys with zero links.
