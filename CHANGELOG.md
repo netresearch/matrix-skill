@@ -6,6 +6,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [3.1.3] - 2026-09-03
+
 ### Changed
 
 - The shipped scripts are declared in `allowed-tools`, not the interpreter
@@ -320,7 +322,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.1...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.3...HEAD
+[3.1.3]: https://github.com/netresearch/matrix-skill/compare/v3.1.1...v3.1.3
 [3.1.1]: https://github.com/netresearch/matrix-skill/compare/v3.0.0...v3.1.1
 [3.0.0]: https://github.com/netresearch/matrix-skill/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/netresearch/matrix-skill/compare/v1.28.0...v2.0.0
