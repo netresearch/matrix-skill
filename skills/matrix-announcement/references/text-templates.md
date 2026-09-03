@@ -101,8 +101,11 @@ next. In that order, and skimmable in about five seconds.
 <p>{🔧|✅|⛔|↩️} <a href="{ticket-url}">{TICKET-KEY}</a> — <strong>{RUNNING|DONE|BLOCKED|ROLLED BACK}</strong>: {what, in one clause}</p>
 <p><strong>Impact:</strong> {who notices what, or "none"}.</p>
 <p><strong>Next:</strong> {the next step and roughly when}.</p>
-<details><summary>Output</summary><pre>{gate output, if any}</pre></details>
+<p><strong>Output:</strong></p>
+<pre><code>{gate output, if any — trim to the lines that carry the verdict}</code></pre>
 ```
+
+No `<details>`: it is not on the Matrix allow-list (`html-subset.md`) and clients strip it silently. Trim the output instead of hiding it.
 
 Every ticket, MR and tag is a link. A bare key is a lookup you have handed to
 the reader; one window produced six messages naming 26 keys with zero links.

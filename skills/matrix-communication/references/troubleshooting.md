@@ -43,10 +43,10 @@ So the recovery is two steps, always:
 
 ```bash
 # 1. transport
-uv run $C/matrix-watchd.py --status      # or --start
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watchd.py --status      # or --start
 
 # 2. the gap it was down for — this is the step that gets skipped
-uv run $C/matrix-read-e2ee.py ROOM --limit 50
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 50
 ```
 
 Read back to the last message you actually saw, not to the last message the
@@ -67,8 +67,8 @@ and one that was never tried at all.
 Before saying a room, a token or the homeserver is unavailable:
 
 ```bash
-python3 $C/matrix-doctor.py            # what the skill itself thinks is wrong
-uv run $C/matrix-e2ee-setup.py --status
+python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py            # what the skill itself thinks is wrong
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py --status
 ```
 
 `matrix-doctor.py` reads the credentials the skill stores; a token rejected from
