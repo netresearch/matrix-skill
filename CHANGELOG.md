@@ -6,6 +6,11 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Documentation
+
+- `matrix-communication`: reading a room's history without the E2EE store — the plain `/messages` endpoint, which works beside a running `matrix-watchd`
+- `matrix-communication`: what a hookshot message looks like when it is parsed — `formatted_body` vs the raw `body`, the name prefix, the `matrix.to` actor, the shared `(?)` help link, entity glyphs
+
 ## [3.1.3] - 2026-09-03
 
 ### Changed

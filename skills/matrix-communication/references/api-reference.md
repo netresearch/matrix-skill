@@ -210,6 +210,46 @@ GET /room_keys/version
 GET /room_keys/keys?version={version}
 ```
 
+### Reading history without the E2EE store
+
+`matrix-read-e2ee.py` opens the encryption store, so it refuses while `matrix-watchd.py`
+holds it (`Error: the E2EE store is held by pid …`) — the documented fallback to the
+direct path applies to sending, not to this. When the messages you are after are
+*unencrypted* — everything a webhook, a bridge or an RSS feed posts is — the plain
+`/messages` endpoint answers with the config's own `access_token` and needs no store at
+all. It performs no `/sync` and touches no key endpoint, so it changes no device state —
+which is why it does not fall under the rule against reusing a client's token: **that
+rule still stands**, take the token from `~/.config/matrix/config.json`, never from
+Element or another running client. Where the config carries no `access_token` (E2EE set
+up by password only), this path is not available; the store holds device credentials, not
+a bearer token.
+
+```bash
+HS=$(python3 -c 'import json;print(json.load(open("'$HOME'/.config/matrix/config.json"))["homeserver"])')
+TOKEN=$(python3 -c 'import json;print(json.load(open("'$HOME'/.config/matrix/config.json"))["access_token"])')
+ROOM=$(curl -s -H "Authorization: Bearer $TOKEN" \
+  "$HS/_matrix/client/v3/directory/room/%23room%3Aserver" | python3 -c 'import json,sys;print(json.load(sys.stdin)["room_id"])')
+
+# newest first; page with the returned `end` token until `origin_server_ts` is old enough
+curl -s -H "Authorization: Bearer $TOKEN" --get \
+  --data-urlencode 'dir=b' --data-urlencode 'limit=100' \
+  --data-urlencode 'filter={"types":["m.room.message","m.room.encrypted"]}' \
+  "$HS/_matrix/client/v3/rooms/$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$ROOM")/messages"
+```
+
+The response holds `chunk` (the events, newest first) and `end` (pass it back as `from`).
+
+**Keep `m.room.encrypted` in the filter even though you cannot read those events.** With
+`m.room.message` alone the encrypted traffic is not merely unreadable, it is invisible,
+and an encrypted room comes back looking empty. Measured on one project room: the same
+50-event window returns 50 plaintext messages under the narrow filter and 24 plaintext
+plus 26 encrypted under this one — more than half the room. An `m.room.encrypted` entry
+carries no readable content on this path; it is the proof that something was said, and
+the reason a count from here is a count of *plaintext* events, never of messages.
+
+Thirty days of ten project rooms were read this way for an event-store backfill while the
+daemon kept running.
+
 ## Event Types
 
 | type | Description |
