@@ -210,6 +210,36 @@ GET /room_keys/version
 GET /room_keys/keys?version={version}
 ```
 
+### Reading history without the E2EE store
+
+`matrix-read-e2ee.py` opens the encryption store, so it refuses while `matrix-watchd.py`
+holds it (`Error: the E2EE store is held by pid …`) — the documented fallback to the
+direct path applies to sending, not to this. When the messages you are after are
+*unencrypted* — everything a webhook, a bridge or an RSS feed posts is — the plain
+`/messages` endpoint answers with the config's `access_token` and needs no store at all.
+It performs no `/sync` and touches no key endpoint, so it is safe to run beside a
+logged-in client and beside the daemon.
+
+```bash
+HS=$(python3 -c 'import json;print(json.load(open("'$HOME'/.config/matrix/config.json"))["homeserver"])')
+TOKEN=$(python3 -c 'import json;print(json.load(open("'$HOME'/.config/matrix/config.json"))["access_token"])')
+ROOM=$(curl -s -H "Authorization: Bearer $TOKEN" \
+  "$HS/_matrix/client/v3/directory/room/%23room%3Aserver" | python3 -c 'import json,sys;print(json.load(sys.stdin)["room_id"])')
+
+# newest first; page with the returned `end` token until `origin_server_ts` is old enough
+curl -s -H "Authorization: Bearer $TOKEN" --get \
+  --data-urlencode 'dir=b' --data-urlencode 'limit=100' \
+  --data-urlencode 'filter={"types":["m.room.message"]}' \
+  "$HS/_matrix/client/v3/rooms/$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$ROOM")/messages"
+```
+
+The response holds `chunk` (the events, newest first) and `end` (pass it back as `from`).
+A room whose *history* is encrypted yields nothing readable here — that is the honest
+answer, not an empty room: check `m.room.encryption` before reporting a count.
+
+Thirty days of ten project rooms were read this way for an event-store backfill while the
+daemon kept running.
+
 ## Event Types
 
 | type | Description |

@@ -65,6 +65,31 @@ The admin room accumulates every webhook ever provisioned by that user across
 all rooms — match on the room name/ID mentioned in the message to find the
 right one if multiple webhooks were created recently.
 
+## What a hookshot message looks like when you parse it
+
+Reading a webhook message back — for an audit, a migration, or an event store — is not
+reading `body`. Five properties, measured over 300 messages in one project room:
+
+- **`formatted_body` carries the message; `body` carries the raw payload.** For a v2
+  webhook `body` is the literal `Received webhook data:` followed by the JSON the sender
+  posted. Parse `formatted_body` and fall back to `body` only when it is absent.
+- **The webhook's own name is prefixed as markup**: `<strong>Production/Staging</strong>:`
+  in front of the message (with the separating space). Strip it, or every title in your data starts with it.
+- **An actor is rendered as a `matrix.to` link**, e.g.
+  `<a href="https://matrix.to/#/@x:server">Anonymous (Incoming E-Mail)</a>: created …`.
+  That link points at a person, never at the cause of the event.
+- **A trailing `(?)` link is a help link**, identical across every message of the same
+  sender. Taken as the message's URL it makes hundreds of messages look like duplicates
+  of one another — the mistake costs whole classes of message if anything downstream
+  deduplicates on a URL.
+- **Glyphs arrive as HTML entities** as often as as characters: `&#9888;` for ⚠️,
+  `&#9989;` for ✅. Match both, and match them anywhere in the line — a monitor puts its
+  glyph in the middle (`[service] [🔴 Down] 504`).
+
+Block tags matter when flattening to text: replace `<br>`, `</p>`, `</li>` and friends
+with newlines *before* stripping tags, otherwise a package list ends up glued to the
+title it follows.
+
 ## Other useful commands
 
 Send `!hookshot help` in a bridged room to get the current list; commonly:
