@@ -72,7 +72,8 @@ reading `body`. Five properties, measured over 300 messages in one project room:
 
 - **`formatted_body` carries the message; `body` carries the raw payload.** For a v2
   webhook `body` is the literal `Received webhook data:` followed by the JSON the sender
-  posted. Parse `formatted_body` and fall back to `body` only when it is absent.
+  posted. Parse `formatted_body`; falling back to `body` when it is absent only makes
+  sense after checking for that prefix, or the "text" you store is the payload dump.
 - **The webhook's own name is prefixed as markup**: `<strong>Production/Staging</strong>:`
   in front of the message (with the separating space). Strip it, or every title in your data starts with it.
 - **An actor is rendered as a `matrix.to` link**, e.g.
