@@ -49,7 +49,20 @@ Add the [Netresearch marketplace](https://github.com/netresearch/claude-code-mar
 ```bash
 # Claude Code
 /plugin marketplace add netresearch/claude-code-marketplace
+/plugin install matrix-communication@netresearch-claude-code-marketplace
 ```
+
+### Without a marketplace
+
+Since Claude Code 2.1.157 a plugin directory under your personal skills directory loads on its own, including the commands this repo ships:
+
+```bash
+mkdir -p ~/.claude/skills
+git clone https://github.com/netresearch/matrix-skill.git \
+  ~/.claude/skills/matrix-communication
+```
+
+It loads as `matrix-communication@skills-dir` on the next session. Update with `git -C ~/.claude/skills/matrix-communication pull` and start a new session; remove it by deleting the directory. This route has no `claude plugin update`.
 
 ### npx ([skills.sh](https://skills.sh))
 
@@ -58,6 +71,8 @@ Install with any [Agent Skills](https://agentskills.io)-compatible agent:
 ```bash
 npx skills add https://github.com/netresearch/matrix-skill --skill matrix-communication
 ```
+
+> **Limitation:** `npx skills` installs `SKILL.md`-based skills only. This repo also ships `commands`, which it does not install — use the marketplace or the skills directory for those.
 
 ### Download Release
 
