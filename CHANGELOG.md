@@ -6,6 +6,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [3.1.4] - 2026-09-11
+
 ### Documentation
 
 - `matrix-communication`: reading a room's history without the E2EE store — the plain `/messages` endpoint, which works beside a running `matrix-watchd`
@@ -327,7 +329,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.3...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.4...HEAD
+[3.1.4]: https://github.com/netresearch/matrix-skill/compare/v3.1.3...v3.1.4
 [3.1.3]: https://github.com/netresearch/matrix-skill/compare/v3.1.2...v3.1.3
 [3.1.2]: https://github.com/netresearch/matrix-skill/compare/v3.1.1...v3.1.2
 [3.1.1]: https://github.com/netresearch/matrix-skill/compare/v3.0.0...v3.1.1
