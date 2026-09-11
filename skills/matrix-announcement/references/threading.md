@@ -21,6 +21,31 @@ A spec-compliant threaded reply has three relation fields — `rel_type`, the th
 
 When in doubt, thread it. Rooms scroll fast.
 
+**A maintenance window gets one thread per ticket.** A window room carrying three
+tickets in one flat timeline interleaves them, and a reader who cares about one
+of them has to reconstruct which line belongs to which — at the moment they are
+least able to. One thread per ticket, rooted on the message that claims it, and
+the room's flat level carries only what is true of the whole window: it opened,
+it closed, an incident started, an incident ended. The closing note for each
+ticket goes in that ticket's thread *and* nowhere else, so the thread reads as a
+complete story on its own.
+
+## Timestamps
+
+**An absolute time carries the zone it was measured in.** Not the zone you
+assume, and not UTC unless that is what you actually read: a window spans a DST
+boundary about twice a year, its operators sit in more than one offset, and the
+logs quoted into the room are frequently in a third. "21:20" in a room whose
+readers are working from a UTC log is a number that has to be guessed at, and it
+is guessed at wrongly in exactly the situation the message exists for.
+
+Write `21:20 CEST`, or `19:20 UTC`, and where a message quotes a log line, say
+which zone the line itself used — for example *21:06:40 CEST, from the host's
+own `date`*.
+Relative times (*in ~10 minutes*, *for the last half hour*) need no zone and are
+usually the kinder form for a heads-up; they just cannot be reconstructed
+afterwards, so anything meant for the record gets the absolute form as well.
+
 ## Mentions
 
 Tag people only when they actually need to see it. Use proper Matrix mentions, not plaintext `@name`:

@@ -14,6 +14,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 ### Documentation
 
 - `troubleshooting.md`: a dead watcher is re-armed in the same turn it is discovered, or that turn says plainly that the room is no longer being read. "I will restart it" is neither ending. One session broadcast into rooms it had stopped listening to for nine hours after its only watcher died on its first event; nothing looked wrong, because a watcher that emits nothing and a quiet room produce the same empty log
+- `matrix-announcement`, `threading.md`: a maintenance window gets one thread per ticket, rooted on the message that claims it, with the room's flat level carrying only what is true of the whole window. Three tickets in one flat timeline interleave, and a reader who cares about one of them has to reconstruct which line belongs to which at the moment they are least able to
+- `matrix-announcement`, `threading.md`: a new Timestamps section — an absolute time carries the zone it was measured in, and a message quoting a log says which zone that log used. A window spans a DST boundary twice a year, its operators sit in more than one offset, and the quoted logs are often in a third, so a bare `21:20` is guessed at wrongly in exactly the situation the message exists for
 
 ## [3.1.4] - 2026-09-11
 
