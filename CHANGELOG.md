@@ -6,6 +6,15 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Fixed
+
+- `matrix-doctor.py`: a rejected config token is no longer answered with "mint a new token" when the credentials store holds a credential the homeserver just confirmed. That case is a stale config entry, and the old advice sent the reader to re-authenticate something that was not broken — `troubleshooting.md` has said so since 3.1.x while the tool said the opposite. `check_e2ee_setup` now runs first and its verdict is passed to `check_token` as `store_ok`, where it changes the remedy and never the verdict: a dead config token stays a failure, because the two credentials serve different scripts. Reported in the 2026-W36 window as "both Matrix tokens on this box are rejected" and parked as a blocker, with a working credential in the store the whole time
+- `matrix-doctor.py`: the ambient `matrix-nio` check is no longer **critical**. All ten E2EE-capable scripts declare `matrix-nio[e2e]` as a PEP 723 inline dependency and run under `uv run`, which resolves it per script, so nio in the interpreter running the doctor is a convenience. Reporting its absence as a broken setup — and exiting non-zero — sent the reader to fix something that was not in the way
+
+### Documentation
+
+- `troubleshooting.md`: a dead watcher is re-armed in the same turn it is discovered, or that turn says plainly that the room is no longer being read. "I will restart it" is neither ending. One session broadcast into rooms it had stopped listening to for nine hours after its only watcher died on its first event; nothing looked wrong, because a watcher that emits nothing and a quiet room produce the same empty log
+
 ## [3.1.4] - 2026-09-11
 
 ### Documentation

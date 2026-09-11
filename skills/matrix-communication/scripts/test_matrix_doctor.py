@@ -87,6 +87,39 @@ class CheckTokenTests(CredentialTestCase):
         self.assertIsNone(state)
         self.assertIn("Could not verify", message)
 
+    def test_rejected_token_with_a_working_store_advises_repair_not_a_new_token(self):
+        """The W36 failure: 'both Matrix tokens are rejected' was reported as a
+        blocker and the work parked, while the store held a live credential.
+        A rejected config token beside a working store is a stale config."""
+        self.responses = [REJECTED]
+        state, message = doctor.check_token(
+            {**CONFIG, "access_token": "syt_dead"}, store_ok=True
+        )
+        self.assertIs(state, False)
+        self.assertIn("stale config entry", message)
+        # The advice must be the negated form, not the bare instruction.
+        self.assertIn("do not mint a new token", message)
+        self.assertNotIn("mint a new token for the skill", message)
+
+    def test_rejected_token_without_a_working_store_still_says_mint(self):
+        """The verdict never changes -- only the remedy. With no working store
+        credential there is nothing to repair against, so the old advice stands."""
+        self.responses = [REJECTED]
+        state, message = doctor.check_token(
+            {**CONFIG, "access_token": "syt_dead"}, store_ok=False
+        )
+        self.assertIs(state, False)
+        self.assertIn("mint a new token", message)
+
+    def test_store_verdict_does_not_rescue_a_rejected_token(self):
+        """A working store must not turn a dead config token green -- the two
+        credentials serve different scripts."""
+        self.responses = [REJECTED]
+        state, _ = doctor.check_token(
+            {**CONFIG, "access_token": "syt_dead"}, store_ok=True
+        )
+        self.assertIs(state, False)
+
     def test_token_for_another_account_fails(self):
         self.responses = [{"user_id": "@someone-else:example.org"}]
         state, message = doctor.check_token({**CONFIG, "admin_token": "syt_admin"})

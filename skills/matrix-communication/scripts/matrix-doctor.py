@@ -199,7 +199,9 @@ def _verify_credential(
     )
 
 
-def check_token(config: dict, offline: bool = False) -> tuple[bool | None, str]:
+def check_token(
+    config: dict, offline: bool = False, store_ok: bool | None = None
+) -> tuple[bool | None, str]:
     """Ask the homeserver whether the config tokens actually work.
 
     ``check_config`` only proves the file parses. A token that has expired or been
@@ -219,6 +221,15 @@ def check_token(config: dict, offline: bool = False) -> tuple[bool | None, str]:
     no token in the config is normal for E2EE use (those scripts authenticate
     from the credentials store), and an unreachable homeserver is a missing
     answer, not a passing one.
+
+    ``store_ok`` is ``check_e2ee_setup``'s verdict on the credentials store, and
+    it only changes the *remedy*, never the verdict. A rejected config token
+    while the store holds a credential the homeserver confirmed is a stale
+    config, not a lost credential: the fix is to repair or drop the config entry,
+    and "mint a new token" would send the reader to re-authenticate something
+    that is not broken. Reported in the 2026-W36 window as "both Matrix tokens on
+    this box are rejected" and parked as a blocker, while a working credential
+    sat in the store the whole time.
     """
     tokens = [
         (label, config[label])
@@ -236,15 +247,17 @@ def check_token(config: dict, offline: bool = False) -> tuple[bool | None, str]:
     if offline:
         return None, "Not verified (--offline): a parseable token is not a working one"
 
-    results = [
-        _verify_credential(
-            config,
-            token,
-            label,
-            "mint a new token for the skill and replace it in the config - "
-            "never copy one out of a client you use",
+    if store_ok is True:
+        remedy = (
+            "the credentials store holds a credential the homeserver confirmed, so this is a "
+            "stale config entry, not a lost credential - repair or remove it in "
+            "~/.config/matrix/config.json; do not mint a new token, and do not report no access"
         )
-        for label, token in tokens
+    else:
+        remedy = "mint a new token for the skill and replace it in the config - never copy one out of a client you use"
+
+    results = [
+        _verify_credential(config, token, label, remedy) for label, token in tokens
     ]
     message = "; ".join(msg for _, msg, _ in results)
 
@@ -361,7 +374,13 @@ def main():
 
     checks = {
         "pip_available": {"ok": False, "message": "", "critical": True},
-        "matrix_nio": {"ok": False, "message": "", "critical": True},
+        # Not critical: every E2EE-capable script in this skill declares
+        # `matrix-nio[e2e]` as a PEP 723 inline dependency and runs under
+        # `uv run`, which resolves it per script. An ambient nio in the
+        # interpreter running the doctor is a convenience, not a requirement,
+        # and reporting its absence as a broken setup sends the reader to fix
+        # something that is not in the way.
+        "matrix_nio": {"ok": False, "message": "", "critical": False},
         "libolm": {"ok": False, "message": "", "critical": False},
         "config": {"ok": False, "message": "", "critical": True},
         "token": {"ok": False, "message": "", "critical": False},
@@ -393,17 +412,23 @@ def main():
     checks["config"]["ok"] = config_ok
     checks["config"]["message"] = config_msg
 
-    # Check the token against the homeserver (a parseable token is not a working one)
-    token_ok, token_msg = check_token(config_data, offline=args.offline)
-    checks["token"]["ok"] = token_ok is True
-    checks["token"]["unknown"] = token_ok is None
-    checks["token"]["message"] = token_msg
-
-    # Check E2EE setup (the stored credential, against the homeserver)
+    # E2EE first, because its verdict changes the advice the token check gives.
+    # The two credentials are independent, but the *remedy* is not: a rejected
+    # config token while the store holds a working one is a stale config, and
+    # telling the reader to mint a new token there sends them to re-authenticate
+    # something that is not broken.
     e2ee_ok, e2ee_msg = check_e2ee_setup(config_data, offline=args.offline)
     checks["e2ee_setup"]["ok"] = e2ee_ok is True
     checks["e2ee_setup"]["unknown"] = e2ee_ok is None
     checks["e2ee_setup"]["message"] = e2ee_msg
+
+    # Check the token against the homeserver (a parseable token is not a working one)
+    token_ok, token_msg = check_token(
+        config_data, offline=args.offline, store_ok=e2ee_ok
+    )
+    checks["token"]["ok"] = token_ok is True
+    checks["token"]["unknown"] = token_ok is None
+    checks["token"]["message"] = token_msg
 
     # Auto-install if requested
     if args.install and pip_cmd and not checks["matrix_nio"]["ok"]:
