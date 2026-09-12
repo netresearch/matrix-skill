@@ -66,6 +66,14 @@ tells you nothing now. Before reporting anything as "no news from the room", ask
 its status in the same breath — silence from a dead watcher looks identical to
 silence from a quiet room, and only one of them is true.
 
+And a dead watcher is not a note for later. Re-arm it in the same turn you
+discover it, or say plainly, in that turn, that you are **no longer reading the
+room** — those are the only two honest endings, and "I will restart it" is
+neither. A watcher that died on its first event and was never replaced left one
+session broadcasting into rooms it had stopped listening to for the remaining
+nine hours; nothing in the transcript looked wrong, because a watcher that
+emits nothing and a room where nothing happens produce the same empty log.
+
 ## "No access" is a claim about you, not about the service
 
 Three times in one session this skill's transport was reported as unreachable
