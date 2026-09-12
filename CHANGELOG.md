@@ -6,6 +6,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [3.1.5] - 2026-09-12
+
 ### Fixed
 
 - `matrix-doctor.py`: a rejected config token is no longer answered with "mint a new token" when the credentials store holds a credential the homeserver just confirmed. That case is a stale config entry, and the old advice sent the reader to re-authenticate something that was not broken — `troubleshooting.md` has said so since 3.1.x while the tool said the opposite. `check_e2ee_setup` now runs first and its verdict is passed to `check_token` as `store_ok`, where it changes the remedy and never the verdict: a dead config token stays a failure, because the two credentials serve different scripts. Reported in the 2026-W36 window as "both Matrix tokens on this box are rejected" and parked as a blocker, with a working credential in the store the whole time
@@ -340,7 +342,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.4...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.5...HEAD
+[3.1.5]: https://github.com/netresearch/matrix-skill/compare/v3.1.4...v3.1.5
 [3.1.4]: https://github.com/netresearch/matrix-skill/compare/v3.1.3...v3.1.4
 [3.1.3]: https://github.com/netresearch/matrix-skill/compare/v3.1.2...v3.1.3
 [3.1.2]: https://github.com/netresearch/matrix-skill/compare/v3.1.1...v3.1.2
