@@ -95,3 +95,41 @@ If you do append `:server` to such an id, the admin room endpoints (`GET /v1/roo
 ## Encryption note
 
 The `synapse-search.py` script uses the same Client-Server search endpoint a regular Element client does. End-to-end-encrypted messages are encrypted on the homeserver, so the search index never sees plaintext. **Empty results ≠ no messages.**
+
+## Bridge state: a hookshot generic webhook's id is NOT in room state
+
+`GET /_matrix/client/v3/rooms/{room_id}/state` shows that a room has a
+matrix-hookshot generic webhook, and its name, and nothing you can send to:
+
+```
+type      = uk.half-shot.matrix-hookshot.generic.hook
+state_key = Alertmanager
+content   = { "name": …, "waitForComplete": … }
+```
+
+There is no `hookId` and no URL. That is deliberate — room state is readable by
+every member, and the id is the credential: the posting URL is
+`<generic.urlPrefix>/<hookId>`, so anyone who could read it could post as the
+bridge. Do not conclude from the missing field that the webhook is broken or
+that the bridge has lost it.
+
+Where it actually lives depends on the deployment, and "no database configured"
+does not mean "in room state" — on a hookshot whose `config.yml` has no
+`database:` / `storage:` section at all, the id was still unreadable from the
+Matrix side. Three places to look instead, cheapest first:
+
+1. **The sender.** Whatever posts to the room already holds the full URL —
+   a CI variable, a Vault entry, or an automation flow. Trace from the thing
+   that emits the messages, not from the room.
+2. **`<hookshot-data>/config.yml`** for `generic.urlPrefix`, which gives you the
+   URL shape and confirms the listener is enabled. The prefix is not secret; the
+   id is.
+3. **The bridge bot in the room**, which can mint a *new* webhook on request.
+   That is a write and it is visible to every member — never the first move
+   when you are only trying to read an existing one.
+
+A practical consequence for provisioning work: if the task is "send CI failures
+to room X" and X already has a hook, reusing it mixes two streams under one
+name, while a second hook means a visible bot command in a shared room. That is
+a routing decision for the room's owners, not a configuration detail to settle
+silently.
