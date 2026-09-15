@@ -107,11 +107,14 @@ state_key = Alertmanager
 content   = { "name": …, "waitForComplete": … }
 ```
 
-There is no `hookId` and no URL. That is deliberate — room state is readable by
-every member, and the id is the credential: the posting URL is
-`<generic.urlPrefix>/<hookId>`, so anyone who could read it could post as the
-bridge. Do not conclude from the missing field that the webhook is broken or
-that the bridge has lost it.
+There is no `hookId` and no URL. Measured on a Synapse 1.x room with a live,
+working hook; the absence is not a symptom, so do not conclude from the missing
+field that the webhook is broken or that the bridge has lost it.
+
+The reason is not stated in the state event and was not read out of hookshot's
+source here, but it follows from what the pieces are: room state is readable by
+every member and the posting URL is `<generic.urlPrefix>/<hookId>`, so a
+member-readable `hookId` would let anyone in the room post as the bridge.
 
 Where it actually lives depends on the deployment, and "no database configured"
 does not mean "in room state" — on a hookshot whose `config.yml` has no
@@ -124,9 +127,10 @@ Matrix side. Three places to look instead, cheapest first:
 2. **`<hookshot-data>/config.yml`** for `generic.urlPrefix`, which gives you the
    URL shape and confirms the listener is enabled. The prefix is not secret; the
    id is.
-3. **The bridge bot in the room**, which can mint a *new* webhook on request.
-   That is a write and it is visible to every member — never the first move
-   when you are only trying to read an existing one.
+3. **The bridge bot in the room.** Per hookshot's own documentation it mints a
+   *new* webhook on request — not tried here, because it is a write and it is
+   visible to every member, which is never the first move when you are only
+   trying to read an existing one.
 
 A practical consequence for provisioning work: if the task is "send CI failures
 to room X" and X already has a hook, reusing it mixes two streams under one
