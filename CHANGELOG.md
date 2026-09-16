@@ -6,6 +6,10 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Documentation
+
+- `references/synapse-admin-api.md`: a matrix-hookshot generic webhook's id is not in room state. Room state shows that a room has a generic webhook and what it is called, but nothing you can post to — no `hookId`, no URL. The id *is* the credential, since the posting URL is `<urlPrefix>/<hookId>` and room state is readable by every member. Undocumented, the missing field reads as a broken bridge, and both obvious next guesses are wrong: "no database configured" does not imply the id is therefore in room state (on a hookshot whose `config.yml` had no database or storage section it was still unreadable from Matrix), and asking the bot is a write visible to every member of a shared room. The section names the three places to look, cheapest first, including the non-obvious one — trace the sender, because whatever already posts to that room holds the full URL. The webhook-minting step is attributed to hookshot's documentation and marked untried
+
 ## [3.1.5] - 2026-09-12
 
 ### Fixed
