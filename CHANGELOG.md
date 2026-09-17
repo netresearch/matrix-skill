@@ -6,6 +6,10 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Fixed
+
+- The three `skills/*/LICENSE` symlinks are removed. They were added on 2026-01-31 pointing at the repository's `LICENSE`, and the split-licensing migration (`df89fde`, 2026-03-10) deleted that file without them — they have resolved to nothing since. The Claude marketplace importer reports one warning per skill for them. Licence terms are the root `LICENSE-MIT` and `LICENSE-CC-BY-SA-4.0`, which is where every other Netresearch skill repository keeps them; none ships a per-skill `LICENSE`
+
 ## [3.1.6] - 2026-09-16
 
 ### Documentation
