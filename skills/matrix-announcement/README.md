@@ -65,7 +65,6 @@ Substitute `{{PLACEHOLDER}}` values in the template before rendering. Full uploa
 matrix-announcement/
 ├── SKILL.md                            # AI instructions
 ├── README.md                           # this file
-├── LICENSE                             # → ../../LICENSE-MIT (and CC-BY-SA-4.0)
 ├── evals/evals.json                    # behavior expectations
 └── references/
     ├── html-subset.md                  # allowed/banned tags, Matrix-specific attrs
