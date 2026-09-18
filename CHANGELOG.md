@@ -6,6 +6,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [3.1.7] - 2026-09-18
+
 ### Fixed
 
 - The three `skills/*/LICENSE` symlinks are removed. They were added on 2026-01-31 pointing at the repository's `LICENSE`, and the split-licensing migration (`df89fde`, 2026-03-10) deleted that file without them — they have resolved to nothing since. The Claude marketplace importer reports one warning per skill for them. Licence terms are the root `LICENSE-MIT` and `LICENSE-CC-BY-SA-4.0`, which is where every other Netresearch skill repository keeps them; none ships a per-skill `LICENSE`. `skills/matrix-announcement/README.md` no longer lists the removed file in its structure tree, where it was annotated as pointing at `LICENSE-MIT` — which it never did
@@ -352,7 +354,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.6...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.7...HEAD
+[3.1.7]: https://github.com/netresearch/matrix-skill/compare/v3.1.6...v3.1.7
 [3.1.6]: https://github.com/netresearch/matrix-skill/compare/v3.1.5...v3.1.6
 [3.1.5]: https://github.com/netresearch/matrix-skill/compare/v3.1.4...v3.1.5
 [3.1.4]: https://github.com/netresearch/matrix-skill/compare/v3.1.3...v3.1.4
