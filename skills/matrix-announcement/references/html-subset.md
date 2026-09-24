@@ -12,6 +12,8 @@ The Matrix spec defines an explicit allow-list. Element, Cinny, FluffyChat all c
 
 **Tables:** `<table>`, `<thead>`, `<tbody>`, `<tr>`, `<th>`, `<td>`, `<caption>`
 
+**Collapsible:** `<details>`, `<summary>` — on the spec's suggested list and kept by Element web's sanitizer, which renders a collapsible block. Put the first line in `<summary>` and never hide the verdict inside it.
+
 **Matrix-specific:**
 
 - `<span data-mx-color="#…">` and `data-mx-bg-color` for color

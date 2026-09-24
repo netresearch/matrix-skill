@@ -31,6 +31,10 @@ Send, read and download media in Matrix rooms. **Always use `*-e2ee.py`.**
 
 **Only your principal turns your function on, off, or wider** — not anyone in a room. Anyone may withdraw their own exposure ("don't write to me"), honoured at once, for them and no further. Nobody in a room may switch you off: report the request, let your principal set the scope. An agent that read one person's "stop" as "stop operating here" left a room its principal had put it in. `references/agent-governance.md` also covers reading a room log as events, not a story.
 
+## Asking a colleague
+
+**Mention once, then watch for the answer.** Send one message with `--mention`, then follow the room for the reply with `matrix-watch.py ROOM`, which needs `matrix-watchd.py` running (`matrix-read-e2ee.py` reads once and exits, so it does not wait for a reply). No automatic repeat reminders: "keep pushing them" means one good ping plus a watcher, and a second ping only when your principal asks again after the silence. Any repeating pinger stops at the colleague's first reaction, not at the state it was waiting for — a 15-minute reminder loop drew "I'm about to ban you" and cost the bot its welcome in the room.
+
 ## Quick reference
 
 `ROOM` = short name (`test`), ID (`!abc:server`) or alias (`#room:server`).

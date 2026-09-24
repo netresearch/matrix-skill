@@ -93,6 +93,20 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py --status
 config, not a lost credential — and the fix is a repair, not a new token. Say
 "I have not got access" only after the tool has said so too.
 
+**The token copies drift apart independently.** The store's `credentials.json`,
+`access_token` in `config.json` and `admin_token` in `config.json` each go stale
+on their own schedule, and which one is live changes over time. `whoami` each
+copy (the `curl` in `setup-guide.md`) before concluding anything about any of
+them. A doctor `[FAIL] token` names the label it rejected — a dead `admin_token`
+says nothing about sending, which never uses it.
+
+**A dead `admin_token` shadows a live admin `access_token`.** The `synapse-*`
+scripts take `config.get("admin_token") or config["access_token"]`, so a
+non-empty but revoked `admin_token` makes every admin call return `401` even
+when `access_token` belongs to a server admin. The `access_token` is never
+tried. Remove or replace the dead `admin_token` field; do not report "no admin
+access" before checking the other token against an admin endpoint.
+
 ## Mistakes that cost the most time
 
 **Calling the store "broken" from the tail of an error.** A session in 2026-08 read
