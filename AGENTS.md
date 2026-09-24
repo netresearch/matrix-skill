@@ -86,7 +86,7 @@ python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # hard
 
 ## Rules — matrix-administration
 
-- **Admin token required**: All `synapse-*` scripts read `~/.config/matrix/config.json` and need `admin_token` (preferred) or `access_token` of a Synapse server-admin. A present `admin_token` always wins, even when it is dead — `access_token` is then never tried, so remove a revoked `admin_token` instead of leaving it beside a working admin `access_token`.
+- **Admin token required**: All `synapse-*` scripts read `~/.config/matrix/config.json` and need `admin_token` (preferred) or `access_token` of a Synapse server-admin. A non-empty `admin_token` always wins, even when it is dead — `access_token` is then never tried, so remove a revoked `admin_token` instead of leaving it beside a working admin `access_token`.
 - **No homeserver-specific defaults baked in**: pass `--space` / `--server` on the CLI or set `home_space_ids` / `room_filter` / `default_space_id` in the config.
 - **Surface destructive ops** before running: `synapse-deactivate-user.py` and `synapse-migrate-room.py` both print what they are about to do and refuse to run non-interactively without `--yes`. Never pass it silently — deactivation is irreversible and so is enabling encryption.
 - **Local vs live**: `synapse-rate-rooms.py`, `synapse-graph.py`, `synapse-user-*-rooms.py` read `rooms.json` — re-run `synapse-fetch-rooms.py` if stale.
