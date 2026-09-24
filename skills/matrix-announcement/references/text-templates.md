@@ -105,7 +105,7 @@ next. In that order, and skimmable in about five seconds.
 <pre><code>{gate output, HTML-escaped, trimmed to the lines that carry the verdict}</code></pre>
 ```
 
-No `<details>`: it is not on the Matrix allow-list (`html-subset.md`) and clients strip it silently. Trim the output instead of hiding it.
+`<details>`/`<summary>` are on the Matrix allow-list (`html-subset.md`) and Element web renders them as a collapsible block, so a long output may go inside `<details>` below the state line. The state, impact and next step stay outside it, and the output is trimmed either way: collapsing does not shorten the `body` fallback or the notification.
 
 **Escape the output before it goes into `formatted_body`.** `<`, `&` and a literal `</pre>` in a log line are parsed as markup and break the block — and gate output is exactly where those appear. The plaintext `body` fallback stays unescaped.
 
