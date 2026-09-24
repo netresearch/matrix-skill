@@ -101,11 +101,11 @@ them. A doctor `[FAIL] token` names the label it rejected — a dead `admin_toke
 says nothing about sending, which never uses it.
 
 **A dead `admin_token` shadows a live admin `access_token`.** The `synapse-*`
-scripts take `config.get("admin_token") or config["access_token"]`, so a non-empty
-but revoked `admin_token` makes every admin call return `401` even when
-`access_token` belongs to a server admin. The `access_token` is never tried.
-Remove or replace the dead `admin_token` field; do not report "no admin access"
-before checking the other token against an admin endpoint.
+scripts take `config.get("admin_token") or config["access_token"]`, so a
+non-empty but revoked `admin_token` makes every admin call return `401` even
+when `access_token` belongs to a server admin. The `access_token` is never
+tried. Remove or replace the dead `admin_token` field; do not report "no admin
+access" before checking the other token against an admin endpoint.
 
 ## Mistakes that cost the most time
 
