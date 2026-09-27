@@ -6,6 +6,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [3.1.8] - 2026-09-27
+
 ### Fixed
 
 - `matrix-announcement`, `text-templates.md`: the gate-output template no longer says `<details>` is off the Matrix allow-list and stripped by clients. `<details>`/`<summary>` are on the Matrix spec's suggested tag set and kept by Element web's sanitizer, which renders a collapsible block, so a long output may go inside `<details>` below the state line. The state, impact and next step stay outside it, and the output is still trimmed, because collapsing does not shorten the `body` fallback or the notification. Mobile client behaviour was not verified
@@ -365,7 +367,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.7...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.8...HEAD
+[3.1.8]: https://github.com/netresearch/matrix-skill/compare/v3.1.7...v3.1.8
 [3.1.7]: https://github.com/netresearch/matrix-skill/compare/v3.1.6...v3.1.7
 [3.1.6]: https://github.com/netresearch/matrix-skill/compare/v3.1.5...v3.1.6
 [3.1.5]: https://github.com/netresearch/matrix-skill/compare/v3.1.4...v3.1.5
