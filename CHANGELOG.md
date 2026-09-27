@@ -6,6 +6,17 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Fixed
+
+- `matrix-announcement`, `text-templates.md`: the gate-output template no longer says `<details>` is off the Matrix allow-list and stripped by clients. `<details>`/`<summary>` are on the Matrix spec's suggested tag set and kept by Element web's sanitizer, which renders a collapsible block, so a long output may go inside `<details>` below the state line. The state, impact and next step stay outside it, and the output is still trimmed, because collapsing does not shorten the `body` fallback or the notification. Mobile client behaviour was not verified
+
+### Documentation
+
+- `matrix-announcement`, `html-subset.md`: `<details>` and `<summary>` are listed as allowed tags, with the rule to put the first line in `<summary>` and never hide the verdict inside it
+- `matrix-communication`, `SKILL.md`: a new "Asking a colleague" section — mention once with `--mention`, then follow the room with `matrix-watch.py` (which needs `matrix-watchd.py` running; `matrix-read-e2ee.py` reads once and does not wait for a reply). No automatic repeat pings: a second ping only when the principal asks again, and any repeating pinger stops at the colleague's first reaction
+- `troubleshooting.md`: the store's `credentials.json`, `access_token` and `admin_token` go stale independently, so `whoami` each copy before concluding anything about any of them; a doctor `[FAIL] token` names the label it rejected
+- `troubleshooting.md` and `AGENTS.md`: a non-empty but dead `admin_token` shadows a live admin `access_token` — the `synapse-*` scripts take `admin_token` first and never try `access_token`, so every admin call returns `401`. Remove or replace the dead `admin_token` instead of reporting "no admin access"
+
 ## [3.1.7] - 2026-09-18
 
 ### Fixed
