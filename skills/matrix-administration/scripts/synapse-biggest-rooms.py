@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Print the largest rooms on the homeserver by Synapse-estimated DB size.
 
 Calls ``GET /_synapse/admin/v1/statistics/database/rooms`` and looks up the

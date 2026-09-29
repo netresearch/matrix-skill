@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Configuration loading for Synapse Admin scripts.
 
 Reuses ``~/.config/matrix/config.json`` (the same file the

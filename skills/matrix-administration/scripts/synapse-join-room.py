@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Force-join a user into a room using the Synapse Admin API.
 
 Calls ``POST /_synapse/admin/v1/join/{room_id}`` with the target user.

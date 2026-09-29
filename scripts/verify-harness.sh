@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # verify-harness.sh — Portable harness consistency checker
 # Checks AGENTS.md, SKILL.md, plugin.json, and related files for agent
 # harness maturity.  Covers structure, consistency, version sync, eval

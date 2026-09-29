@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Room event log: slugs, records, append, and the reader's cursor.
 
 Stdlib only, deliberately. The reader that follows a log must not depend on nio

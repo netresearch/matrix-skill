@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for `_lib.e2ee`: store-error diagnosis and scoped credential deletion.
 
 The skill directory contains a hyphen (`matrix-communication`) so it is not

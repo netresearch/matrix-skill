@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Synapse Admin API — endpoint reference
 
 Endpoints used by this skill, mapped to the upstream documentation.

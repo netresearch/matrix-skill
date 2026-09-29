@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 name: Unit Tests
 
 # Nothing else in CI executes the test files. The lint workflow parses them with

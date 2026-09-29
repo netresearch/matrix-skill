@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Snapshot every visible room on a Synapse homeserver.
 
 Pages through ``GET /_synapse/admin/v1/rooms`` and, for each room, fetches

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Matrix Hookshot Integration
 
 [matrix-hookshot](https://github.com/matrix-org/matrix-hookshot) is a bridge bot

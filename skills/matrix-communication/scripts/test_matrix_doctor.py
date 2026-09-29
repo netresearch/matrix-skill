@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for `matrix-doctor.py` credential checks.
 
 The script name contains a hyphen so it is not importable as a module; it is

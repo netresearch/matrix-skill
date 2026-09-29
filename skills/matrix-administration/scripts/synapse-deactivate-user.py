@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Deactivate a Matrix user.
 
 Calls ``POST /_synapse/admin/v1/deactivate/{user_id}``.  The user is

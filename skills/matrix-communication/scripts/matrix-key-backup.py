@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
 # requires-python = ">=3.10"
 # dependencies = ["matrix-nio[e2e]<0.26", "cryptography", "aiohttp"]

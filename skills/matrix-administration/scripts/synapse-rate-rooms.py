@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Rate every room in a snapshot and print the failing ones.
 
 Reads ``rooms.json`` (produced by ``synapse-fetch-rooms.py``), runs the

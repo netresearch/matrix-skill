@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Room health-check rules.
 
 Each room is rated against a set of policies and earns one of three levels:

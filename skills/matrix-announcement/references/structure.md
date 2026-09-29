@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Announcement structure
 
 Every announcement, regardless of topic, has the same skeleton. Readers learn the rhythm and skim faster.

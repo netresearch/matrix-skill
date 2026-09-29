@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # E2EE (End-to-End Encryption) Guide
 
 Detailed guide for Matrix E2EE setup, device verification, and key management.

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """HTTP wrappers for the Synapse Admin API and Matrix Client-Server API.
 
 Both admin endpoints (under ``/_synapse/admin``) and standard Matrix client

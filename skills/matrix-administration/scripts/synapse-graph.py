@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Render a snapshot of rooms as a Graphviz graph.
 
 Reads ``rooms.json`` (produced by ``synapse-fetch-rooms.py``), writes

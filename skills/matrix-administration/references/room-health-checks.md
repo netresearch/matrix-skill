@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Room health checks
 
 `synapse-rate-rooms.py` and `synapse-graph.py` each run every room through the same set of checks (see `_lib/rating.py`). Results are graded:

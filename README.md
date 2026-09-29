@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Matrix Skill
 
 Agentic Skills for Matrix, distributed as a Claude Code plugin. Three skills ship in this repo:

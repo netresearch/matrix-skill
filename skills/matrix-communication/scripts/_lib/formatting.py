@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Message formatting for Matrix scripts.
 
 All functions use ONLY stdlib.

@@ -1,4 +1,6 @@
 ---
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 name: matrix-announcement
 description: "Use when composing a Matrix announcement — skill release, version bump, weekly digest, breaking-change heads-up, postmortem, RFC, multi-skill pipeline summary, or any agent-authored room post longer than a single line. Trigger before any matrix-send call that produces structured content. Companion to matrix-communication."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"

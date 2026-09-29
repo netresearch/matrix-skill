@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Harden a room: link it into a space, restrict joins, enable encryption.
 
 Multi-step operation:

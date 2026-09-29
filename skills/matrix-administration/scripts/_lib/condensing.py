@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Reduce the verbose ``rooms.json`` snapshot into a small ``Room`` graph.
 
 Mirrors the original ``lib/condensing.mjs`` from the matrix-tools project

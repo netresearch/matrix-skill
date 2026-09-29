@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """List rooms where the given user is a power-level-100 admin.
 
 Reads the local ``rooms.json`` snapshot (produced by

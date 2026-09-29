@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """List every room where the given user is a member.
 
 Reads the local ``rooms.json`` snapshot.  For each room, prints version

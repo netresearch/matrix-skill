@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Promote a user to power-level 100 in a room.
 
 Calls ``POST /_synapse/admin/v1/rooms/{room_id}/make_room_admin``.

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # The HTML subset Matrix clients render
 
 The Matrix spec defines an explicit allow-list. Element, Cinny, FluffyChat all converge on roughly the same set. Treat this as the floor — if it's not on the allow-list, assume the client strips it silently.

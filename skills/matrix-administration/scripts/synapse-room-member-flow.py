@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Reconstruct the join/leave timeline of a room.
 
 Walks the room's current state events (``GET .../rooms/{room_id}/state``)

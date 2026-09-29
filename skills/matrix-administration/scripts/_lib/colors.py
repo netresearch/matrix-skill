@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Minimal ANSI colour helpers.
 
 Disabled automatically when stdout is not a TTY or ``NO_COLOR`` is set.
