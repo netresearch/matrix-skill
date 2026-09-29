@@ -33,7 +33,7 @@ skills/matrix-announcement/    # Content guidance for structured announcements (
 
 commands/work-update.md   # /work-update slash command template
 .claude-plugin/plugin.json   # Plugin manifest — lists all three skills
-docs/{ARCHITECTURE.md, specs/ (OKF designs), exec-plans/}
+docs/{ARCHITECTURE.md, SECURITY-ASSURANCE.md, specs/ (OKF designs), exec-plans/}
 Build/Scripts/   # CI validation
 scripts/verify-harness.sh   # Harness maturity checker
 .github/workflows/   # lint, release, harness-verify, auto-merge-deps, eval-validate
@@ -145,5 +145,5 @@ Use the `#test` room (or a room named `test`) for all testing. Never test in pro
 - [Visual gallery](skills/matrix-announcement/references/gallery.html)
 
 ### Repo
-- [Architecture](docs/ARCHITECTURE.md) — system design and distribution
+- [Architecture](docs/ARCHITECTURE.md) — system design and distribution · [Security assurance case](docs/SECURITY-ASSURANCE.md) — trust boundaries, where tokens and key material are read, stored and sent, limits
 - [Source](https://github.com/netresearch/matrix-skill)
