@@ -33,7 +33,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import http
-from _lib.config import get_config_path
+from _lib.config import TokenSourceError, get_config_path, resolve_tokens
 from _lib.e2ee import get_store_path
 
 sys.stdout.reconfigure(line_buffering=True)
@@ -128,6 +128,13 @@ def check_config() -> tuple[bool, str, dict]:
     try:
         with open(config_path) as f:
             config = json.load(f)
+
+        # The scripts take a token from the environment or a token file before
+        # the config key; check the token they will actually send.
+        try:
+            config = resolve_tokens(config)
+        except TokenSourceError as e:
+            return False, f"Token source unusable: {e}", config
 
         required = ["homeserver", "user_id"]
         missing = [k for k in required if k not in config]

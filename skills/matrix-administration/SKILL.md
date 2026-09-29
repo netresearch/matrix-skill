@@ -70,7 +70,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-search.py            '!room:srv' '@b
 }
 ```
 
-`homeserver` and either `admin_token` or `access_token` (server-admin) are required. The other fields are optional. Env fallbacks: `MATRIX_USER_ID`, `MATRIX_SPACE_ID`, `LANGUAGE=en|de`, `NO_COLOR`.
+`homeserver` and either `admin_token` or `access_token` (server-admin) are required. The other fields are optional. To keep the token out of this file, set `admin_token_file` to a file holding it (relative paths resolve against the config directory) or export `MATRIX_ADMIN_TOKEN`; the environment wins over the file, the file over the inline value. Env fallbacks: `MATRIX_USER_ID`, `MATRIX_SPACE_ID`, `LANGUAGE=en|de`, `NO_COLOR`.
 
 ## Safety
 

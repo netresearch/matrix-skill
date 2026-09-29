@@ -123,8 +123,13 @@ Fall back to the non-E2EE scripts only for a room confirmed to be unencrypted.
 | `homeserver` | required |
 | `user_id` | required |
 | `access_token` | optional, **non-E2EE scripts only** |
+| `access_token_file` | optional: path to a file holding `access_token` (relative to the config directory), so the token stays out of `config.json` |
 | `watch_rooms` | rooms `matrix-watchd.py` logs |
 | `bot_prefix` | message prefix |
+
+`MATRIX_ACCESS_TOKEN` in the environment overrides `access_token_file`, which
+overrides `access_token` (`_lib/config.py`, `resolve_tokens`). Rotating the
+token means replacing that one value; the rest of `config.json` stays as it is.
 
 Copy `access_token` from the skill's own `credentials.json` (setup-guide, step
 6) — never from a client you use. The reason is in `SKILL.md`, and it is the one

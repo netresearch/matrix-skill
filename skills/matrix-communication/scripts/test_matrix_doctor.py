@@ -21,6 +21,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _spec = importlib.util.spec_from_file_location(
@@ -217,6 +218,48 @@ class CheckE2eeSetupTests(CredentialTestCase):
         self.responses = [UNREACHABLE]
         state, _ = doctor.check_e2ee_setup(CONFIG)
         self.assertIsNone(state)
+
+
+class CheckConfigTokenSourceTests(unittest.TestCase):
+    """check_config resolves tokens the way the scripts do.
+
+    Without that, a token kept in MATRIX_ACCESS_TOKEN or a token file makes the
+    doctor report "No token in config" while every script authenticates fine.
+    """
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.config_dir = Path(tmp.name) / "matrix"
+        self.config_dir.mkdir()
+        env = {k: v for k, v in os.environ.items() if not k.startswith("MATRIX_")}
+        env["XDG_CONFIG_HOME"] = tmp.name
+        patcher = mock.patch.dict(os.environ, env, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def write_config(self, data):
+        (self.config_dir / "config.json").write_text(json.dumps(data))
+
+    def test_token_file_reaches_the_token_check(self):
+        (self.config_dir / "access.token").write_text("syt_from_file\n")
+        self.write_config({**CONFIG, "access_token_file": "access.token"})
+        ok, _, config = doctor.check_config()
+        self.assertIs(ok, True)
+        self.assertEqual(config["access_token"], "syt_from_file")
+
+    def test_environment_token_reaches_the_token_check(self):
+        self.write_config(CONFIG)
+        os.environ["MATRIX_ACCESS_TOKEN"] = "syt_from_env"
+        ok, _, config = doctor.check_config()
+        self.assertIs(ok, True)
+        self.assertEqual(config["access_token"], "syt_from_env")
+
+    def test_unreadable_token_file_fails_the_config_check(self):
+        self.write_config({**CONFIG, "access_token_file": "absent.token"})
+        ok, message, _ = doctor.check_config()
+        self.assertIs(ok, False)
+        self.assertIn("absent.token", message)
 
 
 if __name__ == "__main__":
