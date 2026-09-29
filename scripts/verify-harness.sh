@@ -483,6 +483,9 @@ check_reference_docs() {
     # Extract reference file paths mentioned in SKILL.md
     local has_broken=false
     local ref_count=0
+    # The backticks in the grep pattern below are literal characters of the
+    # Markdown code spans it matches, not a command substitution.
+    # shellcheck disable=SC2016
     while IFS= read -r ref; do
         # Only check references/ paths
         [[ "$ref" != references/* ]] && continue
