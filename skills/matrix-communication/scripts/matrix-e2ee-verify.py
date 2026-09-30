@@ -185,12 +185,16 @@ class VerificationHandler:
                 self.emojis = sas.get_emoji()
 
                 # Build emoji display
+                blank_row = (
+                    "║                                                          ║"
+                )
+                divider = "╠══════════════════════════════════════════════════════════╣"
                 emoji_lines = [
                     "",
                     "╔══════════════════════════════════════════════════════════╗",
                     "║           🔐 VERIFICATION EMOJIS - COMPARE NOW! 🔐        ║",
-                    "╠══════════════════════════════════════════════════════════╣",
-                    "║                                                          ║",
+                    divider,
+                    blank_row,
                 ]
 
                 for emoji, name in self.emojis:
@@ -200,10 +204,10 @@ class VerificationHandler:
 
                 emoji_lines.extend(
                     [
-                        "║                                                          ║",
-                        "╠══════════════════════════════════════════════════════════╣",
+                        blank_row,
+                        divider,
                         "║  👆 These emojis must EXACTLY match what Element shows!  ║",
-                        "║                                                          ║",
+                        blank_row,
                         "║  ➡️  Go to Element now and confirm the emojis match      ║",
                         "║  ➡️  Click 'They match' in Element to complete           ║",
                         "╚══════════════════════════════════════════════════════════╝",
