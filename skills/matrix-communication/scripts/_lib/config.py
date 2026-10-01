@@ -33,7 +33,7 @@ def get_config_path() -> Path:
     return Path(xdg_config) / "matrix" / "config.json"
 
 
-def resolve_tokens(config: dict) -> dict:
+def resolve_tokens(config: dict, keys: tuple[str, ...] | None = None) -> dict:
     """Return a copy of ``config`` with each token taken from its strongest source.
 
     For ``admin_token`` and ``access_token``, in this order:
@@ -45,11 +45,17 @@ def resolve_tokens(config: dict) -> dict:
        taken relative to the directory of config.json;
     3. the ``admin_token`` / ``access_token`` value in config.json itself.
 
+    Only the tokens named in ``keys`` are resolved (default: both), so a
+    broken source of a token the caller never sends cannot stop it; a token
+    left out keeps its config.json value.
+
     Raises TokenSourceError when a configured token file cannot be read or is
     empty. The message names the file, never its content.
     """
     resolved = dict(config)
     for key, env_var in TOKEN_SOURCES:
+        if keys is not None and key not in keys:
+            continue
         from_env = os.environ.get(env_var, "").strip()
         if from_env:
             resolved[key] = from_env
@@ -104,7 +110,8 @@ def load_config(require_user_id: bool = False) -> dict:
         config = json.load(f)
 
     try:
-        config = resolve_tokens(config)
+        # Only the access token: these scripts never send the admin token.
+        config = resolve_tokens(config, keys=("access_token",))
     except TokenSourceError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)

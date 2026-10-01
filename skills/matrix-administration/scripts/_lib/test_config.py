@@ -93,6 +93,25 @@ class AdminTokenSourceTests(unittest.TestCase):
         loaded, _ = self.load(require_admin=False)
         self.assertEqual(loaded["homeserver"], BASE["homeserver"])
 
+    def test_unused_access_token_file_does_not_stop_a_working_admin_token(self):
+        """admin_token wins, so a broken access_token_file is never read."""
+        self.write_config({**BASE, "access_token_file": "missing.token"})
+        os.environ["MATRIX_ADMIN_TOKEN"] = "syt_admin_env"
+        loaded, err = self.load()
+        self.assertIsNotNone(loaded, err)
+        self.assertEqual(loaded["admin_token"], "syt_admin_env")
+
+    def test_access_token_file_is_the_fallback_without_an_admin_token(self):
+        (self.config_dir / "access.token").write_text("syt_access_file")
+        self.write_config({**BASE, "access_token_file": "access.token"})
+        loaded, _ = self.load()
+        self.assertEqual(loaded["access_token"], "syt_access_file")
+
+    def test_broken_token_file_does_not_stop_a_command_without_admin(self):
+        self.write_config({**BASE, "admin_token_file": "missing.token"})
+        loaded, err = self.load(require_admin=False)
+        self.assertIsNotNone(loaded, err)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

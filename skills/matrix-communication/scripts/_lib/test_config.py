@@ -122,6 +122,15 @@ class ResolveTokensTests(TokenSourceTestCase):
             config.resolve_tokens({**BASE, "access_token_file": str(path)})
         self.assertIn("is empty", str(ctx.exception))
 
+    def test_only_the_named_keys_are_resolved(self):
+        os.environ["MATRIX_ACCESS_TOKEN"] = "syt_user_env"
+        resolved = config.resolve_tokens(
+            {**BASE, "admin_token_file": "absent.token"}, keys=("access_token",)
+        )
+        self.assertEqual(resolved["access_token"], "syt_user_env")
+        self.assertEqual(resolved["admin_token_file"], "absent.token")
+        self.assertNotIn("admin_token", resolved)
+
 
 class LoadConfigTests(TokenSourceTestCase):
     def test_config_without_token_loads_with_token_file(self):
@@ -151,6 +160,14 @@ class LoadConfigTests(TokenSourceTestCase):
         self.assertIsNone(loaded)
         self.assertIn("access_token_file", err)
         self.assertNotIn("syt_secret_inline", err)
+
+    def test_broken_admin_token_file_does_not_stop_the_chat_scripts(self):
+        """The chat scripts never send the admin token, so its source is not read."""
+        self.write_config({**BASE, "admin_token_file": "gone"})
+        os.environ["MATRIX_ACCESS_TOKEN"] = "syt_from_env"
+        loaded, err = self.load()
+        self.assertIsNotNone(loaded, err)
+        self.assertEqual(loaded["access_token"], "syt_from_env")
 
 
 if __name__ == "__main__":

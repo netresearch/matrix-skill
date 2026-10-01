@@ -54,7 +54,7 @@ def get_config_path() -> Path:
     return Path(xdg_config) / "matrix" / "config.json"
 
 
-def resolve_tokens(config: dict) -> dict:
+def resolve_tokens(config: dict, keys: tuple[str, ...] | None = None) -> dict:
     """Return a copy of ``config`` with each token taken from its strongest source.
 
     For ``admin_token`` and ``access_token``, in this order:
@@ -66,11 +66,17 @@ def resolve_tokens(config: dict) -> dict:
        taken relative to the directory of config.json;
     3. the ``admin_token`` / ``access_token`` value in config.json itself.
 
+    Only the tokens named in ``keys`` are resolved (default: both), so a
+    broken source of a token the caller never sends cannot stop it; a token
+    left out keeps its config.json value.
+
     Raises TokenSourceError when a configured token file cannot be read or is
     empty. The message names the file, never its content.
     """
     resolved = dict(config)
     for key, env_var in TOKEN_SOURCES:
+        if keys is not None and key not in keys:
+            continue
         from_env = os.environ.get(env_var, "").strip()
         if from_env:
             resolved[key] = from_env
@@ -120,11 +126,17 @@ def load_config(require_admin: bool = True) -> dict:
     with open(config_path) as f:
         config = json.load(f)
 
-    try:
-        config = resolve_tokens(config)
-    except TokenSourceError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        sys.exit(1)
+    # Resolve only the token the scripts will send: admin_token wins when it
+    # yields one, access_token is the fallback, and commands that need no
+    # admin credential resolve none, so an unused token source cannot stop them.
+    if require_admin:
+        try:
+            config = resolve_tokens(config, keys=("admin_token",))
+            if not config.get("admin_token"):
+                config = resolve_tokens(config, keys=("access_token",))
+        except TokenSourceError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
 
     if "homeserver" not in config:
         print("Error: config missing required field: homeserver", file=sys.stderr)
