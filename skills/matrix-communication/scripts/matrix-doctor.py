@@ -264,7 +264,11 @@ def check_token(
             "~/.config/matrix/config.json); do not mint a new token, and do not report no access"
         )
     else:
-        remedy = "mint a new token for the skill and replace it in the config - never copy one out of a client you use"
+        remedy = (
+            "mint a new token for the skill and replace it where it is set "
+            "(MATRIX_ACCESS_TOKEN / MATRIX_ADMIN_TOKEN, the *_token_file, or config.json) "
+            "- never copy one out of a client you use"
+        )
 
     results = [
         _verify_credential(config, token, label, remedy) for label, token in tokens

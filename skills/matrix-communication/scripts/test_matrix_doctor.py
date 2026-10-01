@@ -118,6 +118,8 @@ class CheckTokenTests(CredentialTestCase):
         )
         self.assertIs(state, False)
         self.assertIn("mint a new token", message)
+        # The dead token may come from the environment or a token file.
+        self.assertIn("MATRIX_ACCESS_TOKEN", message)
 
     def test_store_verdict_does_not_rescue_a_rejected_token(self):
         """A working store must not turn a dead config token green -- the two
