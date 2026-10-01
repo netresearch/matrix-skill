@@ -259,8 +259,9 @@ def check_token(
     if store_ok is True:
         remedy = (
             "the credentials store holds a credential the homeserver confirmed, so this is a "
-            "stale config entry, not a lost credential - repair or remove it in "
-            "~/.config/matrix/config.json; do not mint a new token, and do not report no access"
+            "stale token, not a lost credential - repair or remove it where it is set "
+            "(MATRIX_ACCESS_TOKEN / MATRIX_ADMIN_TOKEN, the *_token_file, or "
+            "~/.config/matrix/config.json); do not mint a new token, and do not report no access"
         )
     else:
         remedy = "mint a new token for the skill and replace it in the config - never copy one out of a client you use"

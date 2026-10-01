@@ -100,7 +100,11 @@ class CheckTokenTests(CredentialTestCase):
             {**CONFIG, "access_token": "syt_dead"}, store_ok=True
         )
         self.assertIs(state, False)
-        self.assertIn("stale config entry", message)
+        self.assertIn("stale token", message)
+        # The token may come from the environment or a token file, so the
+        # remedy names every source, not only config.json.
+        self.assertIn("MATRIX_ACCESS_TOKEN", message)
+        self.assertIn("_token_file", message)
         # The advice must be the negated form, not the bare instruction.
         self.assertIn("do not mint a new token", message)
         self.assertNotIn("mint a new token for the skill", message)
