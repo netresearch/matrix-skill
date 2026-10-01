@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for `synapse-migrate-room.py`'s confirmation gate.
 
 The script name contains a hyphen so it is not importable as a module; it is

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for `_lib.roomlog`.
 
 Run directly: python3 skills/matrix-communication/scripts/_lib/test_roomlog.py

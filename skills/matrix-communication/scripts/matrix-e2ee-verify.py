@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
 # requires-python = ">=3.10"
 # dependencies = ["matrix-nio[e2e]<0.26"]
@@ -183,48 +185,35 @@ class VerificationHandler:
                 self.emojis = sas.get_emoji()
 
                 # Build emoji display
-                emoji_lines = []
-                emoji_lines.append("")
-                emoji_lines.append(
-                    "╔══════════════════════════════════════════════════════════╗"
-                )
-                emoji_lines.append(
-                    "║           🔐 VERIFICATION EMOJIS - COMPARE NOW! 🔐        ║"
-                )
-                emoji_lines.append(
-                    "╠══════════════════════════════════════════════════════════╣"
-                )
-                emoji_lines.append(
+                blank_row = (
                     "║                                                          ║"
                 )
+                divider = "╠══════════════════════════════════════════════════════════╣"
+                emoji_lines = [
+                    "",
+                    "╔══════════════════════════════════════════════════════════╗",
+                    "║           🔐 VERIFICATION EMOJIS - COMPARE NOW! 🔐        ║",
+                    divider,
+                    blank_row,
+                ]
 
                 for emoji, name in self.emojis:
                     line = f"       {emoji}    {name}"
                     padding = 58 - len(line)
                     emoji_lines.append(f"║{line}{' ' * padding}║")
 
-                emoji_lines.append(
-                    "║                                                          ║"
+                emoji_lines.extend(
+                    [
+                        blank_row,
+                        divider,
+                        "║  👆 These emojis must EXACTLY match what Element shows!  ║",
+                        blank_row,
+                        "║  ➡️  Go to Element now and confirm the emojis match      ║",
+                        "║  ➡️  Click 'They match' in Element to complete           ║",
+                        "╚══════════════════════════════════════════════════════════╝",
+                        "",
+                    ]
                 )
-                emoji_lines.append(
-                    "╠══════════════════════════════════════════════════════════╣"
-                )
-                emoji_lines.append(
-                    "║  👆 These emojis must EXACTLY match what Element shows!  ║"
-                )
-                emoji_lines.append(
-                    "║                                                          ║"
-                )
-                emoji_lines.append(
-                    "║  ➡️  Go to Element now and confirm the emojis match      ║"
-                )
-                emoji_lines.append(
-                    "║  ➡️  Click 'They match' in Element to complete           ║"
-                )
-                emoji_lines.append(
-                    "╚══════════════════════════════════════════════════════════╝"
-                )
-                emoji_lines.append("")
 
                 # Write to file for agent polling (before stdout which may be buffered)
                 emoji_file = "/tmp/matrix_verification_emojis.txt"

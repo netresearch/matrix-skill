@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Matrix Skill shared library.
 
 This module provides common functionality for all Matrix scripts.

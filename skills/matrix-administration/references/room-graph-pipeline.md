@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Room graph pipeline
 
 `synapse-graph.py` produces a Graphviz `.dot` file (and optionally an `.svg` via the system `dot` binary) showing every non-replaced room and its parent-space relationships. Edges go from a child room to its parent space; node colours and the gradient on space nodes encode the rating.

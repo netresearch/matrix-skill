@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Matrix Announcement
 
 Content-design guidance for coding agents posting into Matrix rooms — release notes, version bumps, weekly digests, breaking-change heads-ups, postmortems, RFCs, multi-skill pipeline summaries. Companion to **matrix-communication** in this repo (which transports the message you compose here).

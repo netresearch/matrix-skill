@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Dependency checking for E2EE scripts.
 
 All functions use ONLY stdlib.

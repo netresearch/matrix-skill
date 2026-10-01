@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """E2EE credential management for Matrix scripts.
 
 All functions use ONLY stdlib - no nio dependencies here.

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Human-readable byte-size formatter.
 
 Decimal units by default (``kB``, ``MB``, ``GB`` …); pass ``binary=True``

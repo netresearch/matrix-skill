@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Search a single room for unencrypted messages by a user.
 
 Calls ``POST /_matrix/client/v3/search``.  Only **unencrypted** messages

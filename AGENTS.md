@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 <!-- Managed by agent: keep sections and order; edit content, not structure. Last updated: 2026-04-26 -->
 
 # Matrix Skill
@@ -30,7 +33,7 @@ skills/matrix-announcement/    # Content guidance for structured announcements (
 
 commands/work-update.md   # /work-update slash command template
 .claude-plugin/plugin.json   # Plugin manifest — lists all three skills
-docs/{ARCHITECTURE.md, specs/ (OKF designs), exec-plans/}
+docs/{ARCHITECTURE.md, SECURITY-ASSURANCE.md, specs/ (OKF designs), exec-plans/}
 Build/Scripts/   # CI validation
 scripts/verify-harness.sh   # Harness maturity checker
 .github/workflows/   # lint, release, harness-verify, auto-merge-deps, eval-validate
@@ -86,7 +89,7 @@ python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # hard
 
 ## Rules — matrix-administration
 
-- **Admin token required**: All `synapse-*` scripts read `~/.config/matrix/config.json` and need `admin_token` (preferred) or `access_token` of a Synapse server-admin. A non-empty `admin_token` always wins, even when it is dead — `access_token` is then never tried, so remove a revoked `admin_token` instead of leaving it beside a working admin `access_token`.
+- **Admin token required**: All `synapse-*` scripts read `~/.config/matrix/config.json` and need `admin_token` (preferred) or `access_token` of a Synapse server-admin. Either token can instead come from `MATRIX_ADMIN_TOKEN` / `MATRIX_ACCESS_TOKEN` or from a file named by `admin_token_file` / `access_token_file` (environment, then file, then inline value). A non-empty `admin_token` always wins, even when it is dead — `access_token` is then never tried, so remove a revoked `admin_token` instead of leaving it beside a working admin `access_token`.
 - **No homeserver-specific defaults baked in**: pass `--space` / `--server` on the CLI or set `home_space_ids` / `room_filter` / `default_space_id` in the config.
 - **Surface destructive ops** before running: `synapse-deactivate-user.py` and `synapse-migrate-room.py` both print what they are about to do and refuse to run non-interactively without `--yes`. Never pass it silently — deactivation is irreversible and so is enabling encryption.
 - **Local vs live**: `synapse-rate-rooms.py`, `synapse-graph.py`, `synapse-user-*-rooms.py` read `rooms.json` — re-run `synapse-fetch-rooms.py` if stale.
@@ -102,7 +105,7 @@ python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # hard
 - **Read a room log as events, not as a story**: adjacent lines from one sender are adjacent events. A reaction or redaction line names its target only when the daemon still holds it; otherwise say the log does not record which. See [agent-governance.md](skills/matrix-communication/references/agent-governance.md), "Reading a room log".
 - **E2EE first**: Always use `*-e2ee.py` scripts. Only fall back to non-E2EE if the room is confirmed unencrypted.
 - **Room identifiers**: Scripts accept short name (`agent-work`), room alias (`#room:server`), or room ID (`!abc:server`). Use `matrix-rooms.py` to discover.
-- **Config**: `~/.config/matrix/config.json` — required: `homeserver`, `user_id`; optional: `access_token` (non-E2EE only), `bot_prefix`, `watch_rooms` (rooms the daemon logs).
+- **Config**: `~/.config/matrix/config.json` — required: `homeserver`, `user_id`; optional: `access_token` (non-E2EE only; or `access_token_file`, or `MATRIX_ACCESS_TOKEN`), `bot_prefix`, `watch_rooms` (rooms the daemon logs).
 - **Running scripts**: `uv run` for everything except `matrix-doctor.py` which bootstraps deps via `python3`.
 - **Bash `!` handling**: Prepend `set +H &&` before any command whose arguments contain `!` — history expansion corrupts otherwise.
 - **Passwords with special chars**: Pass via env var, not CLI arg — `MATRIX_PASSWORD="p@ss!" uv run …`.
@@ -142,5 +145,5 @@ Use the `#test` room (or a room named `test`) for all testing. Never test in pro
 - [Visual gallery](skills/matrix-announcement/references/gallery.html)
 
 ### Repo
-- [Architecture](docs/ARCHITECTURE.md) — system design and distribution
+- [Architecture](docs/ARCHITECTURE.md) — system design and distribution · [Security assurance case](docs/SECURITY-ASSURANCE.md) — trust boundaries, where tokens and key material are read, stored and sent, limits
 - [Source](https://github.com/netresearch/matrix-skill)

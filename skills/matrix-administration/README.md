@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Matrix Administration
 
 Operate on a Synapse Matrix homeserver via the [Synapse Admin API](https://element-hq.github.io/synapse/latest/usage/administration/admin_api/index.html). Companion to the **matrix-communication** skill in this repo.

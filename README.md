@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Matrix Skill
 
 Agentic Skills for Matrix, distributed as a Claude Code plugin. Three skills ship in this repo:
@@ -386,6 +389,25 @@ matrix-skill/
 ├── LICENSE-CC-BY-SA-4.0  # Content license (CC-BY-SA-4.0)
 └── README.md
 ```
+
+## Governance and policies
+
+This repository follows the Netresearch organisation policies:
+
+- [Governance](https://github.com/netresearch/.github/blob/main/GOVERNANCE.md): ownership, roles, how decisions are made and disputes resolved, and continuity.
+- [Roadmap](https://github.com/netresearch/.github/blob/main/ROADMAP.md): planned and explicitly excluded work for the coming year.
+- [Handling of dependency and code analysis findings](https://github.com/netresearch/.github/blob/main/SECURITY.md#handling-of-dependency-and-code-analysis-findings): thresholds, deadlines and the exception process for dependency (SCA) and static analysis (SAST) findings.
+- [Secret management](https://github.com/netresearch/.github/blob/main/SECURITY.md#secret-management): how CI and release credentials are stored, accessed and rotated.
+- [Access roster](https://github.com/netresearch/.github/blob/main/docs/access-roster.md): who holds administrative access to this repository and the organisation.
+
+The security assurance case for these skills (threat model, trust boundaries, where tokens and key material are read, stored and sent, countermeasures and limits) is in [docs/SECURITY-ASSURANCE.md](docs/SECURITY-ASSURANCE.md).
+
+Checks that run on pull requests in this repository:
+
+- Every pull request: Skill Validation (`lint.yml`: skill structure, markdownlint, yamllint, actionlint, JSON syntax, ShellCheck, ruff lint and format), Eval Validation (`eval-validate.yml`), Unit Tests (`tests.yml`: every `skills/**/test_*.py` suite) and Label PR (`labeler.yml`).
+- Pull requests to `main` or `master`: `security.yml` with Betterleaks (secret scanning), zizmor (workflow static analysis), dependency review (fails on vulnerabilities of severity high or above), Composer Audit and Opengrep SAST (thresholds as in the organisation's [static analysis rule](https://github.com/netresearch/.github/blob/main/SECURITY.md#static-analysis-sast)); Harness Verification (`harness-verify.yml`) and Template Drift (`check-template-drift.yml`).
+- Every pull request, skipped unless Renovate or Dependabot opened it: Auto-merge dependency PRs (`auto-merge-deps.yml`).
+- Configured outside the workflow files: CodeQL default setup (actions, python), SonarCloud Code Analysis (automatic analysis, settings in `.sonarcloud.properties`), the DCO check and the CodeRabbit review status. Code scanning also reports each analyser's results as a check run of its own: `CodeQL`, `SonarCloud`, `zizmor`, `betterleaks` and `Opengrep OSS`. GitHub secret scanning with push protection is enabled as a repository setting.
 
 ## License
 

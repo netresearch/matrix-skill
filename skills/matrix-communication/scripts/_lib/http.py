@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """HTTP-based Matrix API requests.
 
 All functions use ONLY stdlib.

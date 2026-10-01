@@ -1,4 +1,6 @@
 ---
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 name: matrix-administration
 description: "Use when administering a Synapse / Matrix homeserver — list or snapshot all rooms, rate room health (public, unencrypted, orphaned), render a Graphviz map of the room/space tree, force-join users, promote room admins, harden rooms (add-to-space + restrict + encrypt), deactivate Matrix users (with GDPR erase), find biggest rooms by DB size, audit where a user is admin or member, replay join/leave timelines, or search unencrypted history. Trigger on any '/_synapse/admin', server-wide room operation, Matrix user offboarding, or anything requiring a homeserver-admin token — even without 'admin API' in the prompt. Companion to matrix-communication."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
@@ -68,7 +70,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-search.py            '!room:srv' '@b
 }
 ```
 
-`homeserver` and either `admin_token` or `access_token` (server-admin) are required. The other fields are optional. Env fallbacks: `MATRIX_USER_ID`, `MATRIX_SPACE_ID`, `LANGUAGE=en|de`, `NO_COLOR`.
+`homeserver` and either `admin_token` or `access_token` (server-admin) are required. The other fields are optional. To keep the token out of this file, set `admin_token_file` to a file holding it (relative paths resolve against the config directory) or export `MATRIX_ADMIN_TOKEN`; the environment wins over the file, the file over the inline value. Env fallbacks: `MATRIX_USER_ID`, `MATRIX_SPACE_ID`, `LANGUAGE=en|de`, `NO_COLOR`.
 
 ## Safety
 

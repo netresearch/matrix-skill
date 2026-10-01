@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """matrix-administration shared library.
 
 Stdlib only.  At the top of each script:

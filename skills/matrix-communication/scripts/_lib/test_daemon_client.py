@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for `_lib.daemon_client`.
 
 The point under test is the routing decision: a command may only delegate to a

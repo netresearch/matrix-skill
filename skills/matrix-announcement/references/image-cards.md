@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # When to render an HTML card to PNG
 
 `formatted_body` is fine for prose, lists and short tables. It is **bad** at:

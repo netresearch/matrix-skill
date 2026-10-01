@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Link a room into a space.
 
 Sends an ``m.space.child`` state event on the space with the room as the

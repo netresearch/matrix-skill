@@ -1,4 +1,6 @@
 ---
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 type: design
 title: Live room awareness for coding agents
 description: A daemon that owns the E2EE store, streams decrypted room events to a JSONL log, and accepts send/react commands over a socket, so an agent can follow a room while it works.

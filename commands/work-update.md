@@ -1,4 +1,6 @@
 ---
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 description: Send work summary to configured Matrix room
 allowed-tools: Bash(git:*), Bash(uv run:*), Bash(cat:*)
 ---

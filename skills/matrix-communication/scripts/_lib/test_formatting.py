@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 """Tests for `_lib.formatting` markdown→HTML conversion.
 
 The skill directory contains a hyphen (`matrix-communication`) so it is

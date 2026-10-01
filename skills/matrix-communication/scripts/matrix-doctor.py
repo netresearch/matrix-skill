@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
 # requires-python = ">=3.10"
 # dependencies = []
@@ -31,7 +33,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import http
-from _lib.config import get_config_path
+from _lib.config import TokenSourceError, get_config_path, resolve_tokens
 from _lib.e2ee import get_store_path
 
 sys.stdout.reconfigure(line_buffering=True)
@@ -126,6 +128,13 @@ def check_config() -> tuple[bool, str, dict]:
     try:
         with open(config_path) as f:
             config = json.load(f)
+
+        # The scripts take a token from the environment or a token file before
+        # the config key; check the token they will actually send.
+        try:
+            config = resolve_tokens(config)
+        except TokenSourceError as e:
+            return False, f"Token source unusable: {e}", config
 
         required = ["homeserver", "user_id"]
         missing = [k for k in required if k not in config]
@@ -250,11 +259,16 @@ def check_token(
     if store_ok is True:
         remedy = (
             "the credentials store holds a credential the homeserver confirmed, so this is a "
-            "stale config entry, not a lost credential - repair or remove it in "
-            "~/.config/matrix/config.json; do not mint a new token, and do not report no access"
+            "stale token, not a lost credential - repair or remove it where it is set "
+            "(MATRIX_ACCESS_TOKEN / MATRIX_ADMIN_TOKEN, the *_token_file, or "
+            "~/.config/matrix/config.json); do not mint a new token, and do not report no access"
         )
     else:
-        remedy = "mint a new token for the skill and replace it in the config - never copy one out of a client you use"
+        remedy = (
+            "mint a new token for the skill and replace it where it is set "
+            "(MATRIX_ACCESS_TOKEN / MATRIX_ADMIN_TOKEN, the *_token_file, or config.json) "
+            "- never copy one out of a client you use"
+        )
 
     results = [
         _verify_credential(config, token, label, remedy) for label, token in tokens

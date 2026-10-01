@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Text-only `formatted_body` templates
 
 Drop-in skeletons. Substitute `{placeholders}`. Each is paired with a `body` plaintext fallback.

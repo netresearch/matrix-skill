@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Safety guide
 
 These scripts hold a **Synapse server-admin token**. A bad command is visible homeserver-wide and a few are not reversible. Read this once before running anything new.
