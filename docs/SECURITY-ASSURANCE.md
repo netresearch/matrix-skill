@@ -12,7 +12,7 @@ Paths below are relative to `skills/matrix-communication/scripts/` (`C/`) and `s
 | Part | Files | Runs where |
 | --- | --- | --- |
 | Skill instructions for an AI agent | `skills/*/SKILL.md`, `skills/*/references/*.md`, `commands/work-update.md` | Read by the agent; not executed. The agent runs the scripts they describe with the user's privileges. |
-| Chat scripts (Client-Server API) | `C/matrix-*.py`, `C/_lib/` | On the user's machine, via `uv run` (`matrix-doctor.py` via `python3`). The `*-e2ee.py` scripts, `matrix-watchd.py`, `matrix-fetch-keys.py` and `matrix-key-backup.py` use `matrix-nio[e2e]<0.26`; the rest is stdlib only. |
+| Chat scripts (Client-Server API) | `C/matrix-*.py`, `C/_lib/` | On the user's machine, via `uv run` (`matrix-doctor.py` via `python3`). The `*-e2ee.py` scripts, `matrix-e2ee-setup.py`, `matrix-e2ee-verify.py`, `matrix-watchd.py`, `matrix-fetch-keys.py` and `matrix-key-backup.py` use `matrix-nio[e2e]<0.26`; the rest is stdlib only. |
 | Watch daemon | `C/matrix-watchd.py`, reader `C/matrix-watch.py` | A background process of the user that syncs, decrypts and appends events to per-room logs, and serves send/react/edit/redact on a Unix socket. |
 | Homeserver administration scripts | `A/synapse-*.py`, `A/_lib/` | On the user's machine, stdlib only, against the Synapse Admin API with a server-admin token. |
 | Announcement guidance | `skills/matrix-announcement/` | Text and HTML templates; nothing is executed. |
