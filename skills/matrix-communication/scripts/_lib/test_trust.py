@@ -84,8 +84,9 @@ class UntrustedDevicesTests(unittest.TestCase):
 class SendCheckedTests(unittest.TestCase):
     def test_refuses_and_sends_nothing_while_unverified_devices_are_present(self):
         client = FakeClient([FakeDevice(OTHER, "NEW")])
+        sending = send_checked(client, "!r:example.org", [OTHER], "m.room.message", {})
         with self.assertRaises(UntrustedDevicesError) as caught:
-            run(send_checked(client, "!r:example.org", [OTHER], "m.room.message", {}))
+            run(sending)
         self.assertEqual(client.sent, [])
         self.assertIn("NEW", str(caught.exception))
         self.assertIn("--trust-unverified-devices", str(caught.exception))
@@ -123,12 +124,11 @@ class SendCheckedTests(unittest.TestCase):
                 raise RuntimeError("network")
 
         client = Failing([FakeDevice(OTHER, "NEW")])
+        sending = send_checked(
+            client, "!r", [OTHER], "m.room.message", {}, trust_unverified=True
+        )
         with self.assertRaises(RuntimeError):
-            run(
-                send_checked(
-                    client, "!r", [OTHER], "m.room.message", {}, trust_unverified=True
-                )
-            )
+            run(sending)
         self.assertEqual(client.unignored, ["NEW"])
 
 

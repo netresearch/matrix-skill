@@ -307,7 +307,9 @@ class PrivateStorageTests(unittest.TestCase):
         (root / "store").mkdir(parents=True)
         (root / "rooms").mkdir()
         for path in (root, root / "store", root / "rooms"):
-            os.chmod(path, 0o755)
+            # The looser mode an older version left behind, to be tightened.
+            # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            os.chmod(path, 0o750)
         e2ee.get_store_path()
         e2ee.rooms_dir()
         for path in (root, root / "store", root / "rooms"):
@@ -322,7 +324,7 @@ class PrivateStorageTests(unittest.TestCase):
     def test_write_private_file_tightens_an_existing_file(self):
         target = self.home / "f.json"
         target.write_text("old")
-        os.chmod(target, 0o644)
+        os.chmod(target, 0o640)
         e2ee.write_private_file(target, "new")
         self.assertEqual(self.mode(target), 0o600)
         self.assertEqual(target.read_text(), "new")

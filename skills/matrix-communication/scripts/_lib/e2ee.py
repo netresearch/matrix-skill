@@ -27,6 +27,9 @@ def private_dir(path: Path) -> Path:
     is then out of reach of other local users whatever the files' own modes.
     """
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # 0700 on a directory is owner-only; the execute bit is what lets the
+    # owner enter it.
+    # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     os.chmod(path, 0o700)
     return path
 

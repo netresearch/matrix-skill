@@ -592,6 +592,9 @@ def start_detached() -> int:
     return 0
 
 
+NO_DAEMON = "No daemon running."
+
+
 def stop_daemon() -> int:
     """Stop the daemon that answers on the socket.
 
@@ -606,12 +609,12 @@ def stop_daemon() -> int:
                 pid_file.unlink()
             print("No daemon running (stale pid file removed).")
         else:
-            print("No daemon running.")
+            print(NO_DAEMON)
         return 0
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
-        print("No daemon running.")
+        print(NO_DAEMON)
         return 0
     print(f"Stopped matrix-watchd (pid {pid}).")
     return 0
@@ -620,7 +623,7 @@ def stop_daemon() -> int:
 def show_status() -> int:
     status = daemon_request({"op": "status"})
     if not status:
-        print("No daemon running.")
+        print(NO_DAEMON)
         return 0
     print(f"pid:      {status['pid']}")
     print(f"uptime:   {status['uptime_seconds']}s")
