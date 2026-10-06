@@ -57,6 +57,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
+    UntrustedDevicesError,
     add_bot_prefix,
     build_mentions,
     check_e2ee_dependencies,
@@ -70,6 +71,7 @@ from _lib import (
     markdown_to_html,
     prefer_ipv4,
     restore_login_checked,
+    send_checked,
     suppress_nio_logging,
 )
 
@@ -98,6 +100,7 @@ async def send_message_e2ee(
     mentions: list | None = None,
     mention_room: bool = False,
     debug: bool = False,
+    trust_unverified_devices: bool = False,
 ) -> dict:
     """Send an E2EE-capable message to a Matrix room.
 
@@ -123,6 +126,7 @@ async def send_message_e2ee(
             "thread_root": thread_id,
             "mentions": mentions,
             "mention_room": mention_room,
+            "trust_unverified_devices": trust_unverified_devices,
         }
     )
     if response is not None:
@@ -305,24 +309,6 @@ async def send_message_e2ee(
                 if debug:
                     print(f"Key claiming skipped: {e}", file=sys.stderr)
 
-            # Trust all devices in the room (TOFU - Trust On First Use)
-            if debug:
-                print("Room is encrypted. Trusting devices...", file=sys.stderr)
-            for member_id in room_obj.users:
-                try:
-                    for device in client.device_store.active_user_devices(member_id):
-                        dev_id = device.device_id
-                        if not device.verified:
-                            client.verify_device(device)
-                            if debug:
-                                print(f"Trusted: {member_id}/{dev_id}", file=sys.stderr)
-                except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-                    if debug:
-                        print(
-                            f"Could not verify devices for {member_id}: {e}",
-                            file=sys.stderr,
-                        )
-
         # Build message content with HTML formatting
         if notice:
             msgtype = "m.notice"
@@ -361,13 +347,20 @@ async def send_message_e2ee(
         elif reply_id:
             content["m.relates_to"] = {"m.in_reply_to": {"event_id": reply_id}}
 
-        # Send message (ignore unverified devices for TOFU model)
-        response = await client.room_send(
-            room_id=room_id,
-            message_type="m.room.message",
-            content=content,
-            ignore_unverified_devices=True,
-        )
+        # The room key goes to verified devices only, unless the caller opted
+        # in for this send (see _lib/trust.py).
+        members = list(room_obj.users) if room_obj and room_obj.encrypted else []
+        try:
+            response = await send_checked(
+                client,
+                room_id,
+                members,
+                "m.room.message",
+                content,
+                trust_unverified=trust_unverified_devices,
+            )
+        except UntrustedDevicesError as exc:
+            return {"error": str(exc)}
 
         if isinstance(response, RoomSendResponse):
             return {"event_id": response.event_id, "room_id": room_id}
@@ -416,6 +409,12 @@ def main():
         "--mention-room",
         action="store_true",
         help="Notify everyone in the room (@room)",
+    )
+    parser.add_argument(
+        "--trust-unverified-devices",
+        action="store_true",
+        help="Share this message's room key with devices that are not verified. "
+        "By default the message is not sent while the room has such devices.",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
@@ -466,6 +465,7 @@ def main():
             mentions=args.mention,
             mention_room=args.mention_room,
             debug=args.debug,
+            trust_unverified_devices=args.trust_unverified_devices,
         )
     )
 

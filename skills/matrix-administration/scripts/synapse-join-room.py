@@ -20,7 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import admin_request, load_config
+from _lib import admin_request, load_config, quote
 
 
 def main() -> int:
@@ -39,7 +39,7 @@ def main() -> int:
         return 2
 
     result = admin_request(
-        config, "POST", f"/v1/join/{args.room_id}", {"user_id": user_id}
+        config, "POST", f"/v1/join/{quote(args.room_id)}", {"user_id": user_id}
     )
     print(json.dumps(result, indent=2))
     return 0 if "error" not in result else 1

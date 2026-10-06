@@ -5,7 +5,7 @@ license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires python3, uv. Matrix homeserver access."
 metadata:
   author: Netresearch DTT GmbH
-  version: "3.1.8"
+  version: "3.1.9"
   repository: https://github.com/netresearch/matrix-skill
 allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*) Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*) Bash(uv run skills/matrix-communication/scripts/*) Bash(python3 skills/matrix-communication/scripts/*) Read Write
 ---
@@ -52,6 +52,15 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install      # python3, n
 
 Threads, replies, emote/notice, media, edit, redact, react, rooms, invites, power
 levels, keys, config: `command-reference.md`.
+
+## Secure defaults and their opt-ins
+
+Each default below protects something; its flag turns it off for one command. Use a flag only when your principal decides so for that case.
+
+- **Room keys go to verified devices only.** An encrypted send or edit, or a reaction sent through the daemon, into a room with unverified devices is refused and lists them (a reaction without the daemon goes out unencrypted). Verify them (`matrix-e2ee-verify.py` for your own devices), or pass `--trust-unverified-devices` to share that one message's key with them; nothing is stored and no device is marked verified.
+- **Verification is answered for your own account's devices only.** `matrix-e2ee-verify.py --accept-from @user:server` also answers that user.
+- **Secrets never on the command line.** Password: `MATRIX_PASSWORD` or the prompt. Recovery key or passphrase: `--recovery-key` / `--passphrase` without a value (prompt) or `MATRIX_RECOVERY_KEY` / `MATRIX_RECOVERY_PASSPHRASE`. `--allow-secret-argument` accepts a value on argv.
+- **Downloads never replace a file.** `matrix-download-e2ee.py --overwrite` does.
 
 ## When something fails
 

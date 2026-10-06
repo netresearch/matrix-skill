@@ -15,7 +15,8 @@ Requires libolm system library:
 
 Usage:
     matrix-e2ee-setup.py              # Interactive password prompt
-    matrix-e2ee-setup.py PASSWORD     # Password as argument
+    MATRIX_PASSWORD=... matrix-e2ee-setup.py   # Non-interactive
+    matrix-e2ee-setup.py --allow-secret-argument PASSWORD   # Argument (visible in ps)
     matrix-e2ee-setup.py --status
     matrix-e2ee-setup.py --logout
     matrix-e2ee-setup.py --logout --purge-all
@@ -32,7 +33,6 @@ shared by every device ever set up here, and their megolm history lives in it.
 """
 
 import asyncio
-import getpass
 import json
 import os
 import sys
@@ -48,8 +48,10 @@ from _lib import (
     load_credentials,
     prefer_ipv4,
     save_credentials,
+    store_lock,
     suppress_nio_logging,
 )
+from _lib.secret_input import ALLOW_FLAG, SecretInputError, read_secret
 
 # Check dependencies before importing nio
 check_e2ee_dependencies()
@@ -130,8 +132,9 @@ def show_status(config: dict):
     else:
         print("E2EE Status: NOT SET UP")
         print()
-        print("Run setup with your Matrix password:")
-        print("  matrix-e2ee-setup.py YOUR_PASSWORD")
+        print("Run setup; it prompts for your Matrix password:")
+        print("  matrix-e2ee-setup.py")
+        print("Non-interactive: MATRIX_PASSWORD=... matrix-e2ee-setup.py")
 
 
 def main():
@@ -139,7 +142,17 @@ def main():
 
     parser = argparse.ArgumentParser(description="Set up E2EE device for Matrix Skill")
     parser.add_argument(
-        "password", nargs="?", help="Matrix account password (used once, not stored)"
+        "password",
+        nargs="?",
+        help="Matrix account password - refused unless "
+        f"{ALLOW_FLAG} is given; use the prompt or MATRIX_PASSWORD instead",
+    )
+    parser.add_argument(
+        ALLOW_FLAG,
+        dest="allow_secret_argument",
+        action="store_true",
+        help="Accept the password as a command-line argument (visible to other "
+        "local users in the process list)",
     )
     parser.add_argument("--status", action="store_true", help="Check E2EE setup status")
     parser.add_argument(
@@ -228,24 +241,30 @@ def main():
             print("To reconfigure, first run: matrix-e2ee-setup.py --logout")
         return
 
-    # Get password - from argument, environment variable, or interactive prompt
-    password = args.password or os.environ.get("MATRIX_PASSWORD")
-    if not password:
+    # Password: MATRIX_PASSWORD or an interactive prompt. A command-line
+    # argument only with --allow-secret-argument (see _lib/secret_input.py).
+    if not args.password and not os.environ.get("MATRIX_PASSWORD"):
         print(f"Setting up E2EE device for {config['user_id']}")
         print("Password is used once to create device, then not stored.")
         print()
-        try:
-            password = getpass.getpass(f"Matrix password for {config['user_id']}: ")
-        except (KeyboardInterrupt, EOFError):
-            print("\nAborted.")
-            sys.exit(1)
+    try:
+        password = read_secret(
+            args.password or "",
+            "MATRIX_PASSWORD",
+            f"Matrix password for {config['user_id']}: ",
+            allow_argument=args.allow_secret_argument,
+        )
+    except (KeyboardInterrupt, EOFError):
+        print("\nAborted.")
+        sys.exit(1)
+    except SecretInputError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
-        if not password:
-            print("Error: Password cannot be empty.", file=sys.stderr)
-            sys.exit(1)
-
-    # Run setup
-    result = asyncio.run(setup_device(config, password))
+    # Run setup under the store lock: the new device's store is created in the
+    # directory a running daemon or command is using.
+    with store_lock():
+        result = asyncio.run(setup_device(config, password))
 
     if "error" in result:
         if args.json:

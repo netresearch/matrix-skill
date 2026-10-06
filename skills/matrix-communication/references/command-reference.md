@@ -26,13 +26,19 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "reply" --reply '$ev
   only `m.mentions` does. `--mention-room` for `@room`.
 - `--notice` sends `m.notice`, which other bots do not auto-reply to. Use it for
   unattended automation; mutually exclusive with `--emote`.
+- In an encrypted room the message key goes to verified devices only. If the
+  room has unverified devices, the send is refused and lists them. Verify them,
+  or pass `--trust-unverified-devices` to share this one message's key with
+  them anyway; the flag is not remembered and marks no device verified. The
+  same flag exists on `matrix-edit-e2ee.py` and `matrix-react.py` (and is
+  passed to the daemon when it sends).
 
 ## Read, download, edit, delete, react
 
 ```bash
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 10
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 20 --json
-uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-download-e2ee.py ROOM '$eventId' --output /tmp
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-download-e2ee.py ROOM '$eventId' --output ./downloads   # --overwrite to replace an existing file
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-edit-e2ee.py ROOM '$eventId' "new text"
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-redact.py ROOM '$eventId' --reason "reason"
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' "✅"
@@ -40,7 +46,8 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' "✅"
 
 `--json` output includes the media URL and info for `m.image` / `m.file` /
 `m.video` / `m.audio` events; `matrix-download-e2ee.py` decrypts and saves by
-event ID.
+event ID. It keeps an existing file of the same name (pass `--overwrite` or
+`--filename`) and writes new files readable by your account only.
 
 ## Live awareness
 
@@ -72,10 +79,10 @@ Run `--show` before `--set` on any room you did not create — see
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py --status
 MATRIX_PASSWORD="pass" uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-verify.py --request DEVICE --timeout 180
-uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-verify.py --listen --timeout 180
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-verify.py --listen --timeout 180   # own devices; --accept-from USER for another
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-verify.py --list
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-fetch-keys.py ROOM --sync-time 60
-uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --recovery-key "EsTj …" --import-keys
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --recovery-key --import-keys   # prompts; or MATRIX_RECOVERY_KEY
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --import-keys
 ```
 

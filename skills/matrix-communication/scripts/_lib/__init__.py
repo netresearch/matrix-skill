@@ -16,7 +16,7 @@ Usage:
 from _lib.config import get_config_path, load_config
 
 # E2EE (only used by E2EE scripts, but still stdlib-only)
-from _lib.daemon_client import daemon_request, socket_path
+from _lib.daemon_client import daemon_request, running_daemon_pid, socket_path
 
 # Dependency checking
 from _lib.deps import check_e2ee_dependencies
@@ -26,12 +26,16 @@ from _lib.e2ee import (
     get_credentials_path,
     get_store_path,
     load_credentials,
+    private_dir,
     restore_login_checked,
     rooms_dir,
     save_credentials,
     store_files_for,
     store_lock,
     store_lock_path,
+    verification_emoji_path,
+    verification_partner_allowed,
+    write_private_file,
 )
 
 # Formatting
@@ -45,7 +49,7 @@ from _lib.formatting import (
 )
 
 # HTTP API
-from _lib.http import matrix_request
+from _lib.http import matrix_request, path_segment
 from _lib.roomlog import (
     append_record,
     build_record,
@@ -73,6 +77,9 @@ from _lib.rooms import (
     resolve_room_cli,
 )
 
+# Device trust for encrypted sends
+from _lib.trust import UntrustedDevicesError, send_checked, untrusted_devices
+
 # Utilities
 from _lib.utils import (
     clean_message,
@@ -82,6 +89,7 @@ from _lib.utils import (
 )
 
 __all__ = [
+    "UntrustedDevicesError",
     "add_bot_prefix",
     "append_record",
     "build_mentions",
@@ -108,7 +116,9 @@ __all__ = [
     "matrix_request",
     "mention_pill",
     "next_seq",
+    "path_segment",
     "prefer_ipv4",
+    "private_dir",
     "read_cursor",
     "read_records",
     "remember_subject",
@@ -117,7 +127,9 @@ __all__ = [
     "restore_login_checked",
     "room_slug",
     "rooms_dir",
+    "running_daemon_pid",
     "save_credentials",
+    "send_checked",
     "shorten_service_urls",
     "socket_path",
     "store_files_for",
@@ -127,6 +139,10 @@ __all__ = [
     "summarize_since",
     "suppress_nio_logging",
     "target_of",
+    "untrusted_devices",
+    "verification_emoji_path",
+    "verification_partner_allowed",
     "write_cursor",
+    "write_private_file",
     "write_room_bundle",
 ]
