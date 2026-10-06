@@ -18,15 +18,44 @@ from contextlib import contextmanager
 from pathlib import Path
 
 
+def private_dir(path: Path) -> Path:
+    """Create ``path`` if needed and make it accessible to its owner only.
+
+    The mode is applied on every call, not only on creation, so a directory an
+    older version created with the default umask is tightened on first use.
+    Everything below it - credentials, the nio store, decrypted room logs -
+    is then out of reach of other local users whatever the files' own modes.
+    """
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # 0700 on a directory is owner-only; the execute bit is what lets the
+    # owner enter it.
+    # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    os.chmod(path, 0o700)
+    return path
+
+
+def write_private_file(path: Path, data: str) -> None:
+    """Write ``data`` to ``path`` readable and writable by the owner only.
+
+    The file is created with mode 0600 rather than chmod-ed after the write,
+    an existing file is tightened before anything is written to it, and a
+    symlink at ``path`` is refused instead of followed.
+    """
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        os.fchmod(handle.fileno(), 0o600)
+        handle.write(data)
+
+
 def get_store_path() -> Path:
     """Get or create the E2EE key store directory.
 
-    Uses XDG_DATA_HOME or falls back to ~/.local/share/matrix-skill/store
+    Uses XDG_DATA_HOME or falls back to ~/.local/share/matrix-skill/store.
+    The ``matrix-skill`` directory and the store are owner-only (0700).
     """
     xdg_data = os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")
-    store_path = Path(xdg_data) / "matrix-skill" / "store"
-    store_path.mkdir(parents=True, exist_ok=True)
-    return store_path
+    root = private_dir(Path(xdg_data) / "matrix-skill")
+    return private_dir(root / "store")
 
 
 def rooms_dir() -> Path:
@@ -36,9 +65,27 @@ def rooms_dir() -> Path:
     device-scoped, and `--logout` must not carry a room's history away with the
     device it was recorded on.
     """
-    path = get_store_path().parent / "rooms"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return private_dir(get_store_path().parent / "rooms")
+
+
+def verification_partner_allowed(sender, own_user_id, accept_from=()) -> bool:
+    """Whether a verification event from ``sender`` may be answered.
+
+    matrix-e2ee-verify.py confirms the short authentication string on its own
+    side; the comparison is done by the person at the other device. That is
+    sound for the account's own devices, where that person is the owner. For
+    another user's device it would mark that device verified on the strength
+    of a check only its owner made, so it is answered only for users named
+    explicitly (``--accept-from``).
+    """
+    if not sender:
+        return False
+    return sender == own_user_id or sender in accept_from
+
+
+def verification_emoji_path() -> Path:
+    """Where matrix-e2ee-verify.py writes the emojis for an agent to poll."""
+    return get_store_path().parent / "verification_emojis.txt"
 
 
 def get_credentials_path() -> Path:
@@ -62,20 +109,19 @@ def load_credentials() -> dict | None:
 def save_credentials(user_id: str, device_id: str, access_token: str):
     """Save device credentials for future use.
 
-    Credentials file is chmod 600 for security.
+    The file is created with mode 0600 (see ``write_private_file``).
     """
-    creds_path = get_credentials_path()
-    with open(creds_path, "w") as f:
-        json.dump(
+    write_private_file(
+        get_credentials_path(),
+        json.dumps(
             {
                 "user_id": user_id,
                 "device_id": device_id,
                 "access_token": access_token,
             },
-            f,
             indent=2,
-        )
-    os.chmod(creds_path, 0o600)
+        ),
+    )
 
 
 LOCK_TIMEOUT = 30.0
@@ -260,7 +306,9 @@ def store_files_for(user_id: str, device_id: str) -> list[Path]:
     return sorted(p for p in get_store_path().iterdir() if p.name.startswith(prefix))
 
 
-def delete_credentials(purge_all: bool = False) -> list[str]:
+def delete_credentials(
+    purge_all: bool = False, lock_timeout: float = LOCK_TIMEOUT
+) -> list[str]:
     """Remove the stored credentials and the store files of THAT device.
 
     Returns the names of the files removed, so the caller can say what it did.
@@ -274,7 +322,17 @@ def delete_credentials(purge_all: bool = False) -> list[str]:
     ``purge_all`` restores the old sweep for the case where you do want the
     directory emptied. ``backup_key.json`` is never touched either way; it is
     not device-scoped and re-importing keys depends on it.
+
+    The files are removed under the store lock: deleting a store another
+    process (the daemon, a send in progress) has open would leave that
+    process writing into files that no longer exist. While the lock is held
+    elsewhere this waits ``lock_timeout`` seconds and then refuses.
     """
+    with store_lock(timeout=lock_timeout):
+        return _delete_credentials_locked(purge_all)
+
+
+def _delete_credentials_locked(purge_all: bool) -> list[str]:
     removed: list[str] = []
     creds = load_credentials()
     creds_path = get_credentials_path()

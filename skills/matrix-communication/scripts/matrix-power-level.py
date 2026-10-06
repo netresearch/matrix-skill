@@ -67,6 +67,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lib import (
     load_config,
     matrix_request,
+    path_segment,
     resolve_room_cli,
 )
 
@@ -80,7 +81,9 @@ def get_power_levels(config: dict, room_id: str) -> dict:
     Returns:
         The power_levels content dict, or a dict with 'error' on failure.
     """
-    return matrix_request(config, "GET", f"/rooms/{room_id}/state/m.room.power_levels/")
+    return matrix_request(
+        config, "GET", f"/rooms/{path_segment(room_id)}/state/m.room.power_levels/"
+    )
 
 
 def set_power_level(config: dict, room_id: str, user_id: str, level: int) -> dict:
@@ -101,7 +104,10 @@ def set_power_level(config: dict, room_id: str, user_id: str, level: int) -> dic
     content["users"][user_id] = level
 
     result = matrix_request(
-        config, "PUT", f"/rooms/{room_id}/state/m.room.power_levels/", content
+        config,
+        "PUT",
+        f"/rooms/{path_segment(room_id)}/state/m.room.power_levels/",
+        content,
     )
     if "error" in result:
         return result

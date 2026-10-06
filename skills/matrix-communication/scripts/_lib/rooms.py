@@ -10,7 +10,7 @@ import json
 import sys
 import urllib.parse
 
-from _lib.http import matrix_request
+from _lib.http import matrix_request, path_segment
 
 
 def resolve_room_alias(config: dict, alias: str) -> str:
@@ -47,12 +47,14 @@ def get_room_info(config: dict, room_id: str) -> dict:
     """
     info = {"name": None, "alias": None}
 
-    result = matrix_request(config, "GET", f"/rooms/{room_id}/state/m.room.name")
+    result = matrix_request(
+        config, "GET", f"/rooms/{path_segment(room_id)}/state/m.room.name"
+    )
     if "name" in result:
         info["name"] = result["name"]
 
     result = matrix_request(
-        config, "GET", f"/rooms/{room_id}/state/m.room.canonical_alias"
+        config, "GET", f"/rooms/{path_segment(room_id)}/state/m.room.canonical_alias"
     )
     if "alias" in result:
         info["alias"] = result["alias"]

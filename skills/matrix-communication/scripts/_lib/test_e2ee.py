@@ -153,7 +153,9 @@ class StoreScopingTests(unittest.TestCase):
         )
 
     def _names(self):
-        return sorted(p.name for p in self.store.iterdir())
+        # delete_credentials takes the store lock, which creates its lock file
+        # beside the store files; that file is not part of what is counted.
+        return sorted(p.name for p in self.store.iterdir() if p.name != ".daemon.lock")
 
     def test_store_files_for_selects_one_device(self):
         names = sorted(p.name for p in store_files_for(self.USER, self.MINE))
@@ -244,6 +246,127 @@ class StoreLockTests(unittest.TestCase):
             pass
         self.assertIn("4242", str(caught.exception))
         self.assertIn("matrix-watchd", str(caught.exception))
+
+    def test_logout_refuses_while_another_process_holds_the_store(self):
+        user, device = "@user:example.org", "DEVICEAAAA"
+        db = self.store / f"{user}_{device}.db"
+        db.write_text("x")
+        (self.store / "credentials.json").write_text(
+            json.dumps({"user_id": user, "device_id": device, "access_token": "t"})
+        )
+        script = (
+            "import fcntl, sys, time\n"
+            f"h = open({str(e2ee.store_lock_path())!r}, 'a+')\n"
+            "fcntl.flock(h.fileno(), fcntl.LOCK_EX)\n"
+            "h.seek(0); h.truncate(); h.write('4242'); h.flush()\n"
+            "sys.stdout.write('held\\n'); sys.stdout.flush()\n"
+            "time.sleep(20)\n"
+        )
+        holder = subprocess.Popen(
+            [sys.executable, "-c", script], stdout=subprocess.PIPE, text=True
+        )
+        self.addCleanup(holder.kill)
+        self.assertEqual(holder.stdout.readline().strip(), "held")
+
+        with self.assertRaises(SystemExit):
+            delete_credentials(lock_timeout=1)
+        self.assertTrue(db.exists())
+        self.assertTrue((self.store / "credentials.json").exists())
+
+
+class PrivateStorageTests(unittest.TestCase):
+    """Everything under the skill's data directory is readable by its owner only."""
+
+    def setUp(self):
+        self.home = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.home, True)
+        old_env = os.environ.get("XDG_DATA_HOME")
+        os.environ["XDG_DATA_HOME"] = str(self.home)
+        self.addCleanup(
+            lambda: (
+                os.environ.__setitem__("XDG_DATA_HOME", old_env)
+                if old_env is not None
+                else os.environ.pop("XDG_DATA_HOME", None)
+            )
+        )
+        old_umask = os.umask(0o022)
+        self.addCleanup(os.umask, old_umask)
+
+    def mode(self, path):
+        return os.stat(path).st_mode & 0o777
+
+    def test_data_store_and_rooms_directories_are_private(self):
+        store = e2ee.get_store_path()
+        rooms = e2ee.rooms_dir()
+        self.assertEqual(self.mode(store.parent), 0o700)
+        self.assertEqual(self.mode(store), 0o700)
+        self.assertEqual(self.mode(rooms), 0o700)
+
+    def test_existing_directories_are_tightened(self):
+        root = self.home / "matrix-skill"
+        (root / "store").mkdir(parents=True)
+        (root / "rooms").mkdir()
+        for path in (root, root / "store", root / "rooms"):
+            # The looser mode an older version left behind, to be tightened.
+            # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            os.chmod(path, 0o750)
+        e2ee.get_store_path()
+        e2ee.rooms_dir()
+        for path in (root, root / "store", root / "rooms"):
+            self.assertEqual(self.mode(path), 0o700, path)
+
+    def test_credentials_file_is_created_owner_only(self):
+        e2ee.save_credentials("@u:example.org", "DEV", "secret")
+        path = e2ee.get_credentials_path()
+        self.assertEqual(self.mode(path), 0o600)
+        self.assertEqual(json.loads(path.read_text())["access_token"], "secret")
+
+    def test_write_private_file_tightens_an_existing_file(self):
+        target = self.home / "f.json"
+        target.write_text("old")
+        os.chmod(target, 0o640)
+        e2ee.write_private_file(target, "new")
+        self.assertEqual(self.mode(target), 0o600)
+        self.assertEqual(target.read_text(), "new")
+
+    def test_write_private_file_does_not_follow_a_symlink(self):
+        elsewhere = self.home / "elsewhere.txt"
+        elsewhere.write_text("untouched")
+        link = self.home / "link.json"
+        link.symlink_to(elsewhere)
+        with self.assertRaises(OSError):
+            e2ee.write_private_file(link, "secret")
+        self.assertEqual(elsewhere.read_text(), "untouched")
+
+    def test_verification_emoji_file_lives_in_the_private_directory(self):
+        path = e2ee.verification_emoji_path()
+        self.assertEqual(path.parent, e2ee.get_store_path().parent)
+        e2ee.write_private_file(path, "emoji")
+        self.assertEqual(self.mode(path), 0o600)
+
+
+class VerificationPartnerTests(unittest.TestCase):
+    """Verification is answered for the account's own devices unless another user is named."""
+
+    OWN = "@agent:example.org"
+
+    def test_own_account_allowed(self):
+        self.assertTrue(e2ee.verification_partner_allowed(self.OWN, self.OWN))
+
+    def test_other_user_refused_by_default(self):
+        self.assertFalse(
+            e2ee.verification_partner_allowed("@other:example.org", self.OWN)
+        )
+
+    def test_other_user_allowed_when_named(self):
+        self.assertTrue(
+            e2ee.verification_partner_allowed(
+                "@other:example.org", self.OWN, ("@other:example.org",)
+            )
+        )
+
+    def test_missing_sender_refused(self):
+        self.assertFalse(e2ee.verification_partner_allowed(None, self.OWN))
 
 
 if __name__ == "__main__":

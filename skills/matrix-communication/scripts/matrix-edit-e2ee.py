@@ -33,6 +33,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
+    UntrustedDevicesError,
     add_bot_prefix,
     check_e2ee_dependencies,
     clean_message,
@@ -44,6 +45,7 @@ from _lib import (
     markdown_to_html,
     prefer_ipv4,
     restore_login_checked,
+    send_checked,
     suppress_nio_logging,
 )
 
@@ -62,7 +64,12 @@ sys.stderr.reconfigure(line_buffering=True)
 
 
 async def edit_message_e2ee(
-    config: dict, room: str, event_id: str, message: str, debug: bool = False
+    config: dict,
+    room: str,
+    event_id: str,
+    message: str,
+    debug: bool = False,
+    trust_unverified_devices: bool = False,
 ) -> dict:
     # A running daemon holds the store; opening it here would be the second
     # opener. Before this branch existed, edits went direct and produced events
@@ -73,6 +80,7 @@ async def edit_message_e2ee(
             "room": room,
             "event_id": event_id,
             "body": message,
+            "trust_unverified_devices": trust_unverified_devices,
         }
     )
     if response is not None:
@@ -139,22 +147,8 @@ async def edit_message_e2ee(
                 }
 
         room_obj = client.rooms.get(room_id)
-        if room_obj and room_obj.encrypted and client.olm:
-            if client.should_query_keys:
-                await client.keys_query()
-            for member_id in room_obj.users:
-                try:
-                    for dev_id, device in client.device_store.active_user_devices(
-                        member_id
-                    ):
-                        if not device.verified:
-                            client.verify_device(device)
-                except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-                    if debug:
-                        print(
-                            f"Could not verify devices for {member_id}: {e}",
-                            file=sys.stderr,
-                        )
+        if room_obj and room_obj.encrypted and client.olm and client.should_query_keys:
+            await client.keys_query()
 
         # Build edit content
         content = {
@@ -170,12 +164,18 @@ async def edit_message_e2ee(
             content["m.new_content"]["format"] = "org.matrix.custom.html"
             content["m.new_content"]["formatted_body"] = html
 
-        response = await client.room_send(
-            room_id=room_id,
-            message_type="m.room.message",
-            content=content,
-            ignore_unverified_devices=True,
-        )
+        members = list(room_obj.users) if room_obj and room_obj.encrypted else []
+        try:
+            response = await send_checked(
+                client,
+                room_id,
+                members,
+                "m.room.message",
+                content,
+                trust_unverified=trust_unverified_devices,
+            )
+        except UntrustedDevicesError as exc:
+            return {"error": str(exc)}
 
         if isinstance(response, RoomSendResponse):
             return {"event_id": response.event_id, "room_id": room_id}
@@ -196,6 +196,12 @@ def main():
     parser.add_argument("event_id", help="Event ID to edit")
     parser.add_argument("message", help="New message content")
     parser.add_argument("--no-prefix", action="store_true", help="Don't add bot_prefix")
+    parser.add_argument(
+        "--trust-unverified-devices",
+        action="store_true",
+        help="Share this edit's room key with devices that are not verified. "
+        "By default the message is not sent while the room has such devices.",
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
@@ -216,7 +222,14 @@ def main():
     room = room_input
 
     result = asyncio.run(
-        edit_message_e2ee(config, room, args.event_id, message, args.debug)
+        edit_message_e2ee(
+            config,
+            room,
+            args.event_id,
+            message,
+            args.debug,
+            trust_unverified_devices=args.trust_unverified_devices,
+        )
     )
 
     if "error" in result:

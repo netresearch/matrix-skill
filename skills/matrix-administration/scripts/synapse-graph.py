@@ -76,6 +76,15 @@ def _join_policy_text(r: Room, rooms: dict[str, Room]) -> str:
     return "unknown"
 
 
+def node_label(r: Room, rooms: dict[str, Room]) -> str:
+    """The DOT label of a room node, every room-supplied value escaped."""
+    creator = (r.creator or "unknown").split(":")[0]
+    return (
+        f"{_icon(r)} {_enc(r.name)}\\n(v{_enc(str(r.version))}, "
+        f"{_enc(_join_policy_text(r, rooms))}, by {_enc(creator)})"
+    )
+
+
 def _icon(r: Room) -> str:
     if r.join_policy == "public":
         return "🌐"
@@ -139,8 +148,7 @@ def main() -> int:
             color = _COLORS["red"]
             fill = _COLORS["bright_red"]
 
-        creator = (r.creator or "unknown").split(":")[0]
-        label = f"{_icon(r)} {_enc(r.name)}\\n(v{r.version}, {_join_policy_text(r, rooms)}, by {_enc(creator)})"
+        label = node_label(r, rooms)
         tooltip = "\\n".join(format_rating(m) for m in violations)
 
         lines.append(

@@ -19,7 +19,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 | `M_LIMIT_EXCEEDED` | rate limited | wait, retry |
 | `Could not find room` | name/alias did not resolve | `matrix-rooms.py` to list what you are in |
 | `Room not found` **on a room you are in** | the E2EE credential is dead — a rejected token yields an empty joined-rooms list, which looks like the room is gone. `matrix-doctor.py` reports `[FAIL] e2ee_setup` | re-run `matrix-e2ee-setup.py` |
-| `[Unable to decrypt]` | keys for those messages are not in this device's store | first `matrix-fetch-keys.py ROOM --sync-time 60` (asks other devices, no recovery key needed); only then `matrix-key-backup.py --recovery-key "…" --import-keys` |
+| `[Unable to decrypt]` | keys for those messages are not in this device's store | first `matrix-fetch-keys.py ROOM --sync-time 60` (asks other devices, no recovery key needed); only then `matrix-key-backup.py --recovery-key --import-keys` (prompts for the key) |
 | `signature failed` | running on a foreign device | dedicated device via `matrix-e2ee-setup.py` |
 | `Invalid password` | special characters eaten by the shell | `MATRIX_PASSWORD="pass" uv run …` |
 | `libolm not found` | missing native dependency | Linux: `apt install libolm-dev`; macOS 26+ is unsupported, see `setup-guide.md` |

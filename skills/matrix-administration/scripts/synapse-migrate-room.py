@@ -250,7 +250,7 @@ def main() -> int:
         for s in space_state
     )
 
-    room_info = admin_request(config, "GET", f"/v1/rooms/{args.room_id}")
+    room_info = admin_request(config, "GET", f"/v1/rooms/{quote(args.room_id)}")
     if "error" in room_info:
         print(red(f"✗ {room_info['error']}"), file=sys.stderr)
         return 1
@@ -306,7 +306,7 @@ def main() -> int:
         res = admin_request(
             config,
             "POST",
-            f"/v1/rooms/{args.room_id}/make_room_admin",
+            f"/v1/rooms/{quote(args.room_id)}/make_room_admin",
             {"user_id": user_id},
         )
         if "error" in res:

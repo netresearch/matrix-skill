@@ -31,6 +31,33 @@ def _require_http_scheme(url: str) -> None:
         )
 
 
+def _origin(url: str) -> tuple:
+    parts = urllib.parse.urlsplit(url)
+    scheme = parts.scheme.lower()
+    return (
+        scheme,
+        (parts.hostname or "").lower(),
+        parts.port or (443 if scheme == "https" else 80),
+    )
+
+
+class _SameOriginAuthRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Follow redirects, but send the Authorization header only to the same origin.
+
+    urllib copies every request header onto the redirected request, so a
+    redirect to another scheme, host or port would receive the access token.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and _origin(req.full_url) != _origin(newurl):
+            new.remove_header("Authorization")
+        return new
+
+
+_OPENER = urllib.request.build_opener(_SameOriginAuthRedirectHandler)
+
+
 @contextlib.contextmanager
 def _prefer_ipv4():
     """Temporarily prefer IPv4 in DNS resolution (WSL2 workaround)."""
@@ -59,7 +86,7 @@ def _do_request(req: urllib.request.Request) -> dict:
     """
     _require_http_scheme(req.full_url)
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-    with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT) as response:
+    with _OPENER.open(req, timeout=_DEFAULT_TIMEOUT) as response:
         body = response.read().decode()
         if not body:
             return {}

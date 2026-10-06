@@ -259,5 +259,35 @@ class MentionTests(unittest.TestCase):
         self.assertEqual(out.count("https://matrix.to/#/"), 1)
 
 
+class MarkdownToHtmlEscapingTests(unittest.TestCase):
+    """Message text is escaped; only the markdown the converter knows becomes markup."""
+
+    def test_html_in_the_message_is_shown_as_text(self):
+        html = markdown_to_html('<a href="https://example.org">bank</a> and <b>x</b>')
+        self.assertNotIn("<a href", html)
+        self.assertNotIn("<b>", html)
+        self.assertIn(
+            "&lt;a href=&quot;https://example.org&quot;&gt;bank&lt;/a&gt;", html
+        )
+
+    def test_quote_in_a_link_url_stays_inside_the_attribute(self):
+        html = markdown_to_html('[docs](https://example.org/a"onmouseover="x)')
+        self.assertIn('href="https://example.org/a&quot;onmouseover=&quot;x"', html)
+
+    def test_link_with_a_non_web_scheme_keeps_only_its_text(self):
+        html = markdown_to_html("[click](javascript:alert(1))")
+        self.assertNotIn("<a", html)
+        self.assertIn("click", html)
+
+    def test_ampersand_in_url_is_escaped_in_href(self):
+        html = markdown_to_html("[q](https://example.org/?a=1&b=2)")
+        self.assertIn('href="https://example.org/?a=1&amp;b=2"', html)
+
+    def test_blockquote_and_code_block_still_render(self):
+        html = markdown_to_html("> quoted <b>\n\n```\nif a < b:\n```")
+        self.assertIn("<blockquote>quoted &lt;b&gt;</blockquote>", html)
+        self.assertIn("<pre><code>if a &lt; b:\n</code></pre>", html)
+
+
 if __name__ == "__main__":
     unittest.main()

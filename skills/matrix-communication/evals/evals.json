@@ -262,11 +262,11 @@
       "id": 22,
       "eval_name": "restore-key-backup",
       "prompt": "I have a recovery key 'EsTj qRGp YB4C abcd'. Restore my key backup so I can read old messages.",
-      "expected_output": "Uses matrix-key-backup.py with --recovery-key and --import-keys.",
+      "expected_output": "Uses matrix-key-backup.py with the recovery key in MATRIX_RECOVERY_KEY (or --recovery-key without a value, which prompts) and --import-keys.",
       "files": [],
       "assertions": [
         "Uses matrix-key-backup.py script",
-        "Uses --recovery-key flag with the provided key",
+        "Passes the provided key through MATRIX_RECOVERY_KEY or the --recovery-key prompt, not as a command-line value",
         "Uses --import-keys flag (must not forget this)",
         "Does not omit --import-keys"
       ]

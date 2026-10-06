@@ -73,3 +73,19 @@ def daemon_request(payload: dict, timeout: float = 30.0):
         return None
     finally:
         sock.close()
+
+
+def running_daemon_pid(status) -> int | None:
+    """The pid of the daemon that answered a status request, or None.
+
+    `matrix-watchd.py --stop` signals this pid rather than the one in the pid
+    file: a pid file outlives a crashed daemon, and its number may by then
+    belong to an unrelated process. Only a daemon that answers on the socket,
+    which sits in an owner-only directory, is stopped.
+    """
+    if not status or not status.get("ok"):
+        return None
+    pid = status.get("pid")
+    if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0:
+        return pid
+    return None
