@@ -39,11 +39,11 @@ class UntrustedDevicesError(Exception):
 
 
 def untrusted_devices(client, user_ids) -> list:
-    """Devices of ``user_ids`` that nio would refuse to share a room key with.
+    """Devices of ``user_ids`` this skill refuses to share a room key with.
 
     That is every active device that is not this one and is neither verified
-    nor blacklisted in the local store; an "ignored" device counts as
-    unverified (see the module docstring).
+    nor blacklisted in the local store. An "ignored" device is included,
+    although nio itself would share with it (see the module docstring).
     """
     found = []
     own_device = getattr(client, "device_id", None)

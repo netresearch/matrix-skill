@@ -66,7 +66,7 @@ def run(coro):
 
 
 class UntrustedDevicesTests(unittest.TestCase):
-    def test_lists_only_devices_nio_would_refuse(self):
+    def test_lists_unverified_and_ignored_devices_only(self):
         client = FakeClient(
             [
                 FakeDevice(ME, "SELF"),
