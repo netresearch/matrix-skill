@@ -200,5 +200,40 @@ class DevicesFoundDuringSendTests(unittest.TestCase):
         self.assertTrue(known.ignored)
 
 
+class SlowNioLikeClient(NioLikeClient):
+    """Yields to the event loop after marking devices ignored, like a network round trip."""
+
+    async def room_send(self, **kwargs):
+        result = await super().room_send(**kwargs)
+        for _ in range(5):
+            await asyncio.sleep(0)
+        return result
+
+
+class ConcurrentSendTests(unittest.TestCase):
+    def test_strict_send_waits_for_an_opted_in_send_on_the_same_client(self):
+        client = SlowNioLikeClient([FakeDevice(OTHER, "NEW")])
+
+        async def both():
+            flagged = asyncio.create_task(
+                send_checked(
+                    client,
+                    "!r",
+                    [OTHER],
+                    "m.room.message",
+                    {"n": 1},
+                    trust_unverified=True,
+                )
+            )
+            await asyncio.sleep(0)
+            strict = send_checked(client, "!r", [OTHER], "m.room.message", {"n": 2})
+            return await asyncio.gather(flagged, strict, return_exceptions=True)
+
+        flagged_result, strict_result = run(both())
+        self.assertEqual(flagged_result, "response")
+        self.assertIsInstance(strict_result, UntrustedDevicesError)
+        self.assertEqual([sent["content"] for sent in client.sent], [{"n": 1}])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

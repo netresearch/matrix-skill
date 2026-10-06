@@ -13,7 +13,18 @@ what to do about it. `trust_unverified=True` is the explicit opt-in to share
 with them anyway for this one send: nio records those devices as ignored while
 it shares, and that record is removed again afterwards, so the opt-in does not
 outlive the command and is never stored as verification.
+
+Sends through one client are serialised: while a send with the opt-in is in
+flight, nio's temporary "ignored" mark would let a concurrent strict send (the
+daemon serves requests in parallel) pass the check and reuse the room key just
+shared with an unverified device.
 """
+
+import asyncio
+import weakref
+
+# One lock per client; the daemon's single client serialises all its sends.
+_SEND_LOCKS: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
 
 
 class UntrustedDevicesError(Exception):
@@ -75,6 +86,16 @@ async def send_checked(
     learns about inside ``room_send`` (it may sync the members and query keys
     there), which nio reports as OlmUnverifiedDeviceError.
     """
+    lock = _SEND_LOCKS.setdefault(client, asyncio.Lock())
+    async with lock:
+        return await _send_checked_locked(
+            client, room_id, user_ids, message_type, content, trust_unverified
+        )
+
+
+async def _send_checked_locked(
+    client, room_id, user_ids, message_type, content, trust_unverified
+):
     pending = untrusted_devices(client, user_ids)
     if pending and not trust_unverified:
         raise UntrustedDevicesError(pending)
