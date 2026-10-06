@@ -47,10 +47,13 @@ from _lib import (
     markdown_to_html,
     next_seq,
     prefer_ipv4,
+    private_dir,
     remember_subject,
     resolve_room_alias,
     restore_login_checked,
     rooms_dir,
+    running_daemon_pid,
+    send_checked,
     socket_path,
     store_lock,
     subject_index,
@@ -299,6 +302,25 @@ class Daemon:
         except Exception as exc:  # noqa: BLE001  # a bad request must not kill the daemon
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
+    async def send_to_room(self, request: dict, message_type: str, content: dict):
+        """Encrypted send that shares the room key per the request's trust choice.
+
+        The caller's ``trust_unverified_devices`` travels in the request, so the
+        daemon applies the same rule as the direct path (see _lib/trust.py).
+        UntrustedDevicesError reaches the client through dispatch() as an error.
+        """
+        room_id = self.room_id_for(request["room"])
+        room = self.client.rooms.get(room_id)
+        members = list(room.users) if room and room.encrypted else []
+        return await send_checked(
+            self.client,
+            room_id,
+            members,
+            message_type,
+            content,
+            trust_unverified=bool(request.get("trust_unverified_devices")),
+        )
+
     def room_id_for(self, room: str) -> str:
         """Turn whatever the caller typed into a room id.
 
@@ -346,12 +368,7 @@ class Daemon:
                 "event_id": request["thread_root"],
             }
 
-        response = await self.client.room_send(
-            room_id=self.room_id_for(request["room"]),
-            message_type="m.room.message",
-            content=content,
-            ignore_unverified_devices=True,
-        )
+        response = await self.send_to_room(request, "m.room.message", content)
         return self._event_id_or_error(response)
 
     async def op_edit(self, request: dict) -> dict:
@@ -375,26 +392,20 @@ class Daemon:
                 "event_id": request["event_id"],
             },
         }
-        response = await self.client.room_send(
-            room_id=self.room_id_for(request["room"]),
-            message_type="m.room.message",
-            content=content,
-            ignore_unverified_devices=True,
-        )
+        response = await self.send_to_room(request, "m.room.message", content)
         return self._event_id_or_error(response)
 
     async def op_react(self, request: dict) -> dict:
-        response = await self.client.room_send(
-            room_id=self.room_id_for(request["room"]),
-            message_type="m.reaction",
-            content={
+        response = await self.send_to_room(
+            request,
+            "m.reaction",
+            {
                 "m.relates_to": {
                     "rel_type": "m.annotation",
                     "event_id": request["event_id"],
                     "key": request["key"],
                 }
             },
-            ignore_unverified_devices=True,
         )
         return self._event_id_or_error(response)
 
@@ -458,7 +469,9 @@ class Daemon:
         self.client.add_event_callback(self.on_event, object)
 
         path = socket_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
+        # Owner-only, so nobody else can reach the socket in the moment
+        # between bind and the chmod below.
+        private_dir(path.parent)
         if path.exists():
             path.unlink()
         server = await asyncio.start_unix_server(self.handle_client, str(path))
@@ -541,7 +554,7 @@ def run_foreground(config: dict, credentials: dict) -> int:
         return 1
 
     pid_file = pid_file_path()
-    pid_file.parent.mkdir(parents=True, exist_ok=True)
+    private_dir(pid_file.parent)
     pid_file.write_text(str(os.getpid()))
 
     daemon = Daemon(config, credentials)
@@ -577,19 +590,29 @@ def start_detached() -> int:
     return 0
 
 
+NO_DAEMON = "No daemon running."
+
+
 def stop_daemon() -> int:
+    """Stop the daemon that answers on the socket.
+
+    The pid comes from the daemon's own status answer, not from the pid file:
+    after a crash the file's number may belong to an unrelated process.
+    """
     pid_file = pid_file_path()
-    try:
-        pid = int(pid_file.read_text().strip())
-    except (OSError, ValueError):
-        print("No daemon running.")
+    pid = running_daemon_pid(daemon_request({"op": "status"}))
+    if pid is None:
+        if pid_file.exists():
+            with contextlib.suppress(OSError):
+                pid_file.unlink()
+            print("No daemon running (stale pid file removed).")
+        else:
+            print(NO_DAEMON)
         return 0
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
-        print("No daemon running (stale pid file removed).")
-        with contextlib.suppress(OSError):
-            pid_file.unlink()
+        print(NO_DAEMON)
         return 0
     print(f"Stopped matrix-watchd (pid {pid}).")
     return 0
@@ -598,7 +621,7 @@ def stop_daemon() -> int:
 def show_status() -> int:
     status = daemon_request({"op": "status"})
     if not status:
-        print("No daemon running.")
+        print(NO_DAEMON)
         return 0
     print(f"pid:      {status['pid']}")
     print(f"uptime:   {status['uptime_seconds']}s")

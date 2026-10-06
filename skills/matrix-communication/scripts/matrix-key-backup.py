@@ -7,10 +7,14 @@
 Fetch and decrypt keys from Matrix key backup using recovery key or passphrase.
 
 Usage:
-    matrix-key-backup.py --import-keys                     # Reuse the stored backup key
-    matrix-key-backup.py --recovery-key "EsTj qRGp ..."   # Use recovery key
-    matrix-key-backup.py --passphrase "your passphrase"   # Use passphrase
-    matrix-key-backup.py --status                          # Check backup status
+    matrix-key-backup.py --import-keys                  # Reuse the stored backup key
+    matrix-key-backup.py --recovery-key --import-keys   # Prompt for the recovery key
+    matrix-key-backup.py --passphrase --import-keys     # Prompt for the passphrase
+    matrix-key-backup.py --status                       # Check backup status
+
+Non-interactive: set MATRIX_RECOVERY_KEY or MATRIX_RECOVERY_PASSPHRASE. A
+value on the command line is refused unless --allow-secret-argument is given,
+because other local users can read it in the process list.
 
 The first form works once a recovery key or passphrase has been used at least
 once: that run stores the decrypted backup key in the E2EE store directory, and
@@ -23,6 +27,7 @@ import base64
 import json
 import os
 import sys
+from urllib.parse import quote
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import aiohttp
@@ -31,7 +36,10 @@ from _lib import (
     load_config,
     load_credentials,
     restore_login_checked,
+    write_private_file,
 )
+from _lib.backup_mac import backup_session_mac_ok
+from _lib.secret_input import ALLOW_FLAG, SecretInputError, read_secret
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import hmac as crypto_hmac
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
@@ -199,22 +207,10 @@ def decrypt_backup_session(encrypted: dict, backup_key: bytes) -> dict:
     mac_key = derived[32:64]
     iv = derived[64:80]
 
-    # Verify the MAC. The spec computes it over the ciphertext and truncates to
-    # 8 bytes, so compare only as many bytes as the backup carries.
-    h = crypto_hmac.HMAC(mac_key, hashes.SHA256())
-    h.update(ciphertext)
-    spec_mac = h.finalize()
-
-    if mac != spec_mac[: len(mac)]:
-        # libolm's olm_pk_encrypt MACs the empty string rather than the
-        # ciphertext. Backups written by any libolm-based client - which is
-        # most of them, Element included - carry that MAC, so a strict check
-        # rejects every session in the backup rather than a tampered one.
-        # Accept exactly that one alternative and nothing else.
-        h = crypto_hmac.HMAC(mac_key, hashes.SHA256())
-        h.update(b"")
-        if mac != h.finalize()[: len(mac)]:
-            raise ValueError("Session MAC verification failed")
+    # Verify the MAC: exactly 8 bytes, over the ciphertext or - as libolm
+    # writes it - over the empty string. See _lib/backup_mac.py.
+    if not backup_session_mac_ok(mac, mac_key, ciphertext):
+        raise ValueError("Session MAC verification failed")
 
     # Decrypt using AES-CBC (not CTR!)
     cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv))
@@ -274,13 +270,49 @@ def load_stored_backup_key(store_path, backup_info: dict) -> bytes | None:
 
 async def main():
     parser = argparse.ArgumentParser(description="Matrix key backup")
-    parser.add_argument("--recovery-key", help="Recovery key (base58 format)")
-    parser.add_argument("--passphrase", help="Recovery passphrase")
+    parser.add_argument(
+        "--recovery-key",
+        nargs="?",
+        const="",
+        help="Use the recovery key: prompted for, or read from MATRIX_RECOVERY_KEY",
+    )
+    parser.add_argument(
+        "--passphrase",
+        nargs="?",
+        const="",
+        help="Use the recovery passphrase: prompted for, or read from "
+        "MATRIX_RECOVERY_PASSPHRASE",
+    )
+    parser.add_argument(
+        ALLOW_FLAG,
+        dest="allow_secret_argument",
+        action="store_true",
+        help="Accept the recovery key or passphrase as a command-line value "
+        "(visible to other local users in the process list)",
+    )
     parser.add_argument("--status", action="store_true", help="Show backup status")
     parser.add_argument(
         "--import-keys", action="store_true", help="Import keys after decryption"
     )
     args = parser.parse_args()
+
+    try:
+        args.recovery_key = read_secret(
+            args.recovery_key,
+            "MATRIX_RECOVERY_KEY",
+            "Recovery key: ",
+            allow_argument=args.allow_secret_argument,
+        )
+        if not args.recovery_key:
+            args.passphrase = read_secret(
+                args.passphrase,
+                "MATRIX_RECOVERY_PASSPHRASE",
+                "Recovery passphrase: ",
+                allow_argument=args.allow_secret_argument,
+            )
+    except SecretInputError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
     config = load_config(require_user_id=True)
     creds = load_credentials()
@@ -313,7 +345,7 @@ async def main():
         if args.status:
             # Get key count
             version = backup_info.get("version")
-            url = f"{config['homeserver']}/_matrix/client/v3/room_keys/keys?version={version}"
+            url = f"{config['homeserver']}/_matrix/client/v3/room_keys/keys?version={quote(str(version), safe='')}"
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     keys_data = await resp.json()
@@ -333,7 +365,10 @@ async def main():
         if not args.recovery_key and not args.passphrase:
             stored_key = load_stored_backup_key(store_path, backup_info)
             if stored_key is None:
-                print("\nTo restore keys, provide --recovery-key or --passphrase")
+                print(
+                    "\nTo restore keys, pass --recovery-key or --passphrase "
+                    "(you are prompted), or set MATRIX_RECOVERY_KEY"
+                )
                 print("\nYour recovery key looks like: EsTj qRGp YB4C ...")
                 return 1
             print("\n=== Backup Key ===")
@@ -343,7 +378,7 @@ async def main():
             backup_key = stored_key
         else:
             # Get default SSSS key info
-            url = f"{config['homeserver']}/_matrix/client/v3/user/{config['user_id']}/account_data/m.secret_storage.default_key"
+            url = f"{config['homeserver']}/_matrix/client/v3/user/{quote(config['user_id'], safe='')}/account_data/m.secret_storage.default_key"
             async with session.get(url, headers=headers) as resp:
                 if resp.status != 200:
                     print(f"No SSSS key info found: {resp.status}")
@@ -352,7 +387,7 @@ async def main():
                 default_key_id = default_key_data.get("key")
 
             # Get key info for passphrase derivation
-            url = f"{config['homeserver']}/_matrix/client/v3/user/{config['user_id']}/account_data/m.secret_storage.key.{default_key_id}"
+            url = f"{config['homeserver']}/_matrix/client/v3/user/{quote(config['user_id'], safe='')}/account_data/m.secret_storage.key.{quote(str(default_key_id), safe='')}"
             async with session.get(url, headers=headers) as resp:
                 if resp.status != 200:
                     print(f"Could not get key info: {resp.status}")
@@ -369,7 +404,7 @@ async def main():
                 print("Derived key from passphrase")
 
             # Get encrypted backup key from SSSS
-            url = f"{config['homeserver']}/_matrix/client/v3/user/{config['user_id']}/account_data/m.megolm_backup.v1"
+            url = f"{config['homeserver']}/_matrix/client/v3/user/{quote(config['user_id'], safe='')}/account_data/m.megolm_backup.v1"
             async with session.get(url, headers=headers) as resp:
                 if resp.status != 200:
                     print(f"No backup key in SSSS: {resp.status}")
@@ -415,8 +450,9 @@ async def main():
                 },
                 indent=2,
             )
-            await asyncio.to_thread(backup_key_file.write_text, backup_key_payload)
-            await asyncio.to_thread(os.chmod, backup_key_file, 0o600)
+            await asyncio.to_thread(
+                write_private_file, backup_key_file, backup_key_payload
+            )
             print(f"\n✅ Backup key saved to: {backup_key_file}")
 
         if not args.import_keys:
@@ -426,9 +462,7 @@ async def main():
         # Fetch and import keys
         print("\n=== Fetching Keys from Backup ===")
         version = backup_info.get("version")
-        url = (
-            f"{config['homeserver']}/_matrix/client/v3/room_keys/keys?version={version}"
-        )
+        url = f"{config['homeserver']}/_matrix/client/v3/room_keys/keys?version={quote(str(version), safe='')}"
         async with session.get(url, headers=headers) as resp:
             if resp.status != 200:
                 print(f"Failed to fetch keys: {resp.status}")

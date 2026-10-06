@@ -40,6 +40,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lib import (
     load_config,
     matrix_request,
+    path_segment,
     resolve_room_cli,
 )
 
@@ -59,7 +60,7 @@ def invite_user(config: dict, room_id: str, user_id: str) -> dict:
         Empty dict on success (per Matrix spec), or dict with 'error' on failure
     """
     return matrix_request(
-        config, "POST", f"/rooms/{room_id}/invite", {"user_id": user_id}
+        config, "POST", f"/rooms/{path_segment(room_id)}/invite", {"user_id": user_id}
     )
 
 

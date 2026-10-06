@@ -36,6 +36,9 @@ from _lib import (
     prefer_ipv4,
     restore_login_checked,
     suppress_nio_logging,
+    verification_emoji_path,
+    verification_partner_allowed,
+    write_private_file,
 )
 
 # Check dependencies before importing nio
@@ -68,9 +71,13 @@ sys.stderr.reconfigure(line_buffering=True)
 
 
 class VerificationHandler:
-    def __init__(self, client, debug=False):
+    def __init__(self, client, debug=False, own_user_id=None, accept_from=()):
         self.client = client
         self.debug = debug
+        # Verification is answered for this account's own devices only, plus
+        # the users named with --accept-from. See verification_partner_allowed.
+        self.own_user_id = own_user_id or getattr(client, "user_id", None)
+        self.accept_from = tuple(accept_from)
         self.current_verification = None
         self.emojis = None
         self.verified = False
@@ -81,6 +88,15 @@ class VerificationHandler:
     def _debug(self, msg):
         if self.debug:
             print(f"[DEBUG] {msg}")
+
+    def _partner_allowed(self, sender) -> bool:
+        if verification_partner_allowed(sender, self.own_user_id, self.accept_from):
+            return True
+        print(
+            f"\nIgnoring verification event from {sender}: only devices of "
+            f"{self.own_user_id} are verified here (see --accept-from)."
+        )
+        return False
 
     def _report_accept_failure(self, exc: Exception) -> None:
         """Explain a failed accept instead of hiding it behind --debug.
@@ -113,6 +129,9 @@ class VerificationHandler:
                 methods = content.get("methods", [])
                 sender = source.get("sender")
 
+                if not self._partner_allowed(sender):
+                    return
+
                 print(f"\nVerification request received from {from_device}")
 
                 if "m.sas.v1" in methods:
@@ -142,6 +161,9 @@ class VerificationHandler:
         """Handle verification events."""
         event_type = type(event).__name__
         self._debug(f"Received {event_type}")
+
+        if not self._partner_allowed(getattr(event, "sender", None)):
+            return
 
         if KeyVerificationRequest and isinstance(event, KeyVerificationRequest):
             print(f"\nVerification request from {event.sender}")
@@ -227,9 +249,7 @@ class VerificationHandler:
                 emoji_lines.append("")
 
                 # Write to file for agent polling (before stdout which may be buffered)
-                emoji_file = "/tmp/matrix_verification_emojis.txt"
-                with open(emoji_file, "w") as f:  # noqa: ASYNC230  # short local key/emoji file write; blocking open acceptable here
-                    f.write("\n".join(emoji_lines))
+                write_private_file(verification_emoji_path(), "\n".join(emoji_lines))
 
                 # Also print to stdout
                 for line in emoji_lines:
@@ -381,6 +401,7 @@ async def run_verification(
     timeout: int = 120,
     debug: bool = False,
     listen: bool = False,
+    accept_from: tuple = (),
 ):
     """Run verification process."""
     store_path = get_store_path()
@@ -421,7 +442,9 @@ async def run_verification(
         config=client_config,
     )
 
-    handler = VerificationHandler(client, debug=debug)
+    handler = VerificationHandler(
+        client, debug=debug, own_user_id=config["user_id"], accept_from=accept_from
+    )
 
     client.add_to_device_callback(handler.handle_raw_event, UnknownToDeviceEvent)
 
@@ -657,6 +680,11 @@ Examples:
   %(prog)s --request DEVICE   # Verify with specific device
   %(prog)s --listen           # Wait for Element to initiate (use after conflicts)
   %(prog)s --list             # List all your devices
+  %(prog)s --listen --accept-from @alice:example.org   # Also accept another user
+
+Only verification requests from devices of your own account are answered
+unless --accept-from names another user. The emojis are also written to
+verification_emojis.txt in the skill's data directory (owner-only).
 
 The script will display 7 emojis that must match what Element shows.
 Confirm the match in Element to complete verification.
@@ -669,6 +697,14 @@ Confirm the match in Element to complete verification.
         action="store_true",
         help="Wait for Element to initiate verification instead of sending a request. "
         "Use when Element shows 'Verify from other device' or after a prior conflict.",
+    )
+    parser.add_argument(
+        "--accept-from",
+        metavar="USER_ID",
+        action="append",
+        default=[],
+        help="Also answer verification from this other user's devices (repeatable). "
+        "By default only devices of your own account are verified.",
     )
     parser.add_argument(
         "--timeout", type=int, default=120, help="Timeout in seconds (default: 120)"
@@ -702,6 +738,7 @@ Confirm the match in Element to complete verification.
             timeout=args.timeout,
             debug=args.debug,
             listen=args.listen,
+            accept_from=tuple(args.accept_from),
         )
     )
 

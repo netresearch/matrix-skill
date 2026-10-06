@@ -42,6 +42,7 @@ from _lib import (
     find_room_by_name,
     load_config,
     matrix_request,
+    path_segment,
     resolve_room_alias,
 )
 
@@ -49,7 +50,13 @@ sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
 
-def send_reaction(config: dict, room_id: str, event_id: str, emoji: str) -> dict:
+def send_reaction(
+    config: dict,
+    room_id: str,
+    event_id: str,
+    emoji: str,
+    trust_unverified_devices: bool = False,
+) -> dict:
     """Send a reaction to a message.
 
     Reactions use the m.reaction event type with m.annotation relation.
@@ -60,7 +67,13 @@ def send_reaction(config: dict, room_id: str, event_id: str, emoji: str) -> dict
     # None means nothing is listening; an error response is an answer and is
     # returned, because falling through on it would react twice.
     response = daemon_request(
-        {"op": "react", "room": room_id, "event_id": event_id, "key": emoji}
+        {
+            "op": "react",
+            "room": room_id,
+            "event_id": event_id,
+            "key": emoji,
+            "trust_unverified_devices": trust_unverified_devices,
+        }
     )
     if response is not None:
         if response.get("ok"):
@@ -74,7 +87,10 @@ def send_reaction(config: dict, room_id: str, event_id: str, emoji: str) -> dict
     }
 
     return matrix_request(
-        config, "PUT", f"/rooms/{room_id}/send/m.reaction/{txn_id}", content
+        config,
+        "PUT",
+        f"/rooms/{path_segment(room_id)}/send/m.reaction/{txn_id}",
+        content,
     )
 
 
@@ -90,6 +106,12 @@ def main():
     parser.add_argument("event_id", help="Event ID of message to react to")
     parser.add_argument(
         "emoji", help="Emoji reaction (e.g., checkmark, thumbsup, party)"
+    )
+    parser.add_argument(
+        "--trust-unverified-devices",
+        action="store_true",
+        help="When the daemon sends the reaction into an encrypted room, share its "
+        "room key with devices that are not verified (default: refuse)",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
@@ -143,7 +165,13 @@ def main():
             sys.exit(1)
 
     # Send reaction
-    result = send_reaction(config, room_id, args.event_id, args.emoji)
+    result = send_reaction(
+        config,
+        room_id,
+        args.event_id,
+        args.emoji,
+        trust_unverified_devices=args.trust_unverified_devices,
+    )
 
     if "error" in result:
         if args.json:

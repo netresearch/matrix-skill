@@ -99,7 +99,7 @@ chmod 600 ~/.config/matrix/config.json
 > other client, not here. The password below is used once and not stored; it buys
 > a device that belongs to the skill alone.
 
-**Three ways to provide the password:**
+**Two ways to provide the password:**
 
 **Option A: Environment variable (recommended for agents)**
 ```bash
@@ -112,10 +112,9 @@ uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py
 # Script will securely prompt for password
 ```
 
-**Option C: Command line argument (use with caution)**
-```bash
-set +H && uv run skills/matrix-communication/scripts/matrix-e2ee-setup.py "USER_PASSWORD"
-```
+A password given as a command-line argument is refused: every local user can
+read it in the process list while setup runs. `--allow-secret-argument`
+accepts it anyway, for automation that can use neither option above.
 
 This creates a dedicated "Matrix Skill E2EE" device. The password is used once and not stored.
 
@@ -158,8 +157,9 @@ To decrypt old messages sent before your device was created, restore keys from s
 # Check if backup exists
 uv run skills/matrix-communication/scripts/matrix-key-backup.py --status
 
-# Restore with recovery key (from Element → Settings → Security → "Show Recovery Key")
-uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "EsTj qRGp YB4C ..." --import-keys
+# Restore with recovery key (from Element → Settings → Security → "Show Recovery Key");
+# the script prompts for it, or reads MATRIX_RECOVERY_KEY
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key --import-keys
 ```
 
 **Note on non-interactive contexts:** All scripts use line buffering (`sys.stdout.reconfigure(line_buffering=True)`) to prevent output from hanging in piped/non-interactive environments like Claude Code.
@@ -208,7 +208,8 @@ session state cannot be repaired from this side.
 If your password contains special characters (`!`, `$`, `\`, etc.), bash may mangle them:
 
 ```bash
-# WRONG - bash corrupts passwords with special characters
+# WRONG - bash corrupts passwords with special characters, and the
+# argument is refused anyway (visible in the process list)
 uv run .../matrix-e2ee-setup.py "MyPass!word"
 
 # CORRECT - use environment variable (recommended)
