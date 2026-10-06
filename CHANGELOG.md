@@ -6,6 +6,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [3.1.9] - 2026-10-06
+
 ### Security
 
 - The skill's data directory (`matrix-skill/`, its `store/` and `rooms/`) is owner-only (`0700`), also when an older version created it; `credentials.json`, `backup_key.json` and the verification emoji file are created with mode `0600` and never through a symlink. The verification emojis move from a fixed file in `/tmp` to `verification_emojis.txt` in the data directory
@@ -382,7 +384,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.8...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.9...HEAD
+[3.1.9]: https://github.com/netresearch/matrix-skill/compare/v3.1.8...v3.1.9
 [3.1.8]: https://github.com/netresearch/matrix-skill/compare/v3.1.7...v3.1.8
 [3.1.7]: https://github.com/netresearch/matrix-skill/compare/v3.1.6...v3.1.7
 [3.1.6]: https://github.com/netresearch/matrix-skill/compare/v3.1.5...v3.1.6
