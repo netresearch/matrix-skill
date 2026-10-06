@@ -108,7 +108,7 @@ python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # hard
 - **Config**: `~/.config/matrix/config.json` — required: `homeserver`, `user_id`; optional: `access_token` (non-E2EE only; or `access_token_file`, or `MATRIX_ACCESS_TOKEN`), `bot_prefix`, `watch_rooms` (rooms the daemon logs).
 - **Running scripts**: `uv run` for everything except `matrix-doctor.py` which bootstraps deps via `python3`.
 - **Bash `!` handling**: Prepend `set +H &&` before any command whose arguments contain `!` — history expansion corrupts otherwise.
-- **Passwords with special chars**: Pass via env var, not CLI arg — `MATRIX_PASSWORD="p@ss!" uv run …`.
+- **Secure defaults** (opt-ins in [SKILL.md](skills/matrix-communication/SKILL.md)): secrets come from `MATRIX_PASSWORD` / `MATRIX_RECOVERY_KEY` / `MATRIX_RECOVERY_PASSPHRASE` or a prompt, never argv (`--allow-secret-argument`); room keys go to verified devices only (`--trust-unverified-devices`, one message, nothing stored).
 - **Key backup**: Always include `--import-keys` when restoring; without it, keys are displayed but not stored.
 - **Device verification**: Use Element Desktop or Element Android — Element X has incompatible verification flows.
 - **Line buffering** is `True` for non-interactive (piped) contexts; output appears in real time.

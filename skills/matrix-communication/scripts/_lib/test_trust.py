@@ -1,0 +1,136 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
+"""Tests for `_lib.trust`: which devices an encrypted send shares the room key with.
+
+Run directly (stdlib only, no nio):
+
+    python3 skills/matrix-communication/scripts/_lib/test_trust.py
+"""
+
+import asyncio
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from trust import UntrustedDevicesError, send_checked, untrusted_devices
+
+
+class FakeDevice:
+    def __init__(
+        self, user_id, device_id, verified=False, blacklisted=False, ignored=False
+    ):
+        self.user_id = user_id
+        self.id = device_id
+        self.display_name = f"{device_id} name"
+        self.verified = verified
+        self.blacklisted = blacklisted
+        self.ignored = ignored
+
+
+class FakeDeviceStore:
+    def __init__(self, devices):
+        self.devices = devices
+
+    def active_user_devices(self, user_id):
+        return [d for d in self.devices if d.user_id == user_id]
+
+
+class FakeClient:
+    def __init__(self, devices, device_id="SELF"):
+        self.device_id = device_id
+        self.device_store = FakeDeviceStore(devices)
+        self.sent = []
+        self.unignored = []
+        self.verified_calls = []
+
+    async def room_send(self, **kwargs):
+        self.sent.append(kwargs)
+        return "response"
+
+    def unignore_device(self, device):
+        self.unignored.append(device.id)
+
+    def verify_device(self, device):  # must never be called
+        self.verified_calls.append(device.id)
+
+
+ME = "@agent:example.org"
+OTHER = "@other:example.org"
+
+
+def run(coro):
+    return asyncio.run(coro)
+
+
+class UntrustedDevicesTests(unittest.TestCase):
+    def test_lists_only_devices_nio_would_refuse(self):
+        client = FakeClient(
+            [
+                FakeDevice(ME, "SELF"),
+                FakeDevice(ME, "PHONE", verified=True),
+                FakeDevice(OTHER, "BLOCKED", blacklisted=True),
+                FakeDevice(OTHER, "KNOWN", ignored=True),
+                FakeDevice(OTHER, "NEW"),
+            ]
+        )
+        self.assertEqual(
+            [d.id for d in untrusted_devices(client, [ME, OTHER])], ["NEW"]
+        )
+
+
+class SendCheckedTests(unittest.TestCase):
+    def test_refuses_and_sends_nothing_while_unverified_devices_are_present(self):
+        client = FakeClient([FakeDevice(OTHER, "NEW")])
+        with self.assertRaises(UntrustedDevicesError) as caught:
+            run(send_checked(client, "!r:example.org", [OTHER], "m.room.message", {}))
+        self.assertEqual(client.sent, [])
+        self.assertIn("NEW", str(caught.exception))
+        self.assertIn("--trust-unverified-devices", str(caught.exception))
+
+    def test_sends_strictly_when_every_device_is_verified(self):
+        client = FakeClient([FakeDevice(OTHER, "PHONE", verified=True)])
+        run(
+            send_checked(
+                client, "!r:example.org", [OTHER], "m.room.message", {"body": "x"}
+            )
+        )
+        self.assertEqual(len(client.sent), 1)
+        self.assertIs(client.sent[0]["ignore_unverified_devices"], False)
+        self.assertEqual(client.unignored, [])
+
+    def test_opt_in_shares_for_this_send_only_and_never_verifies(self):
+        client = FakeClient([FakeDevice(OTHER, "NEW")])
+        run(
+            send_checked(
+                client,
+                "!r:example.org",
+                [OTHER],
+                "m.room.message",
+                {},
+                trust_unverified=True,
+            )
+        )
+        self.assertIs(client.sent[0]["ignore_unverified_devices"], True)
+        self.assertEqual(client.unignored, ["NEW"])
+        self.assertEqual(client.verified_calls, [])
+
+    def test_opt_in_is_undone_when_the_send_fails(self):
+        class Failing(FakeClient):
+            async def room_send(self, **kwargs):
+                raise RuntimeError("network")
+
+        client = Failing([FakeDevice(OTHER, "NEW")])
+        with self.assertRaises(RuntimeError):
+            run(
+                send_checked(
+                    client, "!r", [OTHER], "m.room.message", {}, trust_unverified=True
+                )
+            )
+        self.assertEqual(client.unignored, ["NEW"])
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

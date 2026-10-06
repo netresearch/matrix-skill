@@ -68,7 +68,7 @@ def main() -> int:
 
         for room in page:
             state_res = admin_request(
-                config, "GET", f"/v1/rooms/{room['room_id']}/state"
+                config, "GET", f"/v1/rooms/{quote(room['room_id'])}/state"
             )
             if "error" in state_res:
                 print(

@@ -18,6 +18,7 @@ Arguments:
 Options:
     --output DIR     Output directory [default: .]
     --filename NAME  Override filename (default: from message body)
+    --overwrite      Replace an existing file of that name (default: refuse)
     --debug          Show debug information
     --help           Show this help
 """
@@ -40,6 +41,7 @@ from _lib import (
     restore_login_checked,
     suppress_nio_logging,
 )
+from _lib.downloads import download_target, write_download
 
 check_e2ee_dependencies()
 
@@ -60,6 +62,7 @@ async def download_media(
     output_dir: str = ".",
     filename: str | None = None,
     debug: bool = False,
+    overwrite: bool = False,
 ) -> str:
     """Download media from a Matrix message event."""
     store_path = get_store_path()
@@ -150,12 +153,14 @@ async def download_media(
         if debug:
             print(f"Downloading {mxc_url}...", file=sys.stderr)
 
-        # Determine filename — sanitize to prevent path traversal
-        if not filename:
-            raw_name = content.get("body", "media_download")
-            filename = Path(raw_name).name  # Strip directory components
-        else:
-            filename = Path(filename).name
+        # The name comes from the message unless --filename is given; only its
+        # last component is used. An existing file is kept unless --overwrite.
+        out_path = download_target(output_dir, filename or content.get("body"))
+        if out_path.exists() and not overwrite:
+            raise RuntimeError(
+                f"{out_path} exists; pass --overwrite to replace it or "
+                "--filename to choose another name"
+            )
 
         # Download media into memory (don't pass filename to avoid unnecessary disk write)
         resp = await client.download(mxc=mxc_url)
@@ -182,9 +187,8 @@ async def download_media(
             )
 
         # Save to file
-        out_path = Path(output_dir) / filename
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_bytes(data)
+        write_download(out_path, data, overwrite=overwrite)
 
         if debug:
             print(
@@ -204,6 +208,11 @@ def main():
     parser.add_argument("event_id", help="Event ID of the media message")
     parser.add_argument("--output", default=".", help="Output directory [default: .]")
     parser.add_argument("--filename", help="Override filename")
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace an existing file of the same name (default: refuse)",
+    )
     parser.add_argument("--debug", action="store_true", help="Debug output")
     args = parser.parse_args()
 
@@ -221,6 +230,7 @@ def main():
                 output_dir=args.output,
                 filename=args.filename,
                 debug=args.debug,
+                overwrite=args.overwrite,
             )
         )
         print(path)

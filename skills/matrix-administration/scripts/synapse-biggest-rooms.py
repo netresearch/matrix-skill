@@ -18,7 +18,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import admin_request, load_config, pretty_bytes
+from _lib import admin_request, load_config, pretty_bytes, quote
 
 
 def main() -> int:
@@ -38,7 +38,7 @@ def main() -> int:
 
     rows = []
     for r in rooms:
-        info = admin_request(config, "GET", f"/v1/rooms/{r['room_id']}")
+        info = admin_request(config, "GET", f"/v1/rooms/{quote(r['room_id'])}")
         name = info.get("name") if isinstance(info, dict) else None
         rows.append(
             {

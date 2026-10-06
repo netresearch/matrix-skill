@@ -62,6 +62,7 @@ from _lib import (
     load_config,
     markdown_to_html,
     matrix_request,
+    path_segment,
     resolve_room_alias,
 )
 
@@ -128,7 +129,10 @@ def send_message(
         content["m.relates_to"] = {"m.in_reply_to": {"event_id": reply_id}}
 
     return matrix_request(
-        config, "PUT", f"/rooms/{room_id}/send/m.room.message/{txn_id}", content
+        config,
+        "PUT",
+        f"/rooms/{path_segment(room_id)}/send/m.room.message/{txn_id}",
+        content,
     )
 
 

@@ -178,19 +178,20 @@ the store on the other backend and rewrites its account.
 
 ### Agent Workflow for Real-Time Emoji Display
 
-The verification script writes emojis to `/tmp/matrix_verification_emojis.txt` for agent polling.
+The verification script writes emojis to `verification_emojis.txt` in the skill's data directory (`${XDG_DATA_HOME:-~/.local/share}/matrix-skill/`, readable by your account only) for agent polling.
 
 **Step 1: Clear emoji file and start verification in background**
 ```bash
-rm -f /tmp/matrix_verification_emojis.txt
+EMOJIS="${XDG_DATA_HOME:-$HOME/.local/share}/matrix-skill/verification_emojis.txt"
+rm -f "$EMOJIS"
 uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --timeout 180 > /tmp/verify_log.txt 2>&1 &
 ```
 
 **Step 2: Poll for emojis and show to user immediately**
 ```bash
 for i in {1..30}; do
-    if [ -f /tmp/matrix_verification_emojis.txt ]; then
-        cat /tmp/matrix_verification_emojis.txt
+    if [ -f "$EMOJIS" ]; then
+        cat "$EMOJIS"
         break
     fi
     sleep 1
@@ -302,12 +303,17 @@ The `matrix-key-backup.py` script handles the full workflow: SSSS decryption →
 # Check backup status
 uv run skills/matrix-communication/scripts/matrix-key-backup.py --status
 
-# Restore using recovery key AND import into local store
-uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key "EsTj qRGp YB4C ..." --import-keys
+# Restore using the recovery key (prompted for) AND import into local store
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key --import-keys
 
-# Restore using passphrase AND import
-uv run skills/matrix-communication/scripts/matrix-key-backup.py --passphrase "your recovery passphrase" --import-keys
+# Restore using the passphrase (prompted for) AND import
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --passphrase --import-keys
+
+# Non-interactive: from the environment instead of a prompt
+MATRIX_RECOVERY_KEY="..." uv run skills/matrix-communication/scripts/matrix-key-backup.py --import-keys
 ```
+
+The recovery key and passphrase are not accepted as command-line values: other local users can read those in the process list. `--allow-secret-argument` restores that for scripts that can use neither a prompt nor the environment.
 
 **Important:** The `--import-keys` flag is required to actually import decrypted session keys into your local store. Without it, keys are only displayed but not saved.
 
@@ -327,8 +333,14 @@ uv run skills/matrix-communication/scripts/matrix-e2ee-verify.py --listen --time
 # 1. Sync with server
 # 2. Wait for the other client to start the verification
 # 3. Accept the request and display emoji for comparison
-# 4. Write emojis to /tmp/matrix_verification_emojis.txt for agent polling
+# 4. Write emojis to verification_emojis.txt in the data directory for agent polling
 ```
+
+Only verification requests from devices of your own account are answered. The
+script confirms the emojis on its side and relies on the person at the other
+device to compare them; for another user's device that comparison would be
+theirs alone, so such a request is ignored unless that user is named with
+`--accept-from @user:server`.
 
 Prefer `--listen` over `--request` whenever the account has several active
 client sessions (`--list` showing more than one "Element Desktop" entry is the
@@ -354,7 +366,7 @@ Verify session).
 ## Limitations
 
 - **First sync**: Initial run ~2-5s for key exchange; subsequent runs ~2-3s
-- **Device trust**: Auto-trusts devices (TOFU model)
+- **Device trust**: Room keys go only to verified devices. A send into a room with unverified devices is refused and lists them; verify them, or pass `--trust-unverified-devices` to share that one message's key with them. The flag is not stored and never marks a device verified. Stores set up with version 3.1.8 or older contain devices those versions marked verified without a check; to start from a clean trust state, re-create the device (`matrix-e2ee-setup.py --logout`, then setup) and verify your own devices again
 - **Setup required**: First use requires user's Matrix password (one-time only)
 - **Verification**: Cross-signing/room-based verification not fully supported by matrix-nio
 - **Key backup**: Requires recovery key or passphrase (found in Element settings)

@@ -6,6 +6,7 @@
 All functions use ONLY stdlib.
 """
 
+import html as _html
 import re
 
 
@@ -74,6 +75,16 @@ def shorten_service_urls(text: str) -> str:
     return text
 
 
+_LINK_SCHEMES = ("http://", "https://", "mailto:", "matrix:")
+
+
+def _markdown_link(match: "re.Match[str]") -> str:
+    label, url = match.group(1), match.group(2)
+    if not _html.unescape(url).strip().lower().startswith(_LINK_SCHEMES):
+        return label
+    return f'<a href="{url}">{label}</a>'
+
+
 def markdown_to_html(text: str) -> str:
     """Convert markdown to Matrix HTML with smart features.
 
@@ -92,6 +103,10 @@ def markdown_to_html(text: str) -> str:
     """
     # First, shorten service URLs (before other processing)
     html = shorten_service_urls(text)
+
+    # The input is text, not markup: escape it before any tag is generated, so
+    # HTML in the message (a forged link, a fake mention) is shown as typed.
+    html = _html.escape(html, quote=True)
 
     # Extract and protect code blocks from other processing
     code_blocks = []
@@ -116,8 +131,9 @@ def markdown_to_html(text: str) -> str:
         r"(?<!\|)\|\|(.+?)\|\|(?!\|)", r"<span data-mx-spoiler>\1</span>", html
     )
 
-    # Markdown links: [text](url) -> <a href="url">text</a>
-    html = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', html)
+    # Markdown links: [text](url) -> <a href="url">text</a>, for web, mail and
+    # matrix URLs only; any other scheme keeps the link text without a link.
+    html = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _markdown_link, html)
 
     # Matrix user mentions: @user:server -> clickable pill
     # Only match if not already inside a link
@@ -218,15 +234,15 @@ def markdown_to_html(text: str) -> str:
             result.append("</table>")
             in_table = False
 
-        # Blockquotes: > text
-        if stripped.startswith("> "):
+        # Blockquotes: > text (escaped above)
+        if stripped.startswith("&gt; "):
             if not in_quote:
                 if in_list:
                     result.append("</ul>")
                     in_list = False
                 result.append("<blockquote>")
                 in_quote = True
-            result.append(stripped[2:])
+            result.append(stripped[5:])
         # Lists: `- item`, `* item`, `+ item` (all valid CommonMark bullets)
         elif stripped[:2] in ("- ", "* ", "+ "):
             if in_quote:

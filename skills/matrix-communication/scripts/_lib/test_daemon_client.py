@@ -144,5 +144,30 @@ class SocketPathTests(unittest.TestCase):
         self.assertTrue(str(daemon_client.socket_path()).endswith("daemon.sock"))
 
 
+class RunningDaemonPidTests(unittest.TestCase):
+    """--stop signals only a pid the daemon itself reported."""
+
+    def test_pid_from_a_status_answer(self):
+        import daemon_client
+
+        self.assertEqual(
+            daemon_client.running_daemon_pid({"ok": True, "pid": 4242}), 4242
+        )
+
+    def test_no_answer_means_nothing_to_stop(self):
+        import daemon_client
+
+        self.assertIsNone(daemon_client.running_daemon_pid(None))
+        self.assertIsNone(daemon_client.running_daemon_pid({"ok": False, "error": "x"}))
+
+    def test_implausible_pid_is_not_signalled(self):
+        import daemon_client
+
+        for pid in (0, -1, "123", True, None):
+            self.assertIsNone(
+                daemon_client.running_daemon_pid({"ok": True, "pid": pid}), pid
+            )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
