@@ -17,7 +17,8 @@ Requires libolm system library:
 
 Usage:
     matrix-e2ee-setup.py              # Interactive password prompt
-    matrix-e2ee-setup.py PASSWORD     # Password as argument
+    MATRIX_PASSWORD=... matrix-e2ee-setup.py   # Non-interactive
+    matrix-e2ee-setup.py --allow-secret-argument PASSWORD   # Argument (visible in ps)
     matrix-e2ee-setup.py --status
     matrix-e2ee-setup.py --logout
     matrix-e2ee-setup.py --logout --purge-all

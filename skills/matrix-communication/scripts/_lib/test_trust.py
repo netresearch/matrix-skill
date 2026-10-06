@@ -132,5 +132,73 @@ class SendCheckedTests(unittest.TestCase):
         self.assertEqual(client.unignored, ["NEW"])
 
 
+class OlmUnverifiedDeviceError(Exception):
+    """Stand-in for nio's exception, recognised by name."""
+
+    def __init__(self, device):
+        super().__init__(f"Device {device.id} is not verified")
+        self.device = device
+
+
+class NioLikeClient(FakeClient):
+    """room_send behaves like nio 0.25: it may discover a device, then either
+    refuses an unverified one or marks every unverified one ignored."""
+
+    def __init__(self, devices, discovered=None):
+        super().__init__(devices)
+        self.discovered = discovered
+
+    async def room_send(self, **kwargs):
+        if self.discovered is not None:
+            self.device_store.devices.append(self.discovered)
+        for device in self.device_store.devices:
+            if device.id == self.device_id or device.verified or device.ignored:
+                continue
+            if not kwargs["ignore_unverified_devices"]:
+                raise OlmUnverifiedDeviceError(device)
+            device.ignored = True
+        self.sent.append(kwargs)
+        return "response"
+
+    def unignore_device(self, device):
+        super().unignore_device(device)
+        device.ignored = False
+
+
+class DevicesFoundDuringSendTests(unittest.TestCase):
+    def test_opt_in_resets_a_device_found_during_the_send(self):
+        late = FakeDevice(OTHER, "LATE")
+        client = NioLikeClient([FakeDevice(OTHER, "NEW")], discovered=late)
+        run(
+            send_checked(
+                client, "!r", [OTHER], "m.room.message", {}, trust_unverified=True
+            )
+        )
+        self.assertEqual(sorted(client.unignored), ["LATE", "NEW"])
+        self.assertFalse(late.ignored)
+
+    def test_strict_send_reports_a_device_found_during_the_send(self):
+        late = FakeDevice(OTHER, "LATE")
+        client = NioLikeClient(
+            [FakeDevice(OTHER, "PHONE", verified=True)], discovered=late
+        )
+        sending = send_checked(client, "!r", [OTHER], "m.room.message", {})
+        with self.assertRaises(UntrustedDevicesError) as caught:
+            run(sending)
+        self.assertIn("LATE", str(caught.exception))
+        self.assertEqual(client.sent, [])
+
+    def test_device_ignored_before_the_send_stays_ignored(self):
+        known = FakeDevice(OTHER, "KNOWN", ignored=True)
+        client = NioLikeClient([known, FakeDevice(OTHER, "NEW")])
+        run(
+            send_checked(
+                client, "!r", [OTHER], "m.room.message", {}, trust_unverified=True
+            )
+        )
+        self.assertEqual(client.unignored, ["NEW"])
+        self.assertTrue(known.ignored)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

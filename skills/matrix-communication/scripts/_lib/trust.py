@@ -55,30 +55,55 @@ def describe_untrusted(devices) -> str:
     return "\n".join(lines)
 
 
+def _devices(client, user_ids):
+    for user_id in user_ids:
+        yield from client.device_store.active_user_devices(user_id)
+
+
+def _room_users(client, room_id, user_ids):
+    room = getattr(client, "rooms", {}).get(room_id)
+    return list(dict.fromkeys([*user_ids, *(getattr(room, "users", None) or [])]))
+
+
 async def send_checked(
     client, room_id, user_ids, message_type, content, trust_unverified=False
 ):
     """``client.room_send`` for an encrypted room, sharing keys only as allowed.
 
     Raises UntrustedDevicesError instead of sending when unverified devices are
-    present and ``trust_unverified`` is false.
+    present and ``trust_unverified`` is false - also for a device nio only
+    learns about inside ``room_send`` (it may sync the members and query keys
+    there), which nio reports as OlmUnverifiedDeviceError.
     """
     pending = untrusted_devices(client, user_ids)
     if pending and not trust_unverified:
         raise UntrustedDevicesError(pending)
+    ignored_before = {
+        (d.user_id, d.id) for d in _devices(client, user_ids) if d.ignored
+    }
     try:
         return await client.room_send(
             room_id=room_id,
             message_type=message_type,
             content=content,
-            ignore_unverified_devices=bool(pending),
+            ignore_unverified_devices=bool(trust_unverified),
         )
+    except Exception as exc:
+        # Stdlib only: nio's exception is recognised by name.
+        device = getattr(exc, "device", None)
+        if type(exc).__name__ == "OlmUnverifiedDeviceError" and device is not None:
+            raise UntrustedDevicesError([device]) from exc
+        raise
     finally:
-        # nio stores the devices it shared with under ignore_unverified_devices
-        # as "ignored", and later shares with ignored devices without asking.
-        # Undo that, so the opt-in covers this send only.
-        # The in-memory trust state is not always updated with the database
-        # row, so the reset is unconditional; nio returns False when there is
-        # nothing to undo.
-        for device in pending:
-            client.unignore_device(device)
+        if trust_unverified:
+            # nio stores every device it shared with under
+            # ignore_unverified_devices as "ignored" - including devices it
+            # discovered during this send - and later shares with ignored
+            # devices without asking. Reset every device that was not ignored
+            # before, so the opt-in covers this send only. The reset is
+            # unconditional because the in-memory trust state is not always
+            # updated with the database row; nio returns False when there is
+            # nothing to undo.
+            for device in _devices(client, _room_users(client, room_id, user_ids)):
+                if (device.user_id, device.id) not in ignored_before:
+                    client.unignore_device(device)

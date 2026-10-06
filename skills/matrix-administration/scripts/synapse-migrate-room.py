@@ -306,7 +306,7 @@ def main() -> int:
         res = admin_request(
             config,
             "POST",
-            f"/v1/rooms/{args.room_id}/make_room_admin",
+            f"/v1/rooms/{quote(args.room_id)}/make_room_admin",
             {"user_id": user_id},
         )
         if "error" in res:
