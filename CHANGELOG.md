@@ -12,7 +12,7 @@ For the canonical narrative version of each release (rewritten after CI publishe
 ### Security
 
 - The skill's data directory (`matrix-skill/`, its `store/` and `rooms/`) is owner-only (`0700`), also when an older version created it; `credentials.json`, `backup_key.json` and the verification emoji file are created with mode `0600` and never through a symlink. The verification emojis move from a fixed file in `/tmp` to `verification_emojis.txt` in the data directory
-- Encrypted sends, edits and reactions share the room key with verified devices only. A room with unverified devices is refused with a list of them; `--trust-unverified-devices` (`matrix-send-e2ee.py`, `matrix-edit-e2ee.py`, `matrix-react.py`, passed on to the daemon) shares that one message's key with them. Sending no longer marks devices verified
+- Encrypted sends, edits and reactions share the room key with verified devices only; a device nio stores as "ignored" (as the daemon of 3.1.8 and older did) counts as unverified. A room with unverified devices is refused with a list of them; `--trust-unverified-devices` (`matrix-send-e2ee.py`, `matrix-edit-e2ee.py`, `matrix-react.py`, passed on to the daemon) shares that one message's key with them. Sending no longer marks devices verified
 - `matrix-e2ee-verify.py` answers verification only for devices of the own account; `--accept-from USER_ID` adds another user
 - The request helpers of both skills drop the `Authorization` header on a redirect to another origin
 - Passwords, recovery keys and passphrases are read from the environment or a prompt; a value on the command line is refused unless `--allow-secret-argument` is given. `--recovery-key` and `--passphrase` without a value prompt

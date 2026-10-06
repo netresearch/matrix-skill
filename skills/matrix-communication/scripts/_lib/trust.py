@@ -6,13 +6,16 @@
 Stdlib only: the nio client is passed in and used through the few attributes
 named below, so this module can be tested without nio.
 
-By default the room key goes to verified devices only. nio refuses to encrypt
-for a room that contains a device which is neither verified, blacklisted nor
-ignored, and `send_checked` reports every such device before nio does, with
-what to do about it. `trust_unverified=True` is the explicit opt-in to share
-with them anyway for this one send: nio records those devices as ignored while
-it shares, and that record is removed again afterwards, so the opt-in does not
-outlive the command and is never stored as verification.
+By default the room key goes to verified devices only. `send_checked` refuses
+a send while the room has a device that is neither verified nor blacklisted,
+and lists every such device with what to do about it. A device nio stores as
+"ignored" counts as unverified: nio shares keys with ignored devices without
+asking, and this skill never ignores a device on purpose - the mark comes from
+an opted-in send or from versions up to 3.1.8, whose daemon shared keys that
+way. `trust_unverified=True` is the explicit opt-in to share with unverified
+devices for this one send: nio records them as ignored while it shares, and
+every room member's device is reset afterwards, so the opt-in does not outlive
+the command and is never stored as verification.
 
 Sends through one client are serialised: while a send with the opt-in is in
 flight, nio's temporary "ignored" mark would let a concurrent strict send (the
@@ -38,8 +41,9 @@ class UntrustedDevicesError(Exception):
 def untrusted_devices(client, user_ids) -> list:
     """Devices of ``user_ids`` that nio would refuse to share a room key with.
 
-    That is every active device that is not this one and is neither verified,
-    blacklisted nor ignored in the local store.
+    That is every active device that is not this one and is neither verified
+    nor blacklisted in the local store; an "ignored" device counts as
+    unverified (see the module docstring).
     """
     found = []
     own_device = getattr(client, "device_id", None)
@@ -47,7 +51,7 @@ def untrusted_devices(client, user_ids) -> list:
         for device in client.device_store.active_user_devices(user_id):
             if device.id == own_device:
                 continue
-            if device.verified or device.blacklisted or device.ignored:
+            if device.verified or device.blacklisted:
                 continue
             found.append(device)
     return found
@@ -99,9 +103,6 @@ async def _send_checked_locked(
     pending = untrusted_devices(client, user_ids)
     if pending and not trust_unverified:
         raise UntrustedDevicesError(pending)
-    ignored_before = {
-        (d.user_id, d.id) for d in _devices(client, user_ids) if d.ignored
-    }
     try:
         return await client.room_send(
             room_id=room_id,
@@ -120,11 +121,9 @@ async def _send_checked_locked(
             # nio stores every device it shared with under
             # ignore_unverified_devices as "ignored" - including devices it
             # discovered during this send - and later shares with ignored
-            # devices without asking. Reset every device that was not ignored
-            # before, so the opt-in covers this send only. The reset is
-            # unconditional because the in-memory trust state is not always
-            # updated with the database row; nio returns False when there is
-            # nothing to undo.
+            # devices without asking. Reset every room member's device, so the
+            # opt-in covers this send only. The reset is unconditional because
+            # the in-memory trust state is not always updated with the
+            # database row; nio returns False when there is nothing to undo.
             for device in _devices(client, _room_users(client, room_id, user_ids)):
-                if (device.user_id, device.id) not in ignored_before:
-                    client.unignore_device(device)
+                client.unignore_device(device)

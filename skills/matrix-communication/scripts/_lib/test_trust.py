@@ -77,7 +77,7 @@ class UntrustedDevicesTests(unittest.TestCase):
             ]
         )
         self.assertEqual(
-            [d.id for d in untrusted_devices(client, [ME, OTHER])], ["NEW"]
+            [d.id for d in untrusted_devices(client, [ME, OTHER])], ["KNOWN", "NEW"]
         )
 
 
@@ -188,16 +188,24 @@ class DevicesFoundDuringSendTests(unittest.TestCase):
         self.assertIn("LATE", str(caught.exception))
         self.assertEqual(client.sent, [])
 
-    def test_device_ignored_before_the_send_stays_ignored(self):
-        known = FakeDevice(OTHER, "KNOWN", ignored=True)
-        client = NioLikeClient([known, FakeDevice(OTHER, "NEW")])
+    def test_ignored_device_from_an_older_version_is_refused_without_opt_in(self):
+        legacy = FakeDevice(OTHER, "LEGACY", ignored=True)
+        client = NioLikeClient([legacy, FakeDevice(OTHER, "PHONE", verified=True)])
+        sending = send_checked(client, "!r", [OTHER], "m.room.message", {})
+        with self.assertRaises(UntrustedDevicesError) as caught:
+            run(sending)
+        self.assertIn("LEGACY", str(caught.exception))
+        self.assertEqual(client.sent, [])
+
+    def test_opt_in_also_resets_an_older_ignored_mark(self):
+        legacy = FakeDevice(OTHER, "LEGACY", ignored=True)
+        client = NioLikeClient([legacy])
         run(
             send_checked(
                 client, "!r", [OTHER], "m.room.message", {}, trust_unverified=True
             )
         )
-        self.assertEqual(client.unignored, ["NEW"])
-        self.assertTrue(known.ignored)
+        self.assertFalse(legacy.ignored)
 
 
 class SlowNioLikeClient(NioLikeClient):

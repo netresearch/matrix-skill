@@ -366,7 +366,7 @@ Verify session).
 ## Limitations
 
 - **First sync**: Initial run ~2-5s for key exchange; subsequent runs ~2-3s
-- **Device trust**: Room keys go only to verified devices. A send into a room with unverified devices is refused and lists them; verify them, or pass `--trust-unverified-devices` to share that one message's key with them. The flag is not stored and never marks a device verified. Stores set up with version 3.1.8 or older contain devices those versions marked verified without a check; to start from a clean trust state, re-create the device (`matrix-e2ee-setup.py --logout`, then setup) and verify your own devices again
+- **Device trust**: Room keys go only to verified devices. A send into a room with unverified devices is refused and lists them; verify them, or pass `--trust-unverified-devices` to share that one message's key with them. The flag is not stored and never marks a device verified. Devices marked "ignored" (what the daemon of version 3.1.8 or older stored) count as unverified. Stores used with version 3.1.8 or older can also contain devices that the direct send and edit scripts of those versions marked verified without a check; to start from a clean trust state, re-create the device (`matrix-e2ee-setup.py --logout`, then setup) and verify your own devices again
 - **Setup required**: First use requires user's Matrix password (one-time only)
 - **Verification**: Cross-signing/room-based verification not fully supported by matrix-nio
 - **Key backup**: Requires recovery key or passphrase (found in Element settings)
