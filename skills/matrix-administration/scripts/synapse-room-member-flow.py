@@ -20,7 +20,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -60,9 +60,7 @@ def main() -> int:
     for s in state:
         if s.get("type") != "m.room.member":
             continue
-        ts = datetime.fromtimestamp(
-            (s.get("origin_server_ts") or 0) / 1000, tz=timezone.utc
-        )
+        ts = datetime.fromtimestamp((s.get("origin_server_ts") or 0) / 1000, tz=UTC)
         membership = (s.get("content") or {}).get("membership")
         state_key = s.get("state_key")
         if not state_key:
@@ -77,7 +75,7 @@ def main() -> int:
                 old = _get_event(config, args.room_id, state_key, replaces)
                 if old:
                     old_ts = datetime.fromtimestamp(
-                        (old.get("origin_server_ts") or 0) / 1000, tz=timezone.utc
+                        (old.get("origin_server_ts") or 0) / 1000, tz=UTC
                     )
                     old_name = (old.get("content") or {}).get("displayname")
                     events.append((old_ts, "join", state_key, old_name))

@@ -8,7 +8,7 @@ All functions use ONLY stdlib.
 
 import logging
 import socket
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 def clean_message(message: str) -> str:
@@ -54,5 +54,6 @@ def format_timestamp(ts: int) -> str:
     """
     if ts == 0:
         return "unknown"
-    dt = datetime.fromtimestamp(ts / 1000)  # noqa: DTZ006  # local time intended for human-readable display
+    # Local time, intended for human-readable display; converted from an aware UTC value.
+    dt = datetime.fromtimestamp(ts / 1000, tz=UTC).astimezone()
     return dt.strftime("%Y-%m-%d %H:%M")

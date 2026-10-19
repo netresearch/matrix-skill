@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.11"
 # dependencies = ["matrix-nio[e2e]<0.26"]
 # ///
 """Read recent messages from an E2EE Matrix room.

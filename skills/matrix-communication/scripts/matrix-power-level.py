@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.11"
 # dependencies = []
 # ///
 """Show or set a user's power level in a Matrix room.

@@ -16,7 +16,7 @@ docs/specs/2026-08-13-live-room-awareness.md.
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 TEXT_LIMIT = 220
 DEFAULT_MAX_BYTES = 8_000_000
@@ -92,7 +92,7 @@ def render_text(record: dict, subject: str | None = None) -> str:
     # Local time, said explicitly: the reader is a person looking at a clock on
     # the same machine. The conversion goes through UTC so the intent is in the
     # code rather than in whatever the process default happens to be.
-    when = datetime.fromtimestamp(record["ts"] / 1000, tz=timezone.utc).astimezone()
+    when = datetime.fromtimestamp(record["ts"] / 1000, tz=UTC).astimezone()
     stamp = when.strftime("%H:%M")
     who = record.get("sender_display") or _localpart(record["sender"])
     if record.get("self") and record.get("self_basis") == "device":
@@ -347,7 +347,7 @@ def write_room_bundle(directory, rooms: dict) -> None:
     Lives here rather than in the daemon so it can be tested without nio.
     """
     directory.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(tz=timezone.utc).isoformat()
+    stamp = datetime.now(tz=UTC).isoformat()
     entries = []
 
     for room_id, label in sorted(rooms.items(), key=lambda item: item[1]):
