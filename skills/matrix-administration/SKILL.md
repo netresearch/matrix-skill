@@ -4,7 +4,7 @@
 name: matrix-administration
 description: "Use when administering a Synapse / Matrix homeserver — list or snapshot all rooms, rate room health (public, unencrypted, orphaned), render a Graphviz map of the room/space tree, force-join users, promote room admins, harden rooms (add-to-space + restrict + encrypt), deactivate Matrix users (with GDPR erase), find biggest rooms by DB size, audit where a user is admin or member, replay join/leave timelines, or search unencrypted history. Trigger on any '/_synapse/admin', server-wide room operation, Matrix user offboarding, or anything requiring a homeserver-admin token — even without 'admin API' in the prompt. Companion to matrix-communication."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
-compatibility: "python3 (stdlib only) + a Matrix access token belonging to a Synapse server-admin user. Optional: graphviz `dot` for SVG. Synapse 1.x with admin API enabled."
+compatibility: "python3 3.11+ (stdlib only) + a Matrix access token belonging to a Synapse server-admin user. Optional: graphviz `dot` for SVG. Synapse 1.x with admin API enabled."
 metadata:
   author: Netresearch DTT GmbH
   version: "3.1.8"
