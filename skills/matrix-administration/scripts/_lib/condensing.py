@@ -13,7 +13,7 @@ Stdlib only.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # A join policy is one of:
 #   "public"
@@ -122,7 +122,7 @@ def condense(data: list[dict]) -> dict[str, Room]:
                 ts = state.get("origin_server_ts")
                 if isinstance(ts, (int, float)):
                     r.members[state["state_key"]] = datetime.fromtimestamp(
-                        ts / 1000, tz=timezone.utc
+                        ts / 1000, tz=UTC
                     )
 
     return rooms

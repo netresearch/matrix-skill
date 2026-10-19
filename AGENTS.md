@@ -113,7 +113,7 @@ python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # hard
 - **Device verification**: Use Element Desktop or Element Android — Element X has incompatible verification flows.
 - **Line buffering** is `True` for non-interactive (piped) contexts; output appears in real time.
 - **First E2EE run** takes ~2–5 s for initial key sync; subsequent runs are faster.
-- **Dependencies**: `python3`, `uv`, Matrix homeserver access. E2EE additionally needs `libolm-dev` (apt) / `libolm-devel` (dnf) / `libolm` (brew).
+- **Dependencies**: `python3` (3.11+), `uv`, Matrix homeserver access. E2EE additionally needs `libolm-dev` (apt) / `libolm-devel` (dnf) / `libolm` (brew).
 
 ## Testing
 

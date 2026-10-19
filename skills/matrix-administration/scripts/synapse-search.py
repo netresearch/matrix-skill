@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -71,7 +71,7 @@ def main() -> int:
             ts = ev.get("origin_server_ts") or 0
             messages.append(
                 {
-                    "ts": datetime.fromtimestamp(ts / 1000, tz=timezone.utc),
+                    "ts": datetime.fromtimestamp(ts / 1000, tz=UTC),
                     "msgtype": (ev.get("content") or {}).get("msgtype"),
                     "body": (ev.get("content") or {}).get("body", ""),
                 }

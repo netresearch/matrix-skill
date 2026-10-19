@@ -4,7 +4,7 @@
 name: matrix-communication
 description: "Use when communicating via Matrix chat, notifying teams, or managing E2EE. Triggers on #room:server references, Matrix URLs, and chat requests."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
-compatibility: "Requires python3, uv. Matrix homeserver access."
+compatibility: "Requires python3 3.11+, uv. Matrix homeserver access."
 metadata:
   author: Netresearch DTT GmbH
   version: "3.1.8"
