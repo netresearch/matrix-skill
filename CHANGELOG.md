@@ -9,6 +9,21 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-10-21
+
+### Breaking
+
+- Python 3.10 is no longer supported. The PEP 723 headers of the scripts declare `requires-python = ">=3.11"`, the `compatibility` fields of `matrix-communication` and `matrix-administration` name Python 3.11, and the standard-library admin scripts run with plain `python3` need 3.11 as well, because they use `datetime.UTC` ([#177](https://github.com/netresearch/matrix-skill/pull/177))
+
+### Added
+
+- Tokens can be kept out of `config.json`. Each script takes `access_token` / `admin_token` from `MATRIX_ACCESS_TOKEN` / `MATRIX_ADMIN_TOKEN` in the environment, then from the file named by `access_token_file` / `admin_token_file` (relative to the config directory), then from the inline value, which keeps working unchanged. A missing, unreadable or empty token file stops the script with a message naming the file, never its content. `matrix-doctor.py` checks the token the scripts will send ([#165](https://github.com/netresearch/matrix-skill/pull/165))
+
+### Fixed
+
+- A script resolves only the token it sends: a broken `access_token_file` no longer stops admin commands that have a working `MATRIX_ADMIN_TOKEN`, an unreadable `admin_token_file` no longer stops chat commands, and admin commands that need no admin credential resolve no token. Admin scripts fall back to `access_token` only when no admin token is found ([#165](https://github.com/netresearch/matrix-skill/pull/165))
+- When `matrix-doctor.py` advises replacing a stale or rejected token, it names every token source: the environment variables, the token file and `config.json` ([#165](https://github.com/netresearch/matrix-skill/pull/165))
+
 ## [3.1.9] - 2026-10-06
 
 ### Security
@@ -387,7 +402,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v3.1.9...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/netresearch/matrix-skill/compare/v3.1.9...v4.0.0
 [3.1.9]: https://github.com/netresearch/matrix-skill/compare/v3.1.8...v3.1.9
 [3.1.8]: https://github.com/netresearch/matrix-skill/compare/v3.1.7...v3.1.8
 [3.1.7]: https://github.com/netresearch/matrix-skill/compare/v3.1.6...v3.1.7
