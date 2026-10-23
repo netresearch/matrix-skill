@@ -405,9 +405,9 @@ The security assurance case for these skills (threat model, trust boundaries, wh
 Checks that run on pull requests in this repository:
 
 - Every pull request: Skill Validation (`lint.yml`: skill structure, markdownlint, yamllint, actionlint, JSON syntax, ShellCheck, ruff lint and format), Eval Validation (`eval-validate.yml`), Unit Tests (`tests.yml`: every `skills/**/test_*.py` suite) and Label PR (`labeler.yml`).
-- Pull requests to `main` or `master`: `security.yml` with Betterleaks (secret scanning), zizmor (workflow static analysis), dependency review (fails on vulnerabilities of severity high or above), Composer Audit and Opengrep SAST (thresholds as in the organisation's [static analysis rule](https://github.com/netresearch/.github/blob/main/SECURITY.md#static-analysis-sast)); Harness Verification (`harness-verify.yml`) and Template Drift (`check-template-drift.yml`).
+- Pull requests to `main` or `master`: `security.yml` with Betterleaks (secret scanning), zizmor (workflow static analysis), dependency review (fails on vulnerabilities of severity high or above), Composer Audit and Opengrep SAST (thresholds as in the organisation's [static analysis rule](https://github.com/netresearch/.github/blob/main/SECURITY.md#static-analysis-sast)), and CodeQL (actions, python); Harness Verification (`harness-verify.yml`) and Template Drift (`check-template-drift.yml`).
 - Every pull request, skipped unless Renovate or Dependabot opened it: Auto-merge dependency PRs (`auto-merge-deps.yml`).
-- Configured outside the workflow files: CodeQL default setup (actions, python), SonarCloud Code Analysis (automatic analysis, settings in `.sonarcloud.properties`), the DCO check and the CodeRabbit review status. Code scanning also reports each analyser's results as a check run of its own: `CodeQL`, `SonarCloud`, `zizmor`, `betterleaks` and `Opengrep OSS`. GitHub secret scanning with push protection is enabled as a repository setting.
+- Configured outside the workflow files: SonarCloud Code Analysis (automatic analysis, settings in `.sonarcloud.properties`), the DCO check and the CodeRabbit review status. Code scanning also reports each analyser's results as a check run of its own: `CodeQL`, `SonarCloud`, `zizmor`, `betterleaks` and `Opengrep OSS`. GitHub secret scanning with push protection is enabled as a repository setting.
 
 ## License
 
