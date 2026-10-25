@@ -8,7 +8,7 @@
       "expected_output": "Runs synapse-fetch-rooms.py.",
       "files": [],
       "assertions": [
-        "Invokes synapse-fetch-rooms.py via python3",
+        "Invokes synapse-fetch-rooms.py via uv run",
         "Does not pass --server unless the user specified a server suffix",
         "Does not commit or print the resulting rooms.json"
       ]

@@ -8,8 +8,8 @@
 ## Local one-shot
 
 ```bash
-python3 skills/matrix-administration/scripts/synapse-fetch-rooms.py
-python3 skills/matrix-administration/scripts/synapse-graph.py --space '!home:server'
+uv run skills/matrix-administration/scripts/synapse-fetch-rooms.py
+uv run skills/matrix-administration/scripts/synapse-graph.py --space '!home:server'
 xdg-open rooms.svg
 ```
 
@@ -26,6 +26,8 @@ WORKDIR /app
 RUN apt-get update \
  && apt-get install -y --no-install-recommends graphviz \
  && rm -rf /var/lib/apt/lists/*
+# uv starts the scripts on Python 3.11 or later (here the image's 3.13)
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /bin/uv
 
 COPY skills/matrix-administration/scripts ./scripts
 
@@ -39,9 +41,9 @@ RUN --mount=type=secret,id=matrix_token \
 }
 EOF
 
-RUN python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-fetch-rooms.py
-RUN LANGUAGE=en python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-graph.py && mv rooms.svg rooms.en.svg
-RUN LANGUAGE=de python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-graph.py && mv rooms.svg rooms.de.svg
+RUN uv run scripts/synapse-fetch-rooms.py
+RUN LANGUAGE=en uv run scripts/synapse-graph.py && mv rooms.svg rooms.en.svg
+RUN LANGUAGE=de uv run scripts/synapse-graph.py && mv rooms.svg rooms.de.svg
 
 # Runtime: any tiny static-file server
 FROM ghcr.io/thedevminertv/gostatic:1.5.2

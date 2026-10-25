@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
 # requires-python = ">=3.11"
-# dependencies = []
+# dependencies = ["matrix-nio[e2e]<0.26"]
 # ///
 """Matrix Skill health check and dependency installer.
 

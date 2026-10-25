@@ -11,14 +11,14 @@ Before using E2EE features, check dependencies:
 
 ```bash
 # Run health check (checks all dependencies)
-python3 skills/matrix-communication/scripts/matrix-doctor.py
+uv run skills/matrix-communication/scripts/matrix-doctor.py
 
 # Auto-install missing dependencies
-python3 skills/matrix-communication/scripts/matrix-doctor.py --install
+uv run skills/matrix-communication/scripts/matrix-doctor.py --install
 
 # Skip the homeserver call (air-gapped / CI): the token row then reads
 # 'not verified' instead of OK, and the summary says so
-python3 skills/matrix-communication/scripts/matrix-doctor.py --offline
+uv run skills/matrix-communication/scripts/matrix-doctor.py --offline
 ```
 
 The `token` row asks the homeserver (`GET /_matrix/client/v3/account/whoami`)

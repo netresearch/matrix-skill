@@ -1,6 +1,10 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Rate every room in a snapshot and print the failing ones.
 
 Reads ``rooms.json`` (produced by ``synapse-fetch-rooms.py``), runs the

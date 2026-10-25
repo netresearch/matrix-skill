@@ -4,12 +4,12 @@
 name: matrix-communication
 description: "Use when communicating via Matrix chat, notifying teams, or managing E2EE. Triggers on #room:server references, Matrix URLs, and chat requests."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
-compatibility: "Requires python3 3.11+, uv. Matrix homeserver access."
+compatibility: "Requires uv (runs the scripts on Python 3.11 or later). Matrix homeserver access."
 metadata:
   author: Netresearch DTT GmbH
   version: "4.0.0"
   repository: https://github.com/netresearch/matrix-skill
-allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*) Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*) Bash(uv run skills/matrix-communication/scripts/*) Bash(python3 skills/matrix-communication/scripts/*) Read Write
+allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*) Bash(uv run skills/matrix-communication/scripts/*) Read Write
 ---
 
 # Matrix Communication
@@ -49,7 +49,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 10 [--json]
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py [--search ops]
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watchd.py --start | --status | --stop
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py --status
-python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install      # python3, not uv run
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 ```
 
 Threads, replies, emote/notice, media, edit, redact, react, rooms, invites, power

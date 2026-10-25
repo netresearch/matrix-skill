@@ -7,7 +7,7 @@ What the error means and what to run. `matrix-doctor.py` decides most of these
 without guessing:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 ```
 
 ## Errors
@@ -23,7 +23,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 | `signature failed` | running on a foreign device | dedicated device via `matrix-e2ee-setup.py` |
 | `Invalid password` | special characters eaten by the shell | `MATRIX_PASSWORD="pass" uv run …` |
 | `libolm not found` | missing native dependency | Linux: `apt install libolm-dev`; macOS 26+ is unsupported, see `setup-guide.md` |
-| `matrix-nio not found` | Python dependency missing | `python3 …/matrix-doctor.py --install` |
+| `matrix-nio not found` | Python dependency missing | `uv run …/matrix-doctor.py --install` |
 | `The E2EE store cannot be opened by the installed matrix-nio (0.25.x)` | **backend mismatch, not a broken store**: the store was written by nio ≥ 0.26 (vodozemac format), the installed nio is < 0.26 (libolm), or the reverse. The error says so in its first lines — read them before claiming the store is defective | pin nio to the version that wrote the store, or re-create the device with `matrix-e2ee-setup.py` and re-import keys |
 
 Two of these look like the same error and are not: `M_UNKNOWN_TOKEN` says the
@@ -87,7 +87,7 @@ and one that was never tried at all.
 Before saying a room, a token or the homeserver is unavailable:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py            # what the skill itself thinks is wrong
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py            # what the skill itself thinks is wrong
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py --status
 ```
 

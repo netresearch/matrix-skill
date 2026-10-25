@@ -213,11 +213,11 @@
       "id": 18,
       "eval_name": "health-check",
       "prompt": "Check if my Matrix skill dependencies are properly installed.",
-      "expected_output": "Uses matrix-doctor.py with python3 (not uv run).",
+      "expected_output": "Uses matrix-doctor.py with uv run.",
       "files": [],
       "assertions": [
         "Uses matrix-doctor.py script",
-        "Uses python3 (not uv run) to execute",
+        "Uses uv run (not python3) to execute",
         "Optionally uses --install flag"
       ]
     },
