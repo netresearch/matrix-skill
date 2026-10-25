@@ -268,5 +268,86 @@ class CheckConfigTokenSourceTests(unittest.TestCase):
         self.assertIn("absent.token", message)
 
 
+class CheckMatrixNioTests(unittest.TestCase):
+    """The nio row probes the uv environment of the E2EE scripts.
+
+    The doctor must start where nio's olm binding cannot be built (no libolm,
+    no C toolchain), so it declares no dependency itself and asks uv in a
+    subprocess. A stub `uv` on PATH stands in for the real one.
+    """
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.bin = Path(tmp.name)
+        self.argv_log = self.bin / "argv"
+        patcher = mock.patch.dict(os.environ, {"PATH": str(self.bin)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def stub_uv(self, stdout, stderr, rc):
+        uv = self.bin / "uv"
+        uv.write_text(
+            "#!/bin/sh\n"
+            f'printf "%s\\n" "$@" > "{self.argv_log}"\n'
+            f"printf '%s' '{stdout}'\n"
+            f"printf '%s\\n' '{stderr}' >&2\n"
+            f"exit {rc}\n"
+        )
+        uv.chmod(0o755)
+
+    def test_the_doctor_declares_no_dependency(self):
+        source = Path(_HERE, "matrix-doctor.py").read_text()
+        self.assertIn("# dependencies = []\n", source)
+
+    def test_a_built_environment_with_olm_passes(self):
+        self.stub_uv("ok 0.25.2", "", 0)
+        ok, message = doctor.check_matrix_nio_e2ee()
+        self.assertIs(ok, True)
+        self.assertIn("0.25.2", message)
+        argv = self.argv_log.read_text().splitlines()
+        self.assertEqual(argv[:2], ["run", "--no-project"])
+        self.assertIn(doctor.NIO_REQUIREMENT, argv)
+        self.assertIn(">=3.11", argv)
+
+    def test_a_failed_build_reports_uvs_cause_line(self):
+        # uv's output on python:3.13-slim without libolm or a C toolchain.
+        self.stub_uv(
+            "",
+            "  × Failed to build `python-olm==3.2.16`\n"
+            "  ├─▶ The build backend returned an error\n"
+            "  ╰─▶ Call to `setuptools.build_meta.build_wheel` failed (exit status: 1)\n"
+            "  help: `python-olm` (v3.2.16) was included because `matrix-nio[e2e]`\n"
+            "        (v0.25.2) depends on `python-olm`",
+            1,
+        )
+        ok, message = doctor.check_matrix_nio_e2ee()
+        self.assertIs(ok, False)
+        self.assertTrue(
+            message.endswith(": Failed to build `python-olm==3.2.16`"), message
+        )
+
+    def test_a_failure_without_a_cause_line_reports_the_last_line(self):
+        self.stub_uv(
+            "", "No interpreter found for Python >=3.11 in managed installations", 2
+        )
+        ok, message = doctor.check_matrix_nio_e2ee()
+        self.assertIs(ok, False)
+        self.assertIn("No interpreter found for Python >=3.11", message)
+
+    def test_nio_without_olm_fails(self):
+        self.stub_uv("no-e2ee 0.25.2", "", 0)
+        ok, message = doctor.check_matrix_nio_e2ee()
+        self.assertIs(ok, False)
+        self.assertIn("E2EE deps missing", message)
+
+    def test_without_uv_the_running_interpreter_is_checked(self):
+        with mock.patch.dict("sys.modules", {"nio": None}):
+            ok, message = doctor.check_matrix_nio_e2ee()
+        self.assertIs(ok, False)
+        self.assertEqual(message, "matrix-nio not installed")
+        self.assertFalse(self.argv_log.exists())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

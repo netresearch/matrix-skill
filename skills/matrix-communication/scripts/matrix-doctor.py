@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["matrix-nio[e2e]<0.26"]
+# dependencies = []
 # ///
 """Matrix Skill health check and dependency installer.
 
@@ -77,8 +77,66 @@ def run_pip_command(pip_cmd: str, args: list[str]) -> tuple[bool, str]:
         return False, str(e)
 
 
+NIO_REQUIREMENT = "matrix-nio[e2e]<0.26"
+
+# Runs inside the environment uv builds for the E2EE scripts.
+_NIO_PROBE = """
+from importlib.metadata import version
+v = version("matrix-nio")
+try:
+    from nio.crypto import Olm  # noqa: F401
+except ImportError:
+    print("no-e2ee", v)
+else:
+    print("ok", v)
+"""
+
+
 def check_matrix_nio_e2ee() -> tuple[bool, str]:
-    """Check if matrix-nio with E2EE support is installed."""
+    """Check that matrix-nio with E2EE support is usable by the E2EE scripts.
+
+    Those scripts declare NIO_REQUIREMENT in their PEP 723 block and run under
+    `uv run`, so with uv on PATH the doctor builds that same environment in a
+    subprocess. The doctor itself declares no dependency: building nio's olm
+    binding needs libolm and a C toolchain on some hosts, and the doctor has to
+    start on exactly those hosts to say so.
+    """
+    if shutil.which("uv"):
+        cmd = [
+            "uv",
+            "run",
+            "--no-project",
+            "--quiet",
+            "--python",
+            ">=3.11",
+            "--with",
+            NIO_REQUIREMENT,
+            "python",
+            "-c",
+            _NIO_PROBE,
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # noqa: PLW1510  # returncode inspected below
+        except subprocess.TimeoutExpired:
+            return False, f"uv could not build {NIO_REQUIREMENT} within 300 s"
+        if result.returncode != 0:
+            # uv puts the cause on its first `×` or `error:` line and follows
+            # it with indented build output and `help:` hints.
+            lines = [l.strip() for l in result.stderr.splitlines() if l.strip()]
+            heads = [l for l in lines if l.startswith(("×", "error:"))]
+            if heads:
+                reason = heads[0].removeprefix("×").removeprefix("error:").strip()
+            else:
+                reason = lines[-1] if lines else f"uv exited {result.returncode}"
+            return False, f"uv could not build {NIO_REQUIREMENT}: {reason}"
+        state, _, nio_version = result.stdout.strip().partition(" ")
+        if state == "ok":
+            return (
+                True,
+                f"matrix-nio {nio_version} with E2EE support (uv environment of the E2EE scripts)",
+            )
+        return False, f"matrix-nio {nio_version} installed but E2EE deps missing"
+
     try:
         import nio  # noqa: F401
 
