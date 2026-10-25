@@ -12,8 +12,8 @@ Before any state-changing command:
 1. **Confirm the homeserver URL** in `~/.config/matrix/config.json` — the wrong host with the right script wipes the wrong server.
 2. **Confirm the user/room/space ID** you typed. Matrix IDs are similar; copy/paste them and read them back.
 3. **Run any read-only script first** to verify the target exists:
-   - `python3 …/synapse-user-rooms.py '@user:server'`
-   - `python3 …/synapse-room-member-flow.py '!room:server'`
+   - `uv run …/synapse-user-rooms.py '@user:server'`
+   - `uv run …/synapse-room-member-flow.py '!room:server'`
 4. For destructive operations, **dry-run by hand**: print the planned action to stdout (`echo`, `python3 -c 'print(…)'`) and ask the operator to confirm before invoking the script.
 
 ## Per-script risks

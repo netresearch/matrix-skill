@@ -1,6 +1,10 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Promote a user to power-level 100 in a room.
 
 Calls ``POST /_synapse/admin/v1/rooms/{room_id}/make_room_admin``.

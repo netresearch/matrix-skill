@@ -1,6 +1,10 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Force-join a user into a room using the Synapse Admin API.
 
 Calls ``POST /_synapse/admin/v1/join/{room_id}`` with the target user.

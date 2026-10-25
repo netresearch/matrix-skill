@@ -4,12 +4,12 @@
 name: matrix-administration
 description: "Use when administering a Synapse / Matrix homeserver — list or snapshot all rooms, rate room health (public, unencrypted, orphaned), render a Graphviz map of the room/space tree, force-join users, promote room admins, harden rooms (add-to-space + restrict + encrypt), deactivate Matrix users (with GDPR erase), find biggest rooms by DB size, audit where a user is admin or member, replay join/leave timelines, or search unencrypted history. Trigger on any '/_synapse/admin', server-wide room operation, Matrix user offboarding, or anything requiring a homeserver-admin token — even without 'admin API' in the prompt. Companion to matrix-communication."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
-compatibility: "python3 3.11+ (stdlib only) + a Matrix access token belonging to a Synapse server-admin user. Optional: graphviz `dot` for SVG. Synapse 1.x with admin API enabled."
+compatibility: "Requires uv (runs the scripts on Python 3.11 or later; stdlib only) + a Matrix access token belonging to a Synapse server-admin user. Optional: graphviz `dot` for SVG. Synapse 1.x with admin API enabled."
 metadata:
   author: Netresearch DTT GmbH
   version: "4.0.0"
   repository: https://github.com/netresearch/matrix-skill
-allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*) Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*) Bash(python3 skills/matrix-administration/scripts/*) Bash(dot:*) Read Write
+allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*) Bash(uv run skills/matrix-administration/scripts/*) Bash(dot:*) Read Write
 ---
 
 # Matrix Administration
@@ -21,21 +21,21 @@ Stdlib-only Python wrappers around the Synapse [Admin API](https://element-hq.gi
 ```bash
 S=skills/matrix-administration/scripts
 
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-fetch-rooms.py [--server :example.com]
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-rate-rooms.py --space '!home:srv' [--language de]
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-graph.py --space '!home:srv'
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-biggest-rooms.py [-n 10]
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-fetch-rooms.py [--server :example.com]
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-rate-rooms.py --space '!home:srv' [--language de]
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-graph.py --space '!home:srv'
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-biggest-rooms.py [-n 10]
 
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-join-room.py    '!room:srv' '@user:srv'
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-make-admin.py   '!room:srv' '@user:srv'
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-add-to-space.py '!room:srv' '!space:srv'
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-migrate-room.py '!room:srv' '@admin:srv' '!space:srv'   # DESTRUCTIVE, asks first
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-join-room.py    '!room:srv' '@user:srv'
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-make-admin.py   '!room:srv' '@user:srv'
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-add-to-space.py '!room:srv' '!space:srv'
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-migrate-room.py '!room:srv' '@admin:srv' '!space:srv'   # DESTRUCTIVE, asks first
 
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-deactivate-user.py   '@user:srv'   # DESTRUCTIVE
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-user-rooms.py        '@user:srv'
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-user-admin-rooms.py  '@user:srv'
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-room-member-flow.py  '!room:srv'
-python3 ${CLAUDE_SKILL_DIR}/scripts/synapse-search.py            '!room:srv' '@bot:srv' deploy
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-deactivate-user.py   '@user:srv'   # DESTRUCTIVE
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-user-rooms.py        '@user:srv'
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-user-admin-rooms.py  '@user:srv'
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-room-member-flow.py  '!room:srv'
+uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-search.py            '!room:srv' '@bot:srv' deploy
 ```
 
 ## Scripts

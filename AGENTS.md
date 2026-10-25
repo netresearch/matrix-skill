@@ -69,22 +69,22 @@ uv run $C/matrix-e2ee-verify.py --request DEVICE --timeout 180   # or --listen; 
 uv run $C/matrix-fetch-keys.py ROOM --sync-time 60
 uv run $C/matrix-key-backup.py --import-keys   # reuses the stored backup key
 
-# Health check (python3, not uv run) + harness verification
-python3 $C/matrix-doctor.py --install
+# Health check + harness verification
+uv run $C/matrix-doctor.py --install
 bash scripts/verify-harness.sh --status
 ```
 
 ## Commands — matrix-administration
 
-Stdlib-only Python; run via `python3`. See [`skills/matrix-administration/SKILL.md`](skills/matrix-administration/SKILL.md) for the full quick reference. Most-used:
+Stdlib-only Python; run via `uv run`. See [`skills/matrix-administration/SKILL.md`](skills/matrix-administration/SKILL.md) for the full quick reference. Most-used:
 
 ```bash
 S=skills/matrix-administration/scripts
-python3 $S/synapse-fetch-rooms.py                       # snapshot → rooms.json
-python3 $S/synapse-rate-rooms.py --space '!home:srv'    # health checks
-python3 $S/synapse-graph.py --space '!home:srv'         # → rooms.svg
-python3 $S/synapse-deactivate-user.py '@user:srv'       # DESTRUCTIVE
-python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # harden
+uv run $S/synapse-fetch-rooms.py                       # snapshot → rooms.json
+uv run $S/synapse-rate-rooms.py --space '!home:srv'    # health checks
+uv run $S/synapse-graph.py --space '!home:srv'         # → rooms.svg
+uv run $S/synapse-deactivate-user.py '@user:srv'       # DESTRUCTIVE
+uv run $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # harden
 ```
 
 ## Rules — matrix-administration
@@ -106,14 +106,14 @@ python3 $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # hard
 - **E2EE first**: Always use `*-e2ee.py` scripts. Only fall back to non-E2EE if the room is confirmed unencrypted.
 - **Room identifiers**: Scripts accept short name (`agent-work`), room alias (`#room:server`), or room ID (`!abc:server`). Use `matrix-rooms.py` to discover.
 - **Config**: `~/.config/matrix/config.json` — required: `homeserver`, `user_id`; optional: `access_token` (non-E2EE only; or `access_token_file`, or `MATRIX_ACCESS_TOKEN`), `bot_prefix`, `watch_rooms` (rooms the daemon logs).
-- **Running scripts**: `uv run` for everything except `matrix-doctor.py` which bootstraps deps via `python3`.
+- **Running scripts**: `uv run` for every script, `matrix-doctor.py` included; it picks Python 3.11 or later from the PEP 723 block.
 - **Bash `!` handling**: Prepend `set +H &&` before any command whose arguments contain `!` — history expansion corrupts otherwise.
 - **Secure defaults** (opt-ins in [SKILL.md](skills/matrix-communication/SKILL.md)): secrets come from `MATRIX_PASSWORD` / `MATRIX_RECOVERY_KEY` / `MATRIX_RECOVERY_PASSPHRASE` or a prompt, never argv (`--allow-secret-argument`); room keys go to verified devices only (`--trust-unverified-devices`, one message, nothing stored).
 - **Key backup**: Always include `--import-keys` when restoring; without it, keys are displayed but not stored.
 - **Device verification**: Use Element Desktop or Element Android — Element X has incompatible verification flows.
 - **Line buffering** is `True` for non-interactive (piped) contexts; output appears in real time.
 - **First E2EE run** takes ~2–5 s for initial key sync; subsequent runs are faster.
-- **Dependencies**: `python3` (3.11+), `uv`, Matrix homeserver access. E2EE additionally needs `libolm-dev` (apt) / `libolm-devel` (dnf) / `libolm` (brew).
+- **Dependencies**: `uv` (runs the scripts on Python 3.11 or later), Matrix homeserver access. E2EE additionally needs `libolm-dev` (apt) / `libolm-devel` (dnf) / `libolm` (brew).
 
 ## Testing
 

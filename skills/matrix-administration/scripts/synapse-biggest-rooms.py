@@ -1,6 +1,10 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Print the largest rooms on the homeserver by Synapse-estimated DB size.
 
 Calls ``GET /_synapse/admin/v1/statistics/database/rooms`` and looks up the

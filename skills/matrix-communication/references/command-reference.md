@@ -100,13 +100,17 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --import-keys
 ## Health check
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
-python3 ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --offline
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --offline
 ```
 
-`matrix-doctor.py` runs under `python3`, not `uv run` — it bootstraps the
-dependencies the others need. `--offline` skips the homeserver call, and the
-token row then reads `not verified` rather than OK.
+`matrix-doctor.py` runs under `uv run` like the other scripts but declares no
+dependency, so it starts on hosts where nio's olm binding cannot be built.
+Its `matrix_nio` row asks uv to build the environment the E2EE scripts get
+(`matrix-nio[e2e]<0.26` on Python 3.11 or later) and shows uv's error when
+that fails. `--offline` skips the homeserver call, and the token row then
+reads `not verified` rather than OK; the `matrix_nio` probe then runs
+`uv run --offline` and uses only what uv has cached.
 
 ## Script selection
 

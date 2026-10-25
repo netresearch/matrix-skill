@@ -186,7 +186,7 @@ uv run $C/matrix-resolve.py "#myroom:matrix.org"
 ### Check the Setup
 
 ```bash
-python3 $C/matrix-doctor.py          # verifies every credential against the homeserver
+uv run $C/matrix-doctor.py           # verifies every credential against the homeserver
 ```
 
 ## E2EE Support
@@ -273,14 +273,14 @@ Quick start:
 
 ```bash
 # Snapshot all rooms (the admin token comes from ~/.config/matrix/config.json)
-python3 skills/matrix-administration/scripts/synapse-fetch-rooms.py
+uv run skills/matrix-administration/scripts/synapse-fetch-rooms.py
 
 # Rate them in German, treating !home:example.com as our home space
-python3 skills/matrix-administration/scripts/synapse-rate-rooms.py \
+uv run skills/matrix-administration/scripts/synapse-rate-rooms.py \
     --language de --space '!home:example.com'
 
 # Render a Graphviz SVG (requires the `dot` binary)
-python3 skills/matrix-administration/scripts/synapse-graph.py --space '!home:example.com'
+uv run skills/matrix-administration/scripts/synapse-graph.py --space '!home:example.com'
 ```
 
 Full reference and safety guide live in [`skills/matrix-administration/`](skills/matrix-administration/).
@@ -321,7 +321,7 @@ matrix-skill/
 │   │   ├── scripts/
 │   │   │   ├── _lib/                    # stdlib-only shared helpers
 │   │   │   ├── matrix-create-room.py    # Create a room
-│   │   │   ├── matrix-doctor.py         # Health check (python3, not uv run)
+│   │   │   ├── matrix-doctor.py         # Health check
 │   │   │   ├── matrix-download-e2ee.py  # Download attachments (E2EE)
 │   │   │   ├── matrix-e2ee-setup.py     # Create or remove the agent device
 │   │   │   ├── matrix-e2ee-verify.py    # SAS emoji verification
