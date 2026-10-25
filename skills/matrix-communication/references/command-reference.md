@@ -109,7 +109,8 @@ dependency, so it starts on hosts where nio's olm binding cannot be built.
 Its `matrix_nio` row asks uv to build the environment the E2EE scripts get
 (`matrix-nio[e2e]<0.26` on Python 3.11 or later) and shows uv's error when
 that fails. `--offline` skips the homeserver call, and the token row then
-reads `not verified` rather than OK.
+reads `not verified` rather than OK; the `matrix_nio` probe then runs
+`uv run --offline` and uses only what uv has cached.
 
 ## Script selection
 

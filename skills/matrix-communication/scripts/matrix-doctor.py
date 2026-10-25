@@ -92,14 +92,15 @@ else:
 """
 
 
-def check_matrix_nio_e2ee() -> tuple[bool, str]:
+def check_matrix_nio_e2ee(offline: bool = False) -> tuple[bool, str]:
     """Check that matrix-nio with E2EE support is usable by the E2EE scripts.
 
     Those scripts declare NIO_REQUIREMENT in their PEP 723 block and run under
     `uv run`, so with uv on PATH the doctor builds that same environment in a
     subprocess. The doctor itself declares no dependency: building nio's olm
     binding needs libolm and a C toolchain on some hosts, and the doctor has to
-    start on exactly those hosts to say so.
+    start on exactly those hosts to say so. With `offline`, uv may use only its
+    cache, so `--offline` keeps the whole run off the network.
     """
     if shutil.which("uv"):
         cmd = [
@@ -107,6 +108,7 @@ def check_matrix_nio_e2ee() -> tuple[bool, str]:
             "run",
             "--no-project",
             "--quiet",
+            *(["--offline"] if offline else []),
             "--python",
             ">=3.11",
             "--with",
@@ -470,7 +472,7 @@ def main():
         )
 
     # Check matrix-nio
-    nio_ok, nio_msg = check_matrix_nio_e2ee()
+    nio_ok, nio_msg = check_matrix_nio_e2ee(offline=args.offline)
     checks["matrix_nio"]["ok"] = nio_ok
     checks["matrix_nio"]["message"] = nio_msg
 
@@ -507,7 +509,7 @@ def main():
         success, messages = install_dependencies(pip_cmd, args.quiet)
         if success:
             # Re-check after install
-            nio_ok, nio_msg = check_matrix_nio_e2ee()
+            nio_ok, nio_msg = check_matrix_nio_e2ee(offline=args.offline)
             checks["matrix_nio"]["ok"] = nio_ok
             checks["matrix_nio"]["message"] = nio_msg
             checks["install_messages"] = messages

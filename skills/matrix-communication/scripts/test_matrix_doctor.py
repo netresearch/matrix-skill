@@ -335,6 +335,13 @@ class CheckMatrixNioTests(unittest.TestCase):
         self.assertIs(ok, False)
         self.assertIn("No interpreter found for Python >=3.11", message)
 
+    def test_offline_keeps_uv_off_the_network(self):
+        self.stub_uv("ok 0.25.2", "", 0)
+        doctor.check_matrix_nio_e2ee(offline=True)
+        self.assertIn("--offline", self.argv_log.read_text().splitlines())
+        doctor.check_matrix_nio_e2ee()
+        self.assertNotIn("--offline", self.argv_log.read_text().splitlines())
+
     def test_nio_without_olm_fails(self):
         self.stub_uv("no-e2ee 0.25.2", "", 0)
         ok, message = doctor.check_matrix_nio_e2ee()
