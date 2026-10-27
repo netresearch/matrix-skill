@@ -158,8 +158,18 @@ find_skill_md() {
     if [[ -n "$SKILL_MD" ]]; then
         return
     fi
-    # Find the first SKILL.md under skills/
-    SKILL_MD=$(find skills -maxdepth 2 -name "SKILL.md" -type f 2>/dev/null | head -1 || true)
+    # A plugin with several skills names itself after one of them; that
+    # skill's SKILL.md is the one plugin.json is checked against. Without
+    # it, the first SKILL.md `find` returns is directory order, not a choice.
+    local plugin_name=""
+    if [[ -f .claude-plugin/plugin.json ]]; then
+        plugin_name=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json')).get('name',''))" 2>/dev/null || true)
+    fi
+    if [[ -n "$plugin_name" && -f "skills/${plugin_name}/SKILL.md" ]]; then
+        SKILL_MD="skills/${plugin_name}/SKILL.md"
+        return
+    fi
+    SKILL_MD=$(find skills -maxdepth 2 -name "SKILL.md" -type f 2>/dev/null | sort | head -1 || true)
 }
 
 check_skill_md_exists() {
