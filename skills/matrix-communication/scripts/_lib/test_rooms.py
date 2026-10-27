@@ -20,7 +20,7 @@ sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != HERE]
 sys.path.insert(0, os.path.dirname(HERE))
 
 import unittest
-from unittest import mock
+import unittest.mock
 
 from _lib import rooms
 
@@ -47,7 +47,7 @@ def fake_server(direct, joined, membership):
 
 class FindDirectRoomTests(unittest.TestCase):
     def find(self, direct, joined, membership):
-        with mock.patch.object(
+        with unittest.mock.patch.object(
             rooms, "matrix_request", fake_server(direct, joined, membership)
         ):
             return rooms.find_direct_room(CONFIG, JANE)
