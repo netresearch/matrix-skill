@@ -201,6 +201,22 @@ class MarkdownToHtmlLinkTests(unittest.TestCase):
         # Sanity: no leftover bullet asterisks (would mean inline ate the bullet)
         self.assertNotIn("<li>*", html)
 
+    def test_parentheses_inside_the_url_stay_in_the_href(self):
+        """Regression: a JQL filter ending in `currentUser()` was cut at the
+        first `)`, so the href ended in `currentUser(` and a bare `)` followed
+        the anchor."""
+        url = (
+            "https://jira.example.com/issues/?jql=status%3D%22Awaiting%20approval"
+            "%22%20and%20assignee%3DcurrentUser()"
+        )
+        html = markdown_to_html(f"[My open approvals]({url})")
+        self.assertIn(f'<a href="{url}">My open approvals</a>', html)
+        self.assertNotIn("</a>)", html)
+
+    def test_link_inside_parentheses_keeps_the_closing_paren_outside(self):
+        html = markdown_to_html("note ([docs](https://example.com/a_(b)))")
+        self.assertIn('(<a href="https://example.com/a_(b)">docs</a>)', html)
+
 
 class MentionTests(unittest.TestCase):
     """Regression for #90: a plain @name notifies nobody.

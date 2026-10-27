@@ -9,6 +9,10 @@ All functions use ONLY stdlib.
 import html as _html
 import re
 
+# `[text](url)` where the URL may hold balanced parentheses one level deep,
+# such as JQL's `currentUser()`; `[^)]+` would end the URL at the first `)`.
+_MD_LINK_RE = re.compile(r"\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+)\)")
+
 
 def shorten_service_urls(text: str) -> str:
     """Convert service URLs to shorter linked text.
@@ -31,7 +35,7 @@ def shorten_service_urls(text: str) -> str:
         protected.append(match.group(0))
         return f"\x00MDLINK{idx}\x00"
 
-    text = re.sub(r"\[[^\]]+\]\([^)]+\)", _protect, text)
+    text = _MD_LINK_RE.sub(_protect, text)
 
     # Jira URLs: https://jira.*/browse/PROJ-123 or https://*.atlassian.net/browse/PROJ-123
     text = re.sub(
@@ -133,7 +137,7 @@ def markdown_to_html(text: str) -> str:
 
     # Markdown links: [text](url) -> <a href="url">text</a>, for web, mail and
     # matrix URLs only; any other scheme keeps the link text without a link.
-    html = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _markdown_link, html)
+    html = _MD_LINK_RE.sub(_markdown_link, html)
 
     # Matrix user mentions: @user:server -> clickable pill
     # Only match if not already inside a link
