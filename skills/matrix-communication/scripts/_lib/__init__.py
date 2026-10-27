@@ -72,6 +72,7 @@ from _lib.roomlog import (
 
 # Room operations
 from _lib.rooms import (
+    find_direct_room,
     find_room_by_name,
     find_room_in_nio_client,
     get_room_info,
@@ -103,6 +104,7 @@ __all__ = [
     "daemon_request",
     "delete_credentials",
     "explain_store_error",
+    "find_direct_room",
     "find_room_by_name",
     "find_room_in_nio_client",
     "format_timestamp",
