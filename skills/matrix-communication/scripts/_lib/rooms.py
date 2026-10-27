@@ -206,6 +206,67 @@ def find_room_in_nio_client(client_rooms: dict, search_term: str) -> str | None:
     return None
 
 
+def find_direct_room(config: dict, user_id: str) -> str:
+    """Find the direct-message room shared with `user_id`.
+
+    Direct chats rarely carry a name, so a name search does not find them.
+    The account data `m.direct` maps each user to the rooms marked as
+    direct with them; it still lists rooms either side has left. A room
+    counts only when this account is joined to it and `user_id` is joined
+    or invited. Nothing is created: no usable room is an error.
+
+    Args:
+        config: Matrix config with homeserver, user_id and access_token
+        user_id: Full Matrix ID of the other person (@user:server)
+
+    Returns:
+        Room ID of the single usable direct room
+
+    Raises:
+        ValueError if there is no usable direct room, or more than one
+    """
+    direct = matrix_request(
+        config,
+        "GET",
+        f"/user/{path_segment(config['user_id'])}/account_data/m.direct",
+    )
+    if "error" in direct and direct.get("errcode") != "M_NOT_FOUND":
+        raise ValueError(f"Could not read m.direct: {direct['error']}")
+    listed = direct.get(user_id, [])
+    if not listed:
+        raise ValueError(f"No direct chat with {user_id} in m.direct")
+
+    joined_rooms = matrix_request(config, "GET", "/joined_rooms")
+    if "error" in joined_rooms:
+        raise ValueError(f"Could not list joined rooms: {joined_rooms['error']}")
+    joined = set(joined_rooms.get("joined_rooms", []))
+
+    usable = []
+    for room_id in listed:
+        if room_id not in joined:
+            continue
+        member = matrix_request(
+            config,
+            "GET",
+            f"/rooms/{path_segment(room_id)}/state/m.room.member/"
+            f"{path_segment(user_id)}",
+        )
+        if member.get("membership") in ("join", "invite"):
+            usable.append(room_id)
+
+    if len(usable) == 1:
+        return usable[0]
+    if not usable:
+        raise ValueError(
+            f"No usable direct chat with {user_id}: m.direct lists "
+            f"{', '.join(listed)}, but you or they have left each of them"
+        )
+    raise ValueError(
+        f"Several direct chats with {user_id}: {', '.join(usable)}. "
+        "Pass the room ID instead of --to"
+    )
+
+
 def resolve_room_cli(
     config: dict, room_input: str, json_out: bool = False, debug: bool = False
 ) -> str:

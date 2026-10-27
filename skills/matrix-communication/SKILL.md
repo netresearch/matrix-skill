@@ -45,6 +45,7 @@ Send, read and download media in Matrix rooms. **Always use `*-e2ee.py`.**
 ```bash
 set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "message"
 set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "text" --mention '@user:server'   # only this notifies
+set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py --to '@user:server' "message"   # existing direct chat
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 10 [--json]
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py [--search ops]
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watchd.py --start | --status | --stop

@@ -23,7 +23,16 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "is deploying" --emo
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "📦 Release: …" --notice
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "reply" --thread '$rootEventId'
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "reply" --reply '$eventId'
+set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py --to '@user:server' "message"
 ```
+
+- `--to @user:server` replaces `ROOM` and sends to the existing direct chat
+  with that person. Direct chats usually have no name, so neither a room name
+  nor `matrix-rooms.py --search` finds them; `--to` reads the account data
+  `m.direct` instead. That list keeps rooms after a leave, so a room counts
+  only when you are joined and the other person is joined or invited. No
+  usable room, or more than one, is an error that names the rooms — `--to`
+  never creates a room, and with several it does not guess: pass the room ID.
 
 - `--mention` is what notifies. A plain `@name` in the text notifies nobody —
   only `m.mentions` does. `--mention-room` for `@room`.

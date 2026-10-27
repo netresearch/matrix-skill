@@ -46,7 +46,7 @@ All scripts live in `skills/matrix-communication/scripts/`. Use `uv run` unless 
 ```bash
 C=skills/matrix-communication/scripts
 
-# Send (always prefer E2EE) — plain | --thread | --reply | --emote | --notice | --no-prefix
+# Send (always prefer E2EE) — plain | --thread | --reply | --emote | --notice | --no-prefix | --to '@user:server' (direct chat, replaces ROOM)
 set +H && uv run $C/matrix-send-e2ee.py ROOM "message"
 # unattended automation (m.notice — no auto-reply loops; mutex with --emote):
 set +H && uv run $C/matrix-send-e2ee.py ROOM "📦 Release: …" --notice

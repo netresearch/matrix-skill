@@ -14,6 +14,7 @@ Requires libolm system library:
 
 Usage:
     matrix-send-e2ee.py ROOM MESSAGE [OPTIONS]
+    matrix-send-e2ee.py --to @user:server MESSAGE [OPTIONS]
     matrix-send-e2ee.py --help
 
 Arguments:
@@ -30,6 +31,8 @@ Options:
                       CI summaries, scheduled digests). Mutually exclusive with --emote.
     --thread EVENT    Reply in thread (event ID of thread root)
     --reply EVENT     Reply to message (event ID to reply to)
+    --to USER         Send to the existing direct chat with USER (@user:server)
+                      instead of ROOM; never creates a room
     --no-prefix       Don't add bot_prefix from config
     --json            Output as JSON
     --quiet           Minimal output
@@ -48,6 +51,9 @@ Examples:
 
     # Send by alias
     matrix-send-e2ee.py '#general:matrix.org' "Hello everyone!"
+
+    # Send to the direct chat with a person
+    matrix-send-e2ee.py --to '@jane:matrix.org' "Hello Jane!"
 """
 
 import asyncio
@@ -65,6 +71,7 @@ from _lib import (
     check_e2ee_dependencies,
     clean_message,
     daemon_request,
+    find_direct_room,
     find_room_in_nio_client,
     get_store_path,
     inject_pills,
@@ -373,14 +380,46 @@ async def send_message_e2ee(
         await client.close()
 
 
+def resolve_direct_target(config: dict, user_id: str, json_out: bool) -> str:
+    """Return the room ID of the direct chat with `user_id`, or exit 1."""
+    stored_creds = load_credentials()
+    if stored_creds and stored_creds.get("user_id") == config["user_id"]:
+        token = stored_creds["access_token"]
+    else:
+        token = config.get("access_token")
+    try:
+        if not token:
+            raise ValueError(
+                "No credentials found. Add 'access_token' to config, "
+                "or run matrix-e2ee-setup.py"
+            )
+        return find_direct_room({**config, "access_token": token}, user_id)
+    except ValueError as e:
+        if json_out:
+            print(json.dumps({"error": str(e)}))
+        else:
+            print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     import argparse
 
     parser = argparse.ArgumentParser(
         description="Send an E2EE-capable message to a Matrix room"
     )
-    parser.add_argument("room", help="Room ID (!id), alias (#room:server), or name")
+    parser.add_argument(
+        "room",
+        nargs="?",
+        help="Room ID (!id), alias (#room:server), or name. Omit with --to",
+    )
     parser.add_argument("message", help="Message content")
+    parser.add_argument(
+        "--to",
+        metavar="@user:server",
+        help="Send to the existing direct chat with this user instead of ROOM. "
+        "Found through m.direct; never creates a room",
+    )
     msgtype_group = parser.add_mutually_exclusive_group()
     msgtype_group.add_argument(
         "--emote", action="store_true", help="Send as /me action (m.emote msgtype)"
@@ -422,17 +461,26 @@ def main():
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Show debug info")
 
-    args = parser.parse_args()
+    # Intermixed, so ROOM and MESSAGE are told apart around --to wherever
+    # it stands; plain parse_args would fill MESSAGE first.
+    args = parser.parse_intermixed_args()
 
     prefer_ipv4()
     if not args.debug:
         suppress_nio_logging()
 
+    if (args.room is None) == (args.to is None):
+        parser.error("give exactly one of ROOM or --to @user:server")
+
     config = load_config(require_user_id=True)
 
     # Clean message from bash escaping artifacts
     message = clean_message(args.message)
-    room_input = clean_message(args.room)
+    if args.to:
+        room_input = resolve_direct_target(config, args.to, args.json)
+        args.room = args.to  # the confirmation names the person, not the ID
+    else:
+        room_input = clean_message(args.room)
 
     # Room resolution: IDs and aliases are passed through directly.
     # Plain names are resolved AFTER sync (in the async function) using
