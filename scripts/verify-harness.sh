@@ -152,15 +152,16 @@ check_docs_exists() {
     fi
 }
 
-# Locate the SKILL.md (searches skills/**/SKILL.md)
+# find_skill_md — set SKILL_MD to the SKILL.md the checks compare against.
+# A plugin with several skills names itself after one of them, so
+# skills/<plugin.json name>/SKILL.md wins when it exists; otherwise the first
+# skills/*/SKILL.md in sorted order (find's own order is directory order).
+# Sets SKILL_MD to "" when skills/ holds none. Runs once; later calls reuse it.
 SKILL_MD=""
 find_skill_md() {
     if [[ -n "$SKILL_MD" ]]; then
         return
     fi
-    # A plugin with several skills names itself after one of them; that
-    # skill's SKILL.md is the one plugin.json is checked against. Without
-    # it, the first SKILL.md `find` returns is directory order, not a choice.
     local plugin_name=""
     if [[ -f .claude-plugin/plugin.json ]]; then
         plugin_name=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json')).get('name',''))" 2>/dev/null || true)
