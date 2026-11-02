@@ -104,7 +104,7 @@ uv run $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # harde
 - **Mentions need `--mention`**: a plain `@name` notifies nobody, only `m.mentions` does. `--mention-room` for `@room`.
 - **Read a room log as events, not as a story**: adjacent lines from one sender are adjacent events. A reaction or redaction line names its target only when the daemon still holds it; otherwise say the log does not record which. See [agent-governance.md](skills/matrix-communication/references/agent-governance.md), "Reading a room log".
 - **E2EE first**: Always use `*-e2ee.py` scripts. Only fall back to non-E2EE if the room is confirmed unencrypted.
-- **Room identifiers**: Scripts accept short name (`agent-work`), room alias (`#room:server`), or room ID (`!abc:server`). Use `matrix-rooms.py` to discover.
+- **Room identifiers**: Scripts accept short name (`agent-work`), room alias (`#room:server`), room ID (`!abc:server`), or a `https://matrix.to/#/…` link. A room without a name (a direct chat) goes by the name Element shows: the other person's display name or user ID. Use `matrix-rooms.py` to discover.
 - **Config**: `~/.config/matrix/config.json` — required: `homeserver`, `user_id`; optional: `access_token` (non-E2EE only; or `access_token_file`, or `MATRIX_ACCESS_TOKEN`), `bot_prefix`, `watch_rooms` (rooms the daemon logs).
 - **Running scripts**: `uv run` for every script, `matrix-doctor.py` included; it picks Python 3.11 or later from the PEP 723 block.
 - **Bash `!` handling**: Prepend `set +H &&` before any command whose arguments contain `!` — history expansion corrupts otherwise.

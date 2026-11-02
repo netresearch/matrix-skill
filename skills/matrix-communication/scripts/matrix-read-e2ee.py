@@ -46,6 +46,7 @@ from _lib import (
     get_store_path,
     load_config,
     load_credentials,
+    normalize_room_input,
     prefer_ipv4,
     restore_login_checked,
     suppress_nio_logging,
@@ -348,7 +349,7 @@ def main():
     config = load_config(require_user_id=True)
 
     # Room name resolution happens post-sync inside the async function
-    room_input = clean_message(args.room)
+    room_input = normalize_room_input(clean_message(args.room))
     room = room_input
 
     messages = asyncio.run(

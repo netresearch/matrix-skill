@@ -36,6 +36,7 @@ from _lib import (
     format_timestamp,
     load_config,
     matrix_request,
+    normalize_room_input,
     resolve_room_alias,
 )
 
@@ -107,7 +108,7 @@ def main():
     config = load_config()
 
     # Clean and resolve room
-    room_input = clean_message(args.room)
+    room_input = normalize_room_input(clean_message(args.room))
     room_id = room_input
 
     if room_input.startswith("!"):

@@ -37,6 +37,7 @@ from _lib import (
     get_store_path,
     load_config,
     load_credentials,
+    normalize_room_input,
     prefer_ipv4,
     restore_login_checked,
     suppress_nio_logging,
@@ -225,7 +226,7 @@ def main():
         path = asyncio.run(
             download_media(
                 config,
-                args.room,
+                normalize_room_input(args.room),
                 args.event_id,
                 output_dir=args.output,
                 filename=args.filename,

@@ -7,8 +7,12 @@ Every script in this skill, with the flags that are not obvious from `--help`.
 `SKILL.md` carries only the handful used in almost every session; this is the
 full surface.
 
-`ROOM` is a short name (`test`), a room ID (`!abc:server`) or an alias
-(`#room:server`) everywhere below.
+`ROOM` is a short name (`test`), a room ID (`!abc:server`), an alias
+(`#room:server`) or a `https://matrix.to/#/…` link copied from Element
+everywhere below. A room without a name — a direct chat, usually — goes by
+the name Element shows for it: the other person's display name, or their
+user ID (`@jane:server`). Resolving such names costs one request per unnamed
+room on the paths that do not sync.
 
 **Prepend `set +H &&` whenever an argument contains `!`** — bash history
 expansion mangles it otherwise, and the corruption is silent.
@@ -27,12 +31,13 @@ set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py --to '@user:ser
 ```
 
 - `--to @user:server` replaces `ROOM` and sends to the existing direct chat
-  with that person. Direct chats usually have no name, so neither a room name
-  nor `matrix-rooms.py --search` finds them; `--to` reads the account data
-  `m.direct` instead. That list keeps rooms after a leave, so a room counts
-  only when you are joined and the other person is joined or invited. No
-  usable room, or more than one, is an error that names the rooms — `--to`
-  never creates a room, and with several it does not guess: pass the room ID.
+  with that person. Where `ROOM` finds a direct chat by the name it is shown
+  under, `--to` reads the account data `m.direct`, which marks it as direct
+  even when it has a name or the person is in other rooms with you. That list
+  keeps rooms after a leave, so a room counts only when you are joined and
+  the other person is joined or invited. No usable room, or more than one, is
+  an error that names the rooms — `--to` never creates a room, and with
+  several it does not guess: pass the room ID.
 
 - `--mention` is what notifies. A plain `@name` in the text notifies nobody —
   only `m.mentions` does. `--mention-room` for `@room`.
@@ -75,6 +80,7 @@ The daemon owns the store for its whole run; everything else routes through it.
 ```bash
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py --search ops
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py --lookup "Jane Doe"   # direct chat by name
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-resolve.py "#room:server"
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-create-room.py "Room Name" --alias localpart --invite '@user:server'
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-invite.py ROOM '@user:server'

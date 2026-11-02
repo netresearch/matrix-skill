@@ -9,8 +9,103 @@ All functions use ONLY stdlib.
 import json
 import sys
 import urllib.parse
+from collections import Counter
 
+from _lib.formatting import MATRIX_TO
 from _lib.http import matrix_request, path_segment
+
+# nio's MatrixRoom.group_name() lists at most this many members by name.
+GROUP_NAME_HEROES = 5
+
+
+def normalize_room_input(room_input: str) -> str:
+    """Turn a matrix.to permalink into the room ID or alias it points at.
+
+    Element's "Copy link" gives `https://matrix.to/#/!room:server?via=...`,
+    `https://matrix.to/#/#alias:server`, or for a message
+    `https://matrix.to/#/!room:server/$event?via=...`, sometimes
+    percent-encoded. The room part is returned decoded; the event part and
+    the query are dropped. Anything that is not such a link is returned
+    unchanged.
+    """
+    if not room_input.startswith(MATRIX_TO):
+        return room_input
+    target = room_input[len(MATRIX_TO) :].split("?", 1)[0].split("/", 1)[0]
+    return urllib.parse.unquote(target)
+
+
+def group_name(names: list[str]) -> str:
+    """Name a room without m.room.name or alias after its members.
+
+    Same wording as matrix-nio's MatrixRoom.group_name(), so the HTTP path
+    and the nio path give a direct chat the same name: the other person's
+    display name, "A and B", "A, B and 3 others", or "Empty Room".
+    """
+    names = sorted(names, key=str.lower)
+    shown = names[:GROUP_NAME_HEROES]
+    others = len(names) - len(shown)
+    if not shown:
+        return "Empty Room"
+    if others:
+        return f"{', '.join(shown)} and {others} other{'' if others == 1 else 's'}"
+    if len(shown) == 1:
+        return shown[0]
+    return f"{', '.join(shown[:-1])} and {shown[-1]}"
+
+
+def get_room_members(config: dict, room_id: str) -> dict | None:
+    """Return the joined and invited members of a room except this account.
+
+    One request. Invited members count because a direct chat whose partner
+    has not accepted yet is still the chat with that person - nio's
+    room.users holds them too. A display name that two members share, this
+    account included, becomes "Name (@user:server)", as nio's user_name()
+    and the spec's room-name rules have it.
+
+    Returns:
+        Dict of user ID -> display name (the user ID when none is set),
+        or None when the server refused the request
+    """
+    result = matrix_request(
+        config,
+        "GET",
+        f"/rooms/{path_segment(room_id)}/members?not_membership=leave",
+    )
+    if "error" in result:
+        return None
+    display_names = {}
+    for event in result.get("chunk", []):
+        user_id = event.get("state_key")
+        content = event.get("content", {})
+        if not user_id or content.get("membership") not in ("join", "invite"):
+            continue
+        display_names[user_id] = content.get("displayname")
+    taken = Counter(name or user_id for user_id, name in display_names.items())
+    members = {}
+    for user_id, name in display_names.items():
+        if user_id == config.get("user_id"):
+            continue
+        if name and taken[name] > 1:
+            name = f"{name} ({user_id})"
+        members[user_id] = name or user_id
+    return members
+
+
+def room_matches(room: dict, search_lower: str, exact: bool = False) -> bool:
+    """Whether a room dict from list_joined_rooms() matches a search term.
+
+    Matches the room name, the alias, and - for a room named after its
+    members - the members' user IDs, so `@jane:server` finds the direct
+    chat with Jane. Named rooms carry no member list and match as before.
+    """
+    members = [m.lower() for m in room.get("members", [])]
+    if exact:
+        return room["name"].lower() == search_lower or search_lower in members
+    return (
+        search_lower in room["name"].lower()
+        or search_lower in (room.get("alias") or "").lower()
+        or any(search_lower in m for m in members)
+    )
 
 
 def resolve_room_alias(config: dict, alias: str) -> str:
@@ -65,11 +160,16 @@ def get_room_info(config: dict, room_id: str) -> dict:
 def list_joined_rooms(config: dict) -> list:
     """List all joined rooms with names and aliases.
 
+    A room with neither m.room.name nor an alias - a direct chat, usually -
+    is named after its members the way Element and nio name it, which costs
+    one more request for each such room.
+
     Args:
         config: Matrix config with homeserver and access_token
 
     Returns:
-        List of dicts with room_id, name, and alias keys
+        List of dicts with room_id, name, and alias keys; a room named after
+        its members also has `members`, the user IDs it was named from
     """
     result = matrix_request(config, "GET", "/joined_rooms")
     if "error" in result:
@@ -78,8 +178,21 @@ def list_joined_rooms(config: dict) -> list:
     rooms = []
     for room_id in result.get("joined_rooms", []):
         info = get_room_info(config, room_id)
-        display_name = info["name"] or info["alias"] or room_id
-        rooms.append({"room_id": room_id, "name": display_name, "alias": info["alias"]})
+        room = {
+            "room_id": room_id,
+            "name": info["name"] or info["alias"],
+            "alias": info["alias"],
+        }
+        if not room["name"]:
+            members = get_room_members(config, room_id)
+            if members is None:
+                # Members unreadable: keep the bare ID rather than call a
+                # room with people in it "Empty Room".
+                room["name"] = room_id
+            else:
+                room["name"] = group_name(list(members.values()))
+                room["members"] = sorted(members)
+        rooms.append(room)
 
     return rooms
 
@@ -120,19 +233,25 @@ def find_room_by_name(config: dict, search_term: str) -> tuple[str | None, list]
             if alias_name.lower() == search_lower:
                 return room["room_id"], [room]
 
-    # Try exact name match
-    name_matches = [r for r in rooms if r["name"].lower() == search_lower]
+    # Try exact name match (for a room named after its members, also a
+    # member's user ID)
+    name_matches = [r for r in rooms if room_matches(r, search_lower, exact=True)]
     if len(name_matches) == 1:
         room = name_matches[0]
         if room.get("alias"):
             # Room has an alias — well-identified, return directly
             return room["room_id"], name_matches
         # Room has no alias — check if other rooms have names containing
-        # the search term, which suggests the user may want a different room
+        # the search term, which suggests the user may want a different room.
+        # Only names someone gave a room count here: a name made up from
+        # members ("Jane Doe and Max") is not a competing room name, and
+        # before such names existed these rooms never competed either.
         alternatives = [
             r
             for r in rooms
-            if r not in name_matches and search_lower in r["name"].lower()
+            if r not in name_matches
+            and "members" not in r
+            and search_lower in r["name"].lower()
         ]
         if alternatives:
             return None, name_matches + alternatives
@@ -141,13 +260,7 @@ def find_room_by_name(config: dict, search_term: str) -> tuple[str | None, list]
         return None, name_matches
 
     # Try partial match
-    matches = []
-    for room in rooms:
-        if search_lower in room["name"].lower():
-            matches.append(room)
-        elif room.get("alias") and search_lower in room["alias"].lower():  # noqa: SIM102  # kept nested for readability of partial-match dedup
-            if room not in matches:
-                matches.append(room)
+    matches = [r for r in rooms if room_matches(r, search_lower)]
 
     if len(matches) == 1:
         return matches[0]["room_id"], matches
@@ -170,6 +283,14 @@ def find_room_in_nio_client(client_rooms: dict, search_term: str) -> str | None:
     """
     search_lower = search_term.lower()
 
+    def member_ids(room) -> list[str]:
+        # Like list_joined_rooms(): only a room named after its members
+        # matches on their user IDs; named rooms match as before.
+        if room.name or room.canonical_alias:
+            return []
+        own = getattr(room, "own_user_id", None)
+        return [u.lower() for u in room.users if u != own]
+
     # Exact alias match
     for room_id, room in client_rooms.items():
         if room.canonical_alias and room.canonical_alias.lower() == search_lower:
@@ -182,11 +303,13 @@ def find_room_in_nio_client(client_rooms: dict, search_term: str) -> str | None:
             if alias_name.lower() == search_lower:
                 return room_id
 
-    # Exact display name match
+    # Exact display name match (for a room named after its members, also a
+    # member's user ID)
     exact_matches = [
         room_id
         for room_id, room in client_rooms.items()
-        if room.display_name and room.display_name.lower() == search_lower
+        if (room.display_name and room.display_name.lower() == search_lower)
+        or search_lower in member_ids(room)
     ]
     if len(exact_matches) == 1:
         return exact_matches[0]
@@ -199,6 +322,7 @@ def find_room_in_nio_client(client_rooms: dict, search_term: str) -> str | None:
         for room_id, room in client_rooms.items()
         if search_lower in (room.display_name or "").lower()
         or search_lower in (room.canonical_alias or "").lower()
+        or any(search_lower in u for u in member_ids(room))
     ]
     if len(partial_matches) == 1:
         return partial_matches[0]
@@ -209,11 +333,13 @@ def find_room_in_nio_client(client_rooms: dict, search_term: str) -> str | None:
 def find_direct_room(config: dict, user_id: str) -> str:
     """Find the direct-message room shared with `user_id`.
 
-    Direct chats rarely carry a name, so a name search does not find them.
-    The account data `m.direct` maps each user to the rooms marked as
-    direct with them; it still lists rooms either side has left. A room
-    counts only when this account is joined to it and `user_id` is joined
-    or invited. Nothing is created: no usable room is an error.
+    A name search finds a direct chat by the other person's name, but not
+    when the chat has a name of its own or when the person shares unnamed
+    rooms with this account besides it. The account data `m.direct` maps
+    each user to the rooms marked as direct with them; it still lists rooms
+    either side has left. A room counts only when this account is joined to
+    it and `user_id` is joined or invited. Nothing is created: no usable
+    room is an error.
 
     Args:
         config: Matrix config with homeserver, user_id and access_token
@@ -270,7 +396,7 @@ def find_direct_room(config: dict, user_id: str) -> str:
 def resolve_room_cli(
     config: dict, room_input: str, json_out: bool = False, debug: bool = False
 ) -> str:
-    """Resolve a ROOM CLI argument (ID, alias, or name) to a room ID.
+    """Resolve a ROOM CLI argument (ID, alias, name, or matrix.to link).
 
     Shared by scripts that take a ROOM positional argument, so each script
     doesn't reimplement the same ID/alias/name resolution order and error
@@ -278,6 +404,7 @@ def resolve_room_cli(
     room cannot be resolved — callers can assume a valid room ID is
     returned or the process has already ended.
     """
+    room_input = normalize_room_input(room_input)
     if room_input.startswith("!"):
         if debug:
             print(f"Using room ID directly: {room_input}", file=sys.stderr)

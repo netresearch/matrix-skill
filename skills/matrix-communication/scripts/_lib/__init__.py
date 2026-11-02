@@ -77,8 +77,10 @@ from _lib.rooms import (
     find_room_in_nio_client,
     get_room_info,
     list_joined_rooms,
+    normalize_room_input,
     resolve_room_alias,
     resolve_room_cli,
+    room_matches,
 )
 
 # Device trust for encrypted sends
@@ -121,6 +123,7 @@ __all__ = [
     "matrix_request",
     "mention_pill",
     "next_seq",
+    "normalize_room_input",
     "path_segment",
     "prefer_ipv4",
     "private_dir",
@@ -130,6 +133,7 @@ __all__ = [
     "resolve_room_alias",
     "resolve_room_cli",
     "restore_login_checked",
+    "room_matches",
     "room_slug",
     "rooms_dir",
     "running_daemon_pid",
