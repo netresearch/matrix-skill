@@ -9,6 +9,7 @@ All functions use ONLY stdlib.
 import json
 import sys
 import urllib.parse
+from collections import Counter
 
 from _lib.formatting import MATRIX_TO
 from _lib.http import matrix_request, path_segment
@@ -52,12 +53,14 @@ def group_name(names: list[str]) -> str:
     return f"{', '.join(shown[:-1])} and {shown[-1]}"
 
 
-def get_room_members(config: dict, room_id: str) -> dict:
+def get_room_members(config: dict, room_id: str) -> dict | None:
     """Return the joined and invited members of a room except this account.
 
     One request. Invited members count because a direct chat whose partner
     has not accepted yet is still the chat with that person - nio's
-    room.users holds them too.
+    room.users holds them too. A display name that two members share, this
+    account included, becomes "Name (@user:server)", as nio's user_name()
+    and the spec's room-name rules have it.
 
     Returns:
         Dict of user ID -> display name (the user ID when none is set),
@@ -70,15 +73,21 @@ def get_room_members(config: dict, room_id: str) -> dict:
     )
     if "error" in result:
         return None
-    members = {}
+    display_names = {}
     for event in result.get("chunk", []):
         user_id = event.get("state_key")
         content = event.get("content", {})
-        if not user_id or user_id == config.get("user_id"):
+        if not user_id or content.get("membership") not in ("join", "invite"):
             continue
-        if content.get("membership") not in ("join", "invite"):
+        display_names[user_id] = content.get("displayname")
+    taken = Counter(name or user_id for user_id, name in display_names.items())
+    members = {}
+    for user_id, name in display_names.items():
+        if user_id == config.get("user_id"):
             continue
-        members[user_id] = content.get("displayname") or user_id
+        if name and taken[name] > 1:
+            name = f"{name} ({user_id})"
+        members[user_id] = name or user_id
     return members
 
 

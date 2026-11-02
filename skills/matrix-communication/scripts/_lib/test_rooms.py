@@ -186,6 +186,20 @@ class RoomNameTests(unittest.TestCase):
         listed, _ = self.list_rooms(state)
         self.assertEqual(listed[DM]["name"], JANE)
 
+    def test_display_name_shared_with_this_account_is_qualified(self):
+        """nio's user_name() adds the user ID when two members share a name."""
+        state = {DM: {"members": [member(ME, "Sam"), member(JANE, "Sam")]}}
+        listed, _ = self.list_rooms(state)
+        self.assertEqual(listed[DM]["name"], f"Sam ({JANE})")
+
+    def test_display_name_shared_by_two_others_is_qualified(self):
+        bob = "@bob:example.org"
+        state = {
+            GROUP: {"members": [member(ME), member(JANE, "Sam"), member(bob, "Sam")]}
+        }
+        listed, _ = self.list_rooms(state)
+        self.assertEqual(listed[GROUP]["name"], f"Sam ({bob}) and Sam ({JANE})")
+
     def test_unreadable_members_keep_the_room_id(self):
         listed, _ = self.list_rooms({DM: {"members": None}})
         self.assertEqual(listed[DM]["name"], DM)
