@@ -78,6 +78,7 @@ from _lib import (
     load_config,
     load_credentials,
     markdown_to_html,
+    normalize_room_input,
     prefer_ipv4,
     restore_login_checked,
     send_checked,
@@ -480,7 +481,7 @@ def main():
         room_input = resolve_direct_target(config, args.to, args.json)
         args.room = args.to  # the confirmation names the person, not the ID
     else:
-        room_input = clean_message(args.room)
+        room_input = normalize_room_input(clean_message(args.room))
 
     # Room resolution: IDs and aliases are passed through directly.
     # Plain names are resolved AFTER sync (in the async function) using

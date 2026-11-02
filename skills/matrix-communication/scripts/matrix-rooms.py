@@ -14,7 +14,9 @@ Usage:
 
 Options:
     --json            Output as JSON
-    --search TERM     Filter rooms by name or alias
+    --search TERM     Filter rooms by name or alias; a room without a name
+                      (a direct chat) is named after its members and also
+                      matches on their user IDs
     --lookup NAME     Find room by name and output room ID (for scripts)
     --help            Show this help
 
@@ -24,6 +26,10 @@ Examples:
 
     # Search for rooms containing "agent"
     matrix-rooms.py --search agent
+
+    # Find the direct chat with Jane Doe (by display name or user ID)
+    matrix-rooms.py --lookup "Jane Doe"
+    matrix-rooms.py --search @jane:example.org
 
     # Get room ID by name (for use in other commands)
     matrix-rooms.py --lookup "agent-work"
@@ -39,7 +45,7 @@ import sys
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import find_room_by_name, list_joined_rooms, load_config
+from _lib import find_room_by_name, list_joined_rooms, load_config, room_matches
 
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
@@ -50,7 +56,9 @@ def main():
 
     parser = argparse.ArgumentParser(description="List joined Matrix rooms")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument("--search", "-s", help="Filter rooms by name")
+    parser.add_argument(
+        "--search", "-s", help="Filter rooms by name, alias or member user ID"
+    )
     parser.add_argument(
         "--lookup",
         "-l",
@@ -93,13 +101,7 @@ def main():
     rooms = sorted(rooms, key=lambda r: r["name"].lower())
 
     if args.search:
-        search_lower = args.search.lower()
-        rooms = [
-            r
-            for r in rooms
-            if search_lower in r["name"].lower()
-            or (r.get("alias") and search_lower in r["alias"].lower())
-        ]
+        rooms = [r for r in rooms if room_matches(r, args.search.lower())]
 
     if args.json:
         print(json.dumps(rooms, indent=2))

@@ -31,6 +31,7 @@ from _lib import (
     get_store_path,
     load_config,
     load_credentials,
+    normalize_room_input,
     restore_login_checked,
 )
 from nio import (
@@ -190,6 +191,7 @@ async def main():
             await client.keys_upload()
 
         # Resolve room
+        args.room = normalize_room_input(args.room)
         if args.room.startswith("!"):
             room_id = args.room
         else:

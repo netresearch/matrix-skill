@@ -43,6 +43,7 @@ from _lib import (
     load_config,
     load_credentials,
     markdown_to_html,
+    normalize_room_input,
     prefer_ipv4,
     restore_login_checked,
     send_checked,
@@ -213,7 +214,7 @@ def main():
 
     config = load_config(require_user_id=True)
     message = clean_message(args.message)
-    room_input = clean_message(args.room)
+    room_input = normalize_room_input(clean_message(args.room))
 
     if not args.no_prefix and config.get("bot_prefix"):
         message = add_bot_prefix(message, config["bot_prefix"])

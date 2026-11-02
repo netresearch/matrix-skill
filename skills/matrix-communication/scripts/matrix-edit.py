@@ -40,6 +40,7 @@ from _lib import (
     load_config,
     markdown_to_html,
     matrix_request,
+    normalize_room_input,
     resolve_room_alias,
 )
 
@@ -109,7 +110,7 @@ def main():
         message = add_bot_prefix(message, config["bot_prefix"])
 
     # Clean and resolve room
-    room_input = clean_message(args.room)
+    room_input = normalize_room_input(clean_message(args.room))
     room_id = room_input
 
     if room_input.startswith("!"):

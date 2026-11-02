@@ -41,6 +41,7 @@ from _lib import (
     build_record,
     check_e2ee_dependencies,
     daemon_request,
+    find_room_in_nio_client,
     get_store_path,
     inject_pills,
     load_config,
@@ -48,6 +49,7 @@ from _lib import (
     log_path,
     markdown_to_html,
     next_seq,
+    normalize_room_input,
     prefer_ipv4,
     private_dir,
     remember_subject,
@@ -329,16 +331,21 @@ class Daemon:
         Commands hand over the argument a human wrote, which is usually an
         alias - they cannot resolve it themselves, because resolving needs
         credentials and the daemon is holding those. Watched rooms are already
-        mapped, so the common case costs nothing.
+        mapped, so the common case costs nothing. A name is looked up in the
+        synced rooms the same way the direct E2EE path looks it up, so a
+        direct chat is found by the other person's name here too.
         """
+        room = normalize_room_input(room)
         if room.startswith("!"):
             return room
         for room_id, label in self.rooms.items():
             if label == room:
                 return room_id
-        resolved = resolve_room_alias(self.config, room)
-        if resolved:
-            return resolved
+        if room.startswith("#"):
+            return resolve_room_alias(self.config, room)
+        found = find_room_in_nio_client(self.client.rooms, room)
+        if found:
+            return found
         raise ValueError(f"cannot resolve room {room!r}")
 
     async def op_send(self, request: dict) -> dict:
