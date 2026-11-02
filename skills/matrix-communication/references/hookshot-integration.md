@@ -36,8 +36,8 @@ Two details decide whether step 3 does anything:
 
 - **`--no-prefix` is required whenever `bot_prefix` is configured.** The send
   scripts put that prefix (e.g. `🤖`) in front of the text; hookshot only reacts
-  to a message that *starts* with `!hookshot`, so the prefixed command is
-  ignored without a reply.
+  to a message that *starts* with the bot's command prefix (default
+  `!hookshot`), so the prefixed command is ignored without a reply.
 - **In an encrypted room, the bridge only sees the command if it decrypts.**
   hookshot handles encrypted rooms only when its `encryption:` config is set.
   On a bridge without it (measured on hookshot 7.5.0) the command sent with
@@ -183,8 +183,10 @@ reading `body`. Five properties, measured over 300 messages in one project room:
   `Received webhook data:` followed by the JSON the sender posted. Parse
   `formatted_body`; falling back to `body` when it is absent only makes sense after
   checking for that prefix, or the "text" you store is the payload dump.
-- **The webhook's own name is prefixed as markup**: `<strong>Production/Staging</strong>:`
-  in front of the message (with the separating space). Strip it, or every title in your data starts with it.
+- **The sender's `username` is prefixed as markup**: `<strong>Production/Staging</strong>:`
+  in front of the message (with the separating space) when the payload carried
+  `username: "Production/Staging"` (see the table above; the hook's own name
+  only appears in the sender's display name). Strip it, or every title in your data starts with it.
 - **An actor is rendered as a `matrix.to` link**, e.g.
   `<a href="https://matrix.to/#/@x:server">Anonymous (Incoming E-Mail)</a>: created …`.
   That link points at a person, never at the cause of the event.
