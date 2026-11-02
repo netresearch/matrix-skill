@@ -132,7 +132,7 @@ reads `not verified` rather than OK; the `matrix_nio` probe then runs
 | React | `matrix-react.py` | (same) |
 | Delete | `matrix-redact.py` | (same) |
 
-Fall back to the non-E2EE scripts only for a room confirmed to be unencrypted.
+Fall back to the non-E2EE scripts only for a room confirmed to be unencrypted. The one exception is a bot command to a bridge that does not decrypt (see [hookshot-integration.md](hookshot-integration.md)), and only for content you are fine to disclose to the homeserver.
 
 ## Config
 

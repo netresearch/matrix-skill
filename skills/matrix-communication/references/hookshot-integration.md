@@ -44,7 +44,12 @@ Two details decide whether step 3 does anything:
   `matrix-send-e2ee.py` (prefix off, key shared with every device) got no reply
   and created no hook; sent as a plaintext `m.room.message` through the
   Client-Server API (what `matrix-send.py` does) it was answered within seconds.
-  The command carries no secret — the URL arrives in the admin DM either way.
+  This is a deliberate **exception** to the rule of using non-E2EE scripts only
+  in confirmed-unencrypted rooms ([command-reference.md](command-reference.md)):
+  the plaintext event is readable by the homeserver and stored unencrypted in
+  the room's history. Use it only for the bare command, whose content (a hook
+  name) you are fine to disclose — the secret webhook URL is never part of it;
+  it arrives in the admin DM either way.
 
 The bot replies in the room with `"Room configured to bridge webhooks. See
 admin room for secret url."` — **the actual URL is never posted in the
