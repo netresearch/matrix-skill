@@ -38,12 +38,13 @@ Two details decide whether step 3 does anything:
   scripts put that prefix (e.g. `🤖`) in front of the text; hookshot only reacts
   to a message that *starts* with `!hookshot`, so the prefixed command is
   ignored without a reply.
-- **In an encrypted room, send the command unencrypted.** Measured on
-  hookshot 7.5.0: the same command sent with `matrix-send-e2ee.py` (prefix off,
-  key shared with every device) got no reply and created no hook; sent as a
-  plaintext `m.room.message` through the Client-Server API (what
-  `matrix-send.py` does) it was answered within seconds. The command carries no
-  secret — the URL arrives in the admin DM either way.
+- **In an encrypted room, the bridge only sees the command if it decrypts.**
+  hookshot handles encrypted rooms only when its `encryption:` config is set.
+  On a bridge without it (measured on hookshot 7.5.0) the command sent with
+  `matrix-send-e2ee.py` (prefix off, key shared with every device) got no reply
+  and created no hook; sent as a plaintext `m.room.message` through the
+  Client-Server API (what `matrix-send.py` does) it was answered within seconds.
+  The command carries no secret — the URL arrives in the admin DM either way.
 
 The bot replies in the room with `"Room configured to bridge webhooks. See
 admin room for secret url."` — **the actual URL is never posted in the
@@ -88,17 +89,20 @@ reads exactly three keys of the posted JSON:
 
 | Key | Becomes |
 |-----|---------|
-| `text` | `body` — what push notifications, room previews and non-HTML clients show |
-| `html` | `formatted_body` — what Element renders in the timeline |
+| `text` | `body` — what room previews, the notification list, pushes and non-HTML clients show |
+| `html` | `formatted_body` — what Element renders in the timeline; without `html` it is rendered from `text` as Markdown |
 | `username` | prepended to both: `**name**:` before `body`, `<strong>name</strong>:` before `formatted_body` (each followed by a space) |
 
-Everything else is ignored, including `version`, `msgtype`, `plain` and `empty`.
-Those four belong to the **result** a transformation function returns, and
-copying that schema into the webhook input is a common mistake: a payload
-`{version:"v2", msgtype:"m.text", html:…}` renders fine in the timeline, but
-because it has no `text`, its `body` becomes `Received webhook data:` plus the
-raw JSON — which is exactly what every push and room preview shows. Always send
-`text` (plain) alongside `html`.
+No other key affects the message, including `version`, `msgtype`, `plain` and
+`empty` (with `includeHookBody` enabled the whole payload is additionally
+attached to the event as `uk.half-shot.hookshot.webhook_data`, but not
+rendered). Those four belong to the **result** a transformation function
+returns, and copying that schema into the webhook input is a common mistake: a
+payload `{version:"v2", msgtype:"m.text", html:…}` renders fine in the
+timeline, but because it has no `text`, its `body` becomes
+`Received webhook data:` plus the raw JSON — which is what room previews and
+the notification list show, and what a push would show once the message is
+allowed to notify. Always send `text` (plain) alongside `html`.
 
 ## Message type and notifications
 
@@ -127,11 +131,14 @@ QuickJS with `data` set and reads the global `result`
 to drop the message). Prerequisites:
 
 - the bridge runs with `generic.allowJsTransformationFunctions: true` — without
-  it the state event is stored but the hook fails to load on the next restart;
+  it the state event is stored, but hookshot rejects it: an existing hook
+  silently keeps its previous configuration, and on the next restart the hook
+  fails to load at all;
 - the sender of the state event holds hookshot's `manageConnections` permission
-  for webhooks (bridge `permissions:` config). A room power level alone is not
-  enough: hookshot verifies the sender afterwards and rolls the event back.
-  Read the state back a while after writing.
+  for the `generic` service (bridge `permissions:` config; older docs called it
+  `webhooks`, which still works). A room power level alone is not enough:
+  hookshot verifies the sender afterwards and rolls the event back. Read the
+  state back a while after writing.
 
 A transformation applies to **every** sender on that hook. Gate any behaviour
 change on a key only the intended sender sends, so other integrations posting
