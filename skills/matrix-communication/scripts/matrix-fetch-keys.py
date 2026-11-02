@@ -195,6 +195,9 @@ async def main():
         # an E2EE setup may have no access_token in the config for the HTTP
         # lookup to use.
         args.room = normalize_room_input(args.room)
+        if args.room.startswith("#") and ":" not in args.room:
+            # Bare alias without server part: a name to look up, as before
+            args.room = args.room.lstrip("#")
         room_id = args.room
         if args.room.startswith("#"):
             response = await client.room_resolve_alias(args.room)
