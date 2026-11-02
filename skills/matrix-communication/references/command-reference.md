@@ -18,7 +18,7 @@ expansion mangles it otherwise, and the corruption is silent.
 ```bash
 set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "message"
 set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "text" --mention '@user:server'
-uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "message" --no-prefix
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "message" --no-prefix   # bot commands (!hookshot …) need it when bot_prefix is set; see hookshot-integration.md for encrypted rooms
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "is deploying" --emote
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "📦 Release: …" --notice
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py ROOM "reply" --thread '$rootEventId'
@@ -132,7 +132,7 @@ reads `not verified` rather than OK; the `matrix_nio` probe then runs
 | React | `matrix-react.py` | (same) |
 | Delete | `matrix-redact.py` | (same) |
 
-Fall back to the non-E2EE scripts only for a room confirmed to be unencrypted.
+Fall back to the non-E2EE scripts only for a room confirmed to be unencrypted. The one exception is a bot command to a bridge that does not decrypt (see [hookshot-integration.md](hookshot-integration.md)), and only for content you are fine to disclose to the homeserver.
 
 ## Config
 

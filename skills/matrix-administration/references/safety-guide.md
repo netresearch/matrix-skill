@@ -46,6 +46,7 @@ Like `synapse-deactivate-user.py`, the script reads the room's current state, pr
 
 - Only works while *some* existing admin is still in the room (Synapse refuses otherwise).
 - If the original owner has already left, the room is **unrecoverable** through this tool — Synapse explicitly forbids re-creating admin from outside.
+- **Taking admin in a non-public room you are not a member of: `make-admin` first, then join as yourself.** `synapse-join-room.py` (`POST /v1/join`) fails with `M_FORBIDDEN … not in room` there, because for a room that is not public Synapse sends the invite as the calling server admin, who would have to be in the room. `synapse-make-admin.py` succeeds (prints `{}`): Synapse writes the power-level change and then the invite *as the highest-ranked local user who is joined*, so the target gets that user's level (100 only if that user has 100) and an invite. Accept the invite through the Client-Server API with your own token (`POST /_matrix/client/v3/rooms/{room_id}/join`), then read `m.room.power_levels` before any write that needs a level — the `{}` response is the same for an already-joined, a public and an invited user, and re-running the call cannot raise the level above that local user's.
 
 ### `synapse-search.py`
 
