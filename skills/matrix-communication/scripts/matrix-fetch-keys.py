@@ -27,7 +27,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lib import (
-    find_room_by_name,
+    find_room_in_nio_client,
     get_store_path,
     load_config,
     load_credentials,
@@ -42,6 +42,7 @@ from nio import (
     RoomKeyEvent,
     RoomKeyRequestResponse,
     RoomMessagesResponse,
+    RoomResolveAliasResponse,
     UnknownToDeviceEvent,
 )
 
@@ -190,21 +191,25 @@ async def main():
         if client.should_upload_keys:
             await client.keys_upload()
 
-        # Resolve room
+        # Resolve room with the synced client, like the other E2EE scripts:
+        # an E2EE setup may have no access_token in the config for the HTTP
+        # lookup to use.
         args.room = normalize_room_input(args.room)
-        if args.room.startswith("!"):
-            room_id = args.room
-        else:
-            room_id, matches = find_room_by_name(config, args.room)
+        room_id = args.room
+        if args.room.startswith("#"):
+            response = await client.room_resolve_alias(args.room)
+            if not isinstance(response, RoomResolveAliasResponse):
+                print(f"Could not resolve room alias: {response}", file=sys.stderr)
+                return 1
+            room_id = response.room_id
+        elif not args.room.startswith("!"):
+            room_id = find_room_in_nio_client(client.rooms, args.room)
             if not room_id:
-                if matches:
-                    print(f"Multiple matches for '{args.room}':", file=sys.stderr)
-                    for m in matches:
-                        print(
-                            f"  {m['name']} ({m['room_id'][:20]}...)", file=sys.stderr
-                        )
-                else:
-                    print(f"Could not find room: {args.room}", file=sys.stderr)
+                print(
+                    f"Could not find room '{args.room}' (none or several match). "
+                    "Use 'matrix-rooms.py' to list rooms.",
+                    file=sys.stderr,
+                )
                 return 1
 
         room = client.rooms.get(room_id)
