@@ -58,17 +58,49 @@ when changing semantics here, keep them in sync:
 |-------|---------|----------|
 | ▶️ | Actively working NOW | Set on the claim message; REDACT it when work stops — a lingering ▶️ reads as "still busy" |
 | ✅ | Done/Complete | Mark task as finished |
+| 🩹 | Fix handed over | MR/PR provided, work stopped, the team has to review |
 | ⏳ | Waiting/queued | Nobody actively on it (NOT "in progress" — that is ▶️) |
 | 🚀 | Deployed/Shipped | Indicate release |
 | ❌ | Attempt failed | Distinct from 👎 (declining) and ↩️ (questions) |
 | 👀 | Looking at it | No commitment to work on it |
 | ↩️ | Back to reporter | Went back with questions |
 | 💡 | Helpful | This message taught me something |
-| 🤖 | Agent read-receipt | The agent read it and tries to heed it |
+| 🤖 | Agent read-receipt | The agent read it and tries to heed it. On a ticket notification it means something else, see below |
 | 👍 | Agreement, I'm in | NOT a receipt acknowledgement (that is 🤖) |
 | 👎 | Count me out | Rather not |
 
 **Workflow example:** Send "Going to reboot server" then later add checkmark reaction when complete.
+
+### Reactions on ticket notifications
+
+A ticket tracker bridged into a room (for example Jira through a hookshot
+webhook) posts one message per ticket event. The team reads ticket state from
+these messages, so an agent that works on a ticket reacts to its notification:
+
+| Emoji | Meaning |
+|-------|---------|
+| ▶️ | An agent is working on the ticket right now |
+| 🩹 | MR/PR provided, the agent stopped, the team has to review |
+| ✅ | Done: the ticket is in QA, Resolved or Closed |
+| 🤖 | An agent works or worked on this ticket. Here it is NOT a read-receipt |
+
+Rules:
+
+1. Set exactly ONE of ▶️, 🩹 or ✅ per notification, and always 🤖 next to it.
+2. When the status changes, redact the old status reaction, then add the new one.
+3. Set ▶️ + 🤖 when the agent claims the ticket, swap to 🩹 at the MR/PR
+   handover, swap to ✅ when the ticket goes to QA or is resolved.
+
+Finding the notification: each room can have its own webhook sender, so a
+filter on one sender name misses the other rooms. Filter on the bridge's
+sender prefix AND on the ticket URL (`/browse/<KEY>`) in `body`. Busy rooms need
+a large `--limit`:
+
+```bash
+uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 400 --json
+uv run skills/matrix-communication/scripts/matrix-react.py ROOM '$eventId' "▶️"
+uv run skills/matrix-communication/scripts/matrix-react.py ROOM '$eventId' "🤖"
+```
 
 ## Visual Effects (Element Clients)
 

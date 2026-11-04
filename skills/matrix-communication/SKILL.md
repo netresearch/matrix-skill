@@ -37,6 +37,10 @@ Send, read and download media in Matrix rooms. **Always use `*-e2ee.py`.**
 
 **Mention once, then watch for the answer.** Send one message with `--mention`, then follow the room for the reply with `matrix-watch.py ROOM`, which needs `matrix-watchd.py` running (`matrix-read-e2ee.py` reads once and exits, so it does not wait for a reply). No automatic repeat reminders: "keep pushing them" means one good ping plus a watcher, and a second ping only when your principal asks again after the silence. Any repeating pinger stops at the colleague's first reaction, not at the state it was waiting for — a 15-minute reminder loop drew "I'm about to ban you" and cost the bot its welcome in the room.
 
+## Reacting to ticket notifications
+
+**A ticket you work on gets ONE status reaction on its tracker notification, plus 🤖.** ▶️ while you work on it, 🩹 once the MR/PR is handed over for review, ✅ when it is in QA or resolved; redact the old status when it changes. 🤖 here means "an agent works or worked on this ticket", not a read-receipt. Finding the message and the commands: `references/messaging-guide.md`, "Reactions on ticket notifications".
+
 ## Quick reference
 
 `ROOM` = short name (`test`), ID (`!abc:server`), alias (`#room:server`) or
