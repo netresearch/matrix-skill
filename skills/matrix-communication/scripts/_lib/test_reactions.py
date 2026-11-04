@@ -206,5 +206,40 @@ class ApplyReactionTest(unittest.TestCase):
         self.assertEqual(self.calls, [("send", "B")])
 
 
+class FindOwnTest(unittest.TestCase):
+    """The lookup's wiring: v1 relations path, and whoami when user_id is missing."""
+
+    def setUp(self):
+        self.react = load_react()
+        self.requests = []
+
+        def fake_request(config, method, endpoint, data=None, api_version="v3"):
+            self.requests.append((method, endpoint, api_version))
+            if endpoint == "/account/whoami":
+                return {"user_id": ME}
+            return SYNAPSE_PAGE
+
+        self.react.matrix_request = fake_request
+
+    def test_relations_are_read_from_v1(self):
+        found = self.react.find_own({"user_id": ME}, "!r:x", TARGET, {"▶️"})
+        self.assertEqual([r["key"] for r in found], ["▶️"])
+        self.assertEqual(len(self.requests), 1)
+        method, endpoint, version = self.requests[0]
+        self.assertEqual((method, version), ("GET", "v1"))
+        self.assertIn("/relations/", endpoint)
+
+    def test_user_id_falls_back_to_whoami(self):
+        found = self.react.find_own({}, "!r:x", TARGET, {"\U0001f916"})
+        self.assertEqual(self.requests[0][1], "/account/whoami")
+        self.assertEqual([r["key"] for r in found], ["\U0001f916"])
+
+    def test_failed_whoami_is_an_error(self):
+        self.react.matrix_request = lambda *a, **k: {"error": "401"}
+        self.assertEqual(
+            self.react.find_own({}, "!r:x", TARGET, {"x"}), {"error": "401"}
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
