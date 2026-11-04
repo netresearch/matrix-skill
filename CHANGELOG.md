@@ -9,6 +9,28 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Added
+
+- `matrix-send-e2ee.py --to @user:server MESSAGE` sends to the existing direct chat with that person, found through the account data `m.direct`; `--to` replaces `ROOM`. It never creates a room: when there is no direct chat that both sides are still in, or more than one, the command fails and names the rooms ([#189](https://github.com/netresearch/matrix-skill/pull/189))
+
+### Changed
+
+- Every shipped Python script starts through `uv run` on Python 3.11 or later, from its shebang (`#!/usr/bin/env -S uv run --script`) and from every documented invocation; the `compatibility` fields name uv, and the `python3` patterns are removed from `allowed-tools`. The 13 `synapse-*.py` admin scripts gain a PEP 723 block with `requires-python = ">=3.11"` and no dependencies. `matrix-doctor.py` runs through `uv run` as well and declares no dependency, so it starts on hosts where python-olm cannot be built; its `matrix_nio` row checks `matrix-nio[e2e]<0.26` in the uv environment the E2EE scripts get and shows uv's cause line when the build fails, and with `--offline` that probe stays off the network ([#186](https://github.com/netresearch/matrix-skill/pull/186))
+
+### Fixed
+
+- A direct chat and any other room without a name or alias is found by the name Element shows for it — the other person's display name or user ID — in `matrix-rooms.py --search` and `--lookup` and as `ROOM` in every script, on the HTTP path, the nio path and through a running daemon. Such a room is named after its members in nio's wording ("Jane Doe", "A and B", "A, B and 3 others"), and a display name two members share is qualified with the user ID. An unnamed room no longer matches a substring of its room ID in `--search`; a full room ID still works as `ROOM` ([#194](https://github.com/netresearch/matrix-skill/pull/194))
+- A `https://matrix.to/#/…` link copied from Element works as `ROOM`, including `?via=` parameters and a link to a single message ([#194](https://github.com/netresearch/matrix-skill/pull/194))
+- `matrix-fetch-keys.py` resolves `ROOM` through its synced nio client like the other `*-e2ee.py` scripts, instead of through the HTTP lookup, which needs an `access_token` an E2EE setup may not have; a bare `#name` without server is still looked up as a name ([#194](https://github.com/netresearch/matrix-skill/pull/194))
+- A plain room name passed to a command that a running `matrix-watchd.py` daemon serves is resolved as a name; the daemon tried every argument that is not a room ID as an alias, so room names failed through it ([#194](https://github.com/netresearch/matrix-skill/pull/194))
+- A markdown link whose URL contains parentheses, such as a Jira filter ending in `currentUser()`, keeps its full URL in the `href`; the URL used to end at the first `)` ([#188](https://github.com/netresearch/matrix-skill/pull/188))
+
+### Documentation
+
+- `references/hookshot-integration.md`: the keys a hookshot webhook payload must carry (`text` next to `html`, optional `username`), what a payload without `text` puts into `body`, why webhook messages arrive as `m.notice` and never notify by default, how a transformation function changes that and what it needs, and that the webhook command needs `--no-prefix` when `bot_prefix` is set. It corrects two earlier claims: the raw `body` follows from a missing `text`, and the bold prefix comes from the payload's `username`, not the hook name ([#193](https://github.com/netresearch/matrix-skill/pull/193))
+- `references/command-reference.md` names the plaintext bot command in an encrypted room on a bridge without encryption support as the one exception to the E2EE-first rule, and `--no-prefix` for bot commands when `bot_prefix` is set ([#193](https://github.com/netresearch/matrix-skill/pull/193))
+- `matrix-administration/references/safety-guide.md`: how to take admin in a non-public room, where `synapse-join-room.py` fails with `M_FORBIDDEN` and `synapse-make-admin.py` grants the level and invites, which is then accepted through the client join endpoint ([#193](https://github.com/netresearch/matrix-skill/pull/193))
+
 ## [4.0.0] - 2026-10-21
 
 ### Breaking
