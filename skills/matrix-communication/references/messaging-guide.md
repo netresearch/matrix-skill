@@ -88,13 +88,16 @@ Rules:
 
 1. Set exactly ONE of ▶️, 🩹 or ✅ per notification, and always 🤖 next to it.
 2. When the status changes, redact the old status reaction, then add the new one.
+   A reaction is an event of its own: `matrix-react.py` prints its id
+   (`Event ID: $…`), and `matrix-redact.py ROOM '$reactionId'` removes it. Keep
+   that id, because `matrix-read-e2ee.py` does not list reactions.
 3. Set ▶️ + 🤖 when the agent claims the ticket, swap to 🩹 at the MR/PR
    handover, swap to ✅ when the ticket goes to QA or is resolved.
 
 Finding the notification: each room can have its own webhook sender, so a
-filter on one sender name misses the other rooms. Filter on the bridge's
-sender prefix AND on the ticket URL (`/browse/<KEY>`) in `body`. Busy rooms need
-a large `--limit`:
+filter on one sender name misses the other rooms. Filter on the user-ID prefix
+the bridge gives its webhook senders (configurable in hookshot) AND on the
+ticket URL (`/browse/<KEY>`) in `body`. Busy rooms need a large `--limit`:
 
 ```bash
 uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 400 --json
