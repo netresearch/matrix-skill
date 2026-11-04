@@ -58,17 +58,63 @@ when changing semantics here, keep them in sync:
 |-------|---------|----------|
 | ▶️ | Actively working NOW | Set on the claim message; REDACT it when work stops — a lingering ▶️ reads as "still busy" |
 | ✅ | Done/Complete | Mark task as finished |
+| 🩹 | Fix handed over | MR/PR provided, work stopped, the team has to review |
 | ⏳ | Waiting/queued | Nobody actively on it (NOT "in progress" — that is ▶️) |
 | 🚀 | Deployed/Shipped | Indicate release |
 | ❌ | Attempt failed | Distinct from 👎 (declining) and ↩️ (questions) |
 | 👀 | Looking at it | No commitment to work on it |
 | ↩️ | Back to reporter | Went back with questions |
 | 💡 | Helpful | This message taught me something |
-| 🤖 | Agent read-receipt | The agent read it and tries to heed it |
+| 🤖 | Agent read-receipt | The agent read it and tries to heed it. On a ticket notification it means something else, see below |
 | 👍 | Agreement, I'm in | NOT a receipt acknowledgement (that is 🤖) |
 | 👎 | Count me out | Rather not |
 
 **Workflow example:** Send "Going to reboot server" then later add checkmark reaction when complete.
+
+### Reactions on ticket notifications
+
+A ticket tracker bridged into a room (for example Jira through a hookshot
+webhook) posts one message per ticket event. The team reads ticket state from
+these messages, so an agent that works on a ticket reacts to its notification:
+
+| Emoji | Meaning |
+|-------|---------|
+| ▶️ | An agent is working on the ticket right now |
+| 🩹 | MR/PR provided, the agent stopped, the team has to review |
+| ✅ | Done: the ticket is in QA, Resolved or Closed |
+| 🤖 | An agent works or worked on this ticket. Here it is NOT a read-receipt |
+
+Rules:
+
+1. Set exactly ONE of ▶️, 🩹 or ✅ per notification, and always 🤖 next to it.
+2. Change the status with ONE call: `--replace` sets the new status and
+   removes the account's own reactions with the old ones. The script finds
+   those reactions on the server, so no reaction id is needed. It sends the
+   new status first, and it does not send a status the account already set.
+3. Set ▶️ + 🤖 when the agent claims the ticket, swap to 🩹 at the MR/PR
+   handover, swap to ✅ when the ticket goes to QA or is resolved.
+
+```bash
+R=skills/matrix-communication/scripts/matrix-react.py
+uv run $R ROOM '$eventId' "▶️" --replace "🩹" "✅"   # claim
+uv run $R ROOM '$eventId' "🤖"
+uv run $R ROOM '$eventId' "🩹" --replace "▶️" "✅"   # MR/PR handed over
+uv run $R ROOM '$eventId' "✅" --replace "▶️" "🩹"   # QA / resolved
+uv run $R ROOM '$eventId' "▶️" --remove               # take one back
+```
+
+Pass the room ID (`!…:server`) when you have it. A room name is resolved by
+reading every joined room: on an account in many rooms that took 40 s per
+call, against 0.7 s with the room ID (measured 2026-11-04).
+
+Finding the notification: each room can have its own webhook sender, so a
+filter on one sender name misses the other rooms. Filter on the user-ID prefix
+the bridge's webhook senders share AND on the ticket URL (`/browse/<KEY>`) in
+`body`. Busy rooms need a large `--limit`:
+
+```bash
+uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 400 --json
+```
 
 ## Visual Effects (Element Clients)
 

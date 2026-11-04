@@ -97,7 +97,11 @@ def _parse_http_error(e: urllib.error.HTTPError) -> dict:
 
 
 def matrix_request(
-    config: dict, method: str, endpoint: str, data: dict | None = None
+    config: dict,
+    method: str,
+    endpoint: str,
+    data: dict | None = None,
+    api_version: str = "v3",
 ) -> dict:
     """Make a Matrix API request.
 
@@ -106,11 +110,13 @@ def matrix_request(
         method: HTTP method (GET, POST, PUT, DELETE)
         endpoint: API endpoint (e.g., /joined_rooms)
         data: Optional dict to send as JSON body
+        api_version: Client-API version in the path; the relations endpoint
+            exists only under v1
 
     Returns:
         Response dict, or dict with 'error' key on failure
     """
-    url = f"{config['homeserver']}/_matrix/client/v3{endpoint}"
+    url = f"{config['homeserver']}/_matrix/client/{api_version}{endpoint}"
     _require_http_scheme(url)
     headers = {
         "Authorization": f"Bearer {config['access_token']}",

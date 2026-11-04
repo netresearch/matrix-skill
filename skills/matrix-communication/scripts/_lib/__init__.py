@@ -53,6 +53,9 @@ from _lib.formatting import (
 
 # HTTP API
 from _lib.http import matrix_request, path_segment
+
+# The account's own reactions on an event
+from _lib.reactions import annotations, own_reactions
 from _lib.roomlog import (
     append_record,
     build_record,
@@ -97,6 +100,7 @@ from _lib.utils import (
 __all__ = [
     "UntrustedDevicesError",
     "add_bot_prefix",
+    "annotations",
     "append_record",
     "build_mentions",
     "build_record",
@@ -124,6 +128,7 @@ __all__ = [
     "mention_pill",
     "next_seq",
     "normalize_room_input",
+    "own_reactions",
     "path_segment",
     "prefer_ipv4",
     "private_dir",
