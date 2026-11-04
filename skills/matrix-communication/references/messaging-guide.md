@@ -87,22 +87,33 @@ these messages, so an agent that works on a ticket reacts to its notification:
 Rules:
 
 1. Set exactly ONE of ▶️, 🩹 or ✅ per notification, and always 🤖 next to it.
-2. When the status changes, redact the old status reaction, then add the new one.
-   A reaction is an event of its own: `matrix-react.py` prints its id
-   (`Event ID: $…`), and `matrix-redact.py ROOM '$reactionId'` removes it. Keep
-   that id, because `matrix-read-e2ee.py` does not list reactions.
+2. Change the status with ONE call: `--replace` sets the new status and
+   removes the account's own reactions with the old ones. The script finds
+   those reactions on the server, so no reaction id is needed. It sends the
+   new status first, and it does not send a status the account already set.
 3. Set ▶️ + 🤖 when the agent claims the ticket, swap to 🩹 at the MR/PR
    handover, swap to ✅ when the ticket goes to QA or is resolved.
 
+```bash
+R=skills/matrix-communication/scripts/matrix-react.py
+uv run $R ROOM '$eventId' "▶️" --replace "🩹" "✅"   # claim
+uv run $R ROOM '$eventId' "🤖"
+uv run $R ROOM '$eventId' "🩹" --replace "▶️" "✅"   # MR/PR handed over
+uv run $R ROOM '$eventId' "✅" --replace "▶️" "🩹"   # QA / resolved
+uv run $R ROOM '$eventId' "▶️" --remove               # take one back
+```
+
+Pass the room ID (`!…:server`) when you have it. A room name is resolved by
+reading every joined room: on an account in many rooms that took 40 s per
+call, against 0.7 s with the room ID (measured 2026-11-04).
+
 Finding the notification: each room can have its own webhook sender, so a
 filter on one sender name misses the other rooms. Filter on the user-ID prefix
-the bridge gives its webhook senders (configurable in hookshot) AND on the
-ticket URL (`/browse/<KEY>`) in `body`. Busy rooms need a large `--limit`:
+the bridge's webhook senders share AND on the ticket URL (`/browse/<KEY>`) in
+`body`. Busy rooms need a large `--limit`:
 
 ```bash
 uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 400 --json
-uv run skills/matrix-communication/scripts/matrix-react.py ROOM '$eventId' "▶️"
-uv run skills/matrix-communication/scripts/matrix-react.py ROOM '$eventId' "🤖"
 ```
 
 ## Visual Effects (Element Clients)

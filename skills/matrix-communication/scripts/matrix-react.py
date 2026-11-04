@@ -8,7 +8,8 @@
 """React to a Matrix message with an emoji.
 
 Usage:
-    matrix-react.py ROOM EVENT_ID EMOJI
+    matrix-react.py ROOM EVENT_ID EMOJI [--replace OLD ...]
+    matrix-react.py ROOM EVENT_ID EMOJI --remove
     matrix-react.py --help
 
 Arguments:
@@ -17,17 +18,28 @@ Arguments:
     EMOJI       Emoji reaction (e.g., checkmark, thumbsup, party)
 
 Options:
+    --replace OLD [OLD ...]
+                Status swap: set EMOJI, then remove this account's own
+                reactions with any of OLD on the same event. EMOJI is not
+                sent twice when this account already set it.
+    --remove    Remove this account's own EMOJI reaction instead of adding one
     --json      Output as JSON
     --quiet     Minimal output
     --debug     Show debug information
     --help      Show this help
 
+The script looks up the account's own reactions on the server, so the caller
+never needs a reaction's event id.
+
 Examples:
     # Add checkmark reaction
     matrix-react.py "#ops:matrix.org" "$eventid" "checkmark"
 
-    # Thumbs up
-    matrix-react.py "#dev:matrix.org" "$eventid" "thumbsup"
+    # Move a ticket notification from "working" to "done"
+    matrix-react.py "#ops:matrix.org" "$eventid" "✅" --replace "▶️" "🩹"
+
+    # Take a reaction back
+    matrix-react.py "#dev:matrix.org" "$eventid" "▶️" --remove
 """
 
 import json
@@ -39,12 +51,14 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib import (
+    annotations,
     clean_message,
     daemon_request,
     find_room_by_name,
     load_config,
     matrix_request,
     normalize_room_input,
+    own_reactions,
     path_segment,
     resolve_room_alias,
 )
@@ -97,6 +111,98 @@ def send_reaction(
     )
 
 
+def redact_reaction(config: dict, room_id: str, reaction_id: str) -> dict:
+    """Redact one reaction event; same routing as matrix-redact.py."""
+    response = daemon_request(
+        {"op": "redact", "room": room_id, "event_id": reaction_id, "reason": None}
+    )
+    if response is not None:
+        if response.get("ok"):
+            return {"event_id": response["event_id"]}
+        return {"error": response.get("error", "daemon refused the redaction")}
+    txn_id = str(int(time.time() * 1000))
+    return matrix_request(
+        config,
+        "PUT",
+        f"/rooms/{path_segment(room_id)}/redact/{path_segment(reaction_id)}/{txn_id}",
+        {},
+    )
+
+
+def own_user_id(config: dict) -> str | dict:
+    """The account's user ID: from the config, else asked of the server."""
+    if config.get("user_id"):
+        return config["user_id"]
+    whoami = matrix_request(config, "GET", "/account/whoami")
+    if "error" in whoami:
+        return whoami
+    return whoami.get("user_id") or {"error": "whoami returned no user_id"}
+
+
+def find_own(config: dict, room_id: str, event_id: str, keys: set) -> list | dict:
+    """This account's live reactions with one of ``keys`` on ``event_id``."""
+    user_id = own_user_id(config)
+    if isinstance(user_id, dict):
+        return user_id
+    events = annotations(
+        lambda path: matrix_request(config, "GET", path, api_version="v1"),
+        room_id,
+        event_id,
+    )
+    if isinstance(events, dict):
+        return events
+    return own_reactions(events, user_id, keys)
+
+
+def apply_reaction(
+    config: dict,
+    room_id: str,
+    event_id: str,
+    emoji: str,
+    replace: list[str],
+    remove: bool,
+    trust_unverified_devices: bool = False,
+) -> dict:
+    """Add, swap or remove a reaction; returns what was sent and redacted."""
+    if not replace and not remove:
+        return send_reaction(config, room_id, event_id, emoji, trust_unverified_devices)
+
+    drop = {emoji} if remove else set(replace) - {emoji}
+    found = find_own(config, room_id, event_id, drop | {emoji})
+    if isinstance(found, dict):
+        return {
+            "error": f"could not read the reactions on {event_id}: {found['error']}"
+        }
+
+    result: dict = {"event_id": None, "removed": []}
+    if not remove:
+        existing = [r["event_id"] for r in found if r["key"] == emoji]
+        if existing:
+            # Matrix rejects a second identical annotation; keep the first.
+            result["event_id"] = existing[0]
+        else:
+            sent = send_reaction(
+                config, room_id, event_id, emoji, trust_unverified_devices
+            )
+            if "error" in sent:
+                # Leave the old status in place: no status is worse than a stale one.
+                return sent
+            result["event_id"] = sent.get("event_id")
+
+    for reaction in found:
+        if reaction["key"] not in drop:
+            continue
+        redacted = redact_reaction(config, room_id, reaction["event_id"])
+        if "error" in redacted:
+            result["error"] = (
+                f"could not remove {reaction['key']} ({reaction['event_id']}): "
+                f"{redacted['error']}"
+            )
+            return result
+        result["removed"].append(reaction["key"])
+    return result
+
+
 def main():
     import argparse
 
@@ -109,6 +215,20 @@ def main():
     parser.add_argument("event_id", help="Event ID of message to react to")
     parser.add_argument(
         "emoji", help="Emoji reaction (e.g., checkmark, thumbsup, party)"
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--replace",
+        nargs="+",
+        default=[],
+        metavar="OLD",
+        help="Set EMOJI, then remove this account's own reactions with any of OLD "
+        "on the same event (a status swap)",
+    )
+    mode.add_argument(
+        "--remove",
+        action="store_true",
+        help="Remove this account's own EMOJI reaction instead of adding one",
     )
     parser.add_argument(
         "--trust-unverified-devices",
@@ -167,12 +287,13 @@ def main():
                 print(f"Error: {error_msg}", file=sys.stderr)
             sys.exit(1)
 
-    # Send reaction
-    result = send_reaction(
+    result = apply_reaction(
         config,
         room_id,
         args.event_id,
         args.emoji,
+        replace=args.replace,
+        remove=args.remove,
         trust_unverified_devices=args.trust_unverified_devices,
     )
 
@@ -186,10 +307,15 @@ def main():
     if args.json:
         print(json.dumps(result))
     elif args.quiet:
-        print(result.get("event_id", ""))
+        print(result.get("event_id") or "")
+    elif args.remove:
+        removed = len(result["removed"])
+        print(f"Removed {removed} {args.emoji} reaction(s) from {args.event_id}")
     else:
         print(f"Reacted with {args.emoji} to {args.event_id}")
         print(f"Event ID: {result.get('event_id')}")
+        if result.get("removed"):
+            print(f"Removed: {' '.join(result['removed'])}")
 
 
 if __name__ == "__main__":

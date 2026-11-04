@@ -59,6 +59,9 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-download-e2ee.py ROOM '$eventId' --out
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-edit-e2ee.py ROOM '$eventId' "new text"
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-redact.py ROOM '$eventId' --reason "reason"
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' "✅"
+# status swap: set ✅, remove this account's own ▶️/🩹 on that event (looked up, no id needed)
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' "✅" --replace "▶️" "🩹"
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' "▶️" --remove
 ```
 
 `--json` output includes the media URL and info for `m.image` / `m.file` /
