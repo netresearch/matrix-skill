@@ -9,6 +9,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-11-04
+
 ### Added
 
 - `matrix-send-e2ee.py --to @user:server MESSAGE` sends to the existing direct chat with that person, found through the account data `m.direct`; `--to` replaces `ROOM`. It never creates a room: when there is no direct chat that both sides are still in, or more than one, the command fails and names the rooms ([#189](https://github.com/netresearch/matrix-skill/pull/189))
@@ -424,7 +426,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.0.0...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.1.0...HEAD
+[4.1.0]: https://github.com/netresearch/matrix-skill/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/netresearch/matrix-skill/compare/v3.1.9...v4.0.0
 [3.1.9]: https://github.com/netresearch/matrix-skill/compare/v3.1.8...v3.1.9
 [3.1.8]: https://github.com/netresearch/matrix-skill/compare/v3.1.7...v3.1.8
