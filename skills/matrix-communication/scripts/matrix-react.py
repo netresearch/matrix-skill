@@ -189,6 +189,13 @@ def apply_reaction(
                 return sent
             result["event_id"] = sent.get("event_id")
 
+    return redact_keys(config, room_id, found, drop, result)
+
+
+def redact_keys(
+    config: dict, room_id: str, found: list, drop: set, result: dict
+) -> dict:
+    """Redact the reactions in ``found`` whose key is in ``drop``; stop at the first failure."""
     for reaction in found:
         if reaction["key"] not in drop:
             continue
