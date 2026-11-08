@@ -9,6 +9,16 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-11-08
+
+### Added
+
+- `matrix-react.py ROOM EVENT --list` prints the account's own live reactions on an event, emoji and reaction event ID, and changes nothing; `--json` gives them as a list ([#200](https://github.com/netresearch/matrix-skill/pull/200))
+
+### Documentation
+
+- `references/messaging-guide.md`: `matrix-read-e2ee.py` returns room messages only, never reactions; the "Reading Reactions" section and the poll example now use `--list` and the relations endpoint, and name reactions that arrive as `m.room.encrypted` with a clear-text `m.relates_to`. The ticket-notification rules gain a fourth: before reporting done, compare each status reaction with the live ticket, and a ticket someone else reopened loses ✅ and carries no status until one applies again ([#200](https://github.com/netresearch/matrix-skill/pull/200))
+
 ## [4.2.0] - 2026-11-08
 
 ### Added
@@ -436,7 +446,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.2.0...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.3.0...HEAD
+[4.3.0]: https://github.com/netresearch/matrix-skill/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/netresearch/matrix-skill/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/netresearch/matrix-skill/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/netresearch/matrix-skill/compare/v3.1.9...v4.0.0
