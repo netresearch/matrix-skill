@@ -93,6 +93,10 @@ Rules:
    new status first, and it does not send a status the account already set.
 3. Set ▶️ + 🤖 when the agent claims the ticket, swap to 🩹 at the MR/PR
    handover, swap to ✅ when the ticket goes to QA or is resolved.
+4. Before reporting the work done, compare each status you set with the
+   ticket's live status. A person can move the ticket after you: a ticket
+   someone reopened loses ✅ (`--remove`), and 🤖 stays. `--list` shows what
+   the account has set on a notification.
 
 ```bash
 R=skills/matrix-communication/scripts/matrix-react.py
@@ -101,6 +105,7 @@ uv run $R ROOM '$eventId' "🤖"
 uv run $R ROOM '$eventId' "🩹" --replace "▶️" "✅"   # MR/PR handed over
 uv run $R ROOM '$eventId' "✅" --replace "▶️" "🩹"   # QA / resolved
 uv run $R ROOM '$eventId' "▶️" --remove               # take one back
+uv run $R ROOM '$eventId' --list                      # what this account has set
 ```
 
 Pass the room ID (`!…:server`) when you have it. A room name is resolved by
@@ -237,7 +242,7 @@ uv run .../matrix-send-e2ee.py "#ops-team:matrix.org" "Message here"
 
 ## Reading Reactions
 
-Reactions are `m.reaction` events that reference a target event via `relates_to`. When reading room history with `--json`, reactions appear as separate events.
+Reactions are `m.reaction` events that reference a target event via `relates_to`. `matrix-read-e2ee.py` does not return them: it emits room messages only (`m.room.message` and undecryptable `m.room.encrypted`). Read the reactions on one event through the relations API instead, which is what `matrix-react.py --list` does for the account's own reactions.
 
 ### How Reactions Work
 
@@ -264,22 +269,22 @@ Reactions are `m.reaction` events that reference a target event via `relates_to`
 
 ### Analyzing Reactions Programmatically
 
-Use `--json` output and filter for `m.reaction` events:
+The account's own reactions on one event, as emoji and reaction event ID:
 
 ```bash
-# Read room history as JSON
-uv run skills/matrix-communication/scripts/matrix-read-e2ee.py room-name --limit 200 --json
-
-# Use jq to extract reactions for a specific event
-... | jq '[.[] | select(.type == "m.reaction") | {sender: .sender, emoji: .content."m.relates_to".key, target: .content."m.relates_to".event_id}]'
+uv run skills/matrix-communication/scripts/matrix-react.py ROOM '$eventId' --list [--json]
 ```
+
+Every sender's reactions on one event come from
+`GET /_matrix/client/v1/rooms/{roomId}/relations/{eventId}/m.annotation`;
+follow `next_batch` until it is absent. Each `chunk` entry has the shape above.
 
 ### Use Case: Polls and Attendance via Reactions
 
 Reactions can serve as lightweight polls. Post a message with options and ask users to react:
 
 1. Send a message with options (e.g., "React with your lunch preference: 🍕 Pizza, 🍔 Burger, 🥗 Salad")
-2. Read reactions with `--json` and group by emoji `key`
+2. Read the reactions on that message through the relations API and group by emoji `key`
 3. Count unique senders per emoji to tally votes
 
 ## Mentions

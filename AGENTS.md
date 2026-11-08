@@ -56,6 +56,7 @@ uv run $C/matrix-read-e2ee.py ROOM --limit 10 [--json]
 set +H && uv run $C/matrix-edit-e2ee.py ROOM '$eventId' "new text"
 uv run $C/matrix-react.py ROOM '$eventId' "✅"
 uv run $C/matrix-react.py ROOM '$eventId' "✅" --replace "▶️" "🩹"   # status swap; --remove takes one back
+uv run $C/matrix-react.py ROOM '$eventId' --list                    # own reactions; read output has none
 uv run $C/matrix-redact.py ROOM '$eventId' "reason"
 
 # Rooms / aliases

@@ -62,6 +62,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' "✅"
 # status swap: set ✅, remove this account's own ▶️/🩹 on that event (looked up, no id needed)
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' "✅" --replace "▶️" "🩹"
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' "▶️" --remove
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' --list   # own reactions, changes nothing
 ```
 
 `--json` output includes the media URL and info for `m.image` / `m.file` /
