@@ -7,7 +7,7 @@ license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires uv (runs the scripts on Python 3.11 or later; stdlib only) + a Matrix access token belonging to a Synapse server-admin user. Optional: graphviz `dot` for SVG. Synapse 1.x with admin API enabled."
 metadata:
   author: Netresearch DTT GmbH
-  version: "4.2.0"
+  version: "4.3.0"
   repository: https://github.com/netresearch/matrix-skill
 allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*) Bash(uv run skills/matrix-administration/scripts/*) Bash(dot:*) Read Write
 ---
