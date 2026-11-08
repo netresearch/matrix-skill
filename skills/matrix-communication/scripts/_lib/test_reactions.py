@@ -94,6 +94,10 @@ class OwnReactionsTest(unittest.TestCase):
         events = [reaction("$a", "x", redacted_because={"type": "m.room.redaction"})]
         self.assertEqual(own_reactions(events, ME, {"x"}), [])
 
+    def test_keys_none_returns_every_own_key(self):
+        found = own_reactions(SYNAPSE_PAGE["chunk"], ME, None)
+        self.assertEqual([r["key"] for r in found], ["\U0001f916", "▶️"])
+
     def test_other_relation_types_are_skipped(self):
         event = reaction("$a", "x")
         event["content"]["m.relates_to"]["rel_type"] = "m.thread"
@@ -239,6 +243,57 @@ class FindOwnTest(unittest.TestCase):
         self.assertEqual(
             self.react.find_own({}, "!r:x", TARGET, {"x"}), {"error": "401"}
         )
+
+
+class ListModeTest(unittest.TestCase):
+    """`--list` prints the account's own reactions and sends nothing."""
+
+    def setUp(self):
+        self.react = load_react()
+        self.react.load_config = lambda: {"user_id": ME}
+        self.react.matrix_request = (
+            lambda config, method, endpoint, data=None, api_version="v3": SYNAPSE_PAGE
+        )
+        self.react.send_reaction = lambda *a, **k: self.fail("--list must not send")
+        self.react.redact_reaction = lambda *a, **k: self.fail("--list must not redact")
+
+    def run_main(self, *argv):
+        import contextlib
+        import io
+
+        out = io.StringIO()
+        old = sys.argv
+        sys.argv = ["matrix-react.py", "!r:example.org", TARGET, *argv]
+        try:
+            with contextlib.redirect_stdout(out):
+                self.react.main()
+        finally:
+            sys.argv = old
+        return out.getvalue()
+
+    def test_list_prints_every_own_reaction(self):
+        lines = self.run_main("--list").splitlines()
+        self.assertEqual(
+            lines,
+            [
+                "\U0001f916\t$yBkEG80w7_Mw1QzR9TFPQUSvuOhpHAc1sGtMvevvdq4",
+                "▶️\t$aSpdQ3N6_FzzWuJsjvf2VYSueIFWDmXOGJBSoSTbhzc",
+            ],
+        )
+
+    def test_list_json(self):
+        import json
+
+        data = json.loads(self.run_main("--list", "--json"))
+        self.assertEqual([r["key"] for r in data["reactions"]], ["\U0001f916", "▶️"])
+
+    def test_list_with_emoji_is_refused(self):
+        with self.assertRaises(SystemExit):
+            self.run_main("✅", "--list")
+
+    def test_emoji_required_without_list(self):
+        with self.assertRaises(SystemExit):
+            self.run_main()
 
 
 if __name__ == "__main__":

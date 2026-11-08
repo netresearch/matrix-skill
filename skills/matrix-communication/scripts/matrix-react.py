@@ -139,8 +139,11 @@ def own_user_id(config: dict) -> str | dict:
     return whoami.get("user_id") or {"error": "whoami returned no user_id"}
 
 
-def find_own(config: dict, room_id: str, event_id: str, keys: set) -> list | dict:
-    """This account's live reactions with one of ``keys`` on ``event_id``."""
+def find_own(
+    config: dict, room_id: str, event_id: str, keys: set | None
+) -> list | dict:
+    """This account's live reactions with one of ``keys`` on ``event_id``
+    (every key when ``keys`` is None)."""
     user_id = own_user_id(config)
     if isinstance(user_id, dict):
         return user_id
@@ -221,7 +224,9 @@ def main():
     )
     parser.add_argument("event_id", help="Event ID of message to react to")
     parser.add_argument(
-        "emoji", help="Emoji reaction (e.g., checkmark, thumbsup, party)"
+        "emoji",
+        nargs="?",
+        help="Emoji reaction (e.g., checkmark, thumbsup, party); not with --list",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -237,6 +242,12 @@ def main():
         action="store_true",
         help="Remove this account's own EMOJI reaction instead of adding one",
     )
+    mode.add_argument(
+        "--list",
+        action="store_true",
+        help="Print this account's own live reactions on the event (emoji and "
+        "reaction event ID) and change nothing",
+    )
     parser.add_argument(
         "--trust-unverified-devices",
         action="store_true",
@@ -248,6 +259,10 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Show debug info")
 
     args = parser.parse_args()
+    if args.list and args.emoji:
+        parser.error("--list takes no EMOJI")
+    if not args.list and not args.emoji:
+        parser.error("EMOJI is required unless --list is given")
 
     config = load_config()
 
@@ -293,6 +308,24 @@ def main():
             else:
                 print(f"Error: {error_msg}", file=sys.stderr)
             sys.exit(1)
+
+    if args.list:
+        found = find_own(config, room_id, args.event_id, None)
+        if isinstance(found, dict):
+            message = (
+                f"could not read the reactions on {args.event_id}: {found['error']}"
+            )
+            if args.json:
+                print(json.dumps({"error": message}))
+            else:
+                print(f"Error: {message}", file=sys.stderr)
+            sys.exit(1)
+        if args.json:
+            print(json.dumps({"reactions": found}))
+        else:
+            for item in found:
+                print(f"{item['key']}\t{item['event_id']}")
+        return
 
     result = apply_reaction(
         config,

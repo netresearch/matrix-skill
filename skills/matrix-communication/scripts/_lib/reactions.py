@@ -27,9 +27,11 @@ def path_segment(value: str) -> str:
 MAX_PAGES = 50
 
 
-def own_reactions(events: Iterable[dict], user_id: str, keys: set[str]) -> list[dict]:
+def own_reactions(
+    events: Iterable[dict], user_id: str, keys: set[str] | None
+) -> list[dict]:
     """Return ``{"event_id", "key"}`` for each live reaction ``user_id`` set
-    with one of ``keys``.
+    with one of ``keys``; ``keys=None`` returns every key.
 
     A reaction that was already redacted no longer counts: its content is gone,
     and redacting it again would only produce a second, useless event.
@@ -46,7 +48,7 @@ def own_reactions(events: Iterable[dict], user_id: str, keys: set[str]) -> list[
         if relation.get("rel_type") != "m.annotation":
             continue
         key = relation.get("key")
-        if key in keys and event.get("event_id"):
+        if (keys is None or key in keys) and event.get("event_id"):
             found.append({"event_id": event["event_id"], "key": key})
     return found
 

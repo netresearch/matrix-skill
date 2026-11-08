@@ -39,7 +39,7 @@ Send, read and download media in Matrix rooms. **Always use `*-e2ee.py`.**
 
 ## Reacting to ticket notifications
 
-**A ticket you work on gets ONE status reaction on its tracker notification, plus 🤖.** ▶️ while you work on it, 🩹 once the MR/PR is handed over for review, ✅ when it is in QA or resolved. Swap in one call, `matrix-react.py ROOM '$eventId' "✅" --replace "▶️" "🩹"`: the script finds and removes its own old status, no reaction id needed. 🤖 here means "an agent works or worked on this ticket", not a read-receipt. Finding the message and the commands: `references/messaging-guide.md`, "Reactions on ticket notifications".
+**A ticket you work on gets ONE status reaction on its tracker notification, plus 🤖.** ▶️ while you work on it, 🩹 once the MR/PR is handed over for review, ✅ when it is in QA or resolved. Swap in one call, `matrix-react.py ROOM '$eventId' "✅" --replace "▶️" "🩹"`: the script finds and removes its own old status, no reaction id needed. Before reporting done, check each status against the live ticket: one someone reopened loses ✅ and carries no status until one applies again. `--list` shows what you set; `matrix-read-e2ee.py` does not return reactions. 🤖 here means "an agent works or worked on this ticket", not a read-receipt. Finding the message and the commands: `references/messaging-guide.md`, "Reactions on ticket notifications".
 
 ## Quick reference
 
