@@ -9,6 +9,14 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Added
+
+- `matrix-react.py --replace OLD ...` swaps a reaction in one call: it sends the new reaction first, then redacts the account's own old ones; a failed send leaves the old reaction in place, and a reaction the account already set is not sent again. `matrix-react.py --remove` redacts the account's own reaction with that emoji. Both find the account's reactions on the server through the relations endpoint, so no caller has to keep a reaction's event id; plain use is unchanged and makes no lookup ([#197](https://github.com/netresearch/matrix-skill/pull/197))
+
+### Documentation
+
+- `references/messaging-guide.md`: 🩹 (MR/PR handed over) in the reaction table, and a section on reactions on ticket notifications — one status reaction (▶️ working, 🩹 handed over, ✅ done) plus 🤖 for "an agent works or worked on this ticket" — with the one-call swap; room IDs are recommended over room names for it, because resolving a name can take tens of seconds on an account in many rooms ([#197](https://github.com/netresearch/matrix-skill/pull/197))
+
 ## [4.1.0] - 2026-11-04
 
 ### Added
