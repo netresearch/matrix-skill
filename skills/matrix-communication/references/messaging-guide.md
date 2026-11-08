@@ -87,6 +87,7 @@ these messages, so an agent that works on a ticket reacts to its notification:
 Rules:
 
 1. Set exactly ONE of ▶️, 🩹 or ✅ per notification, and always 🤖 next to it.
+   Rule 4 names the one state without a status.
 2. Change the status with ONE call: `--replace` sets the new status and
    removes the account's own reactions with the old ones. The script finds
    those reactions on the server, so no reaction id is needed. It sends the
@@ -95,8 +96,10 @@ Rules:
    handover, swap to ✅ when the ticket goes to QA or is resolved.
 4. Before reporting the work done, compare each status you set with the
    ticket's live status. A person can move the ticket after you: a ticket
-   someone reopened loses ✅ (`--remove`), and 🤖 stays. `--list` shows what
-   the account has set on a notification.
+   someone reopened loses ✅ (`--remove`) and carries no status until one
+   applies again, such as ▶️ when work on it resumes. 🤖 stays. This is the
+   one state without a status reaction. `--list` shows what the account has
+   set on a notification.
 
 ```bash
 R=skills/matrix-communication/scripts/matrix-react.py
@@ -242,11 +245,11 @@ uv run .../matrix-send-e2ee.py "#ops-team:matrix.org" "Message here"
 
 ## Reading Reactions
 
-Reactions are `m.reaction` events that reference a target event via `relates_to`. `matrix-read-e2ee.py` does not return them: it emits room messages only (`m.room.message` and undecryptable `m.room.encrypted`). Read the reactions on one event through the relations API instead, which is what `matrix-react.py --list` does for the account's own reactions.
+Reactions are `m.reaction` events that reference a target event via `relates_to`. In an encrypted room a reaction can also arrive as `m.room.encrypted`; its `m.relates_to` stays in clear text, so filter on the relation (`rel_type: m.annotation` and its `key`), not on the event type. `matrix-read-e2ee.py` does not return reactions: it emits room messages only (`m.room.message` and undecryptable `m.room.encrypted`). Read the reactions on one event through the relations API instead, which is what `matrix-react.py --list` does for the account's own reactions.
 
 ### How Reactions Work
 
-- Each reaction is a standalone `m.reaction` event
+- Each reaction is a standalone `m.reaction` event (or `m.room.encrypted` with a clear-text `m.relates_to`)
 - The `content.m.relates_to` field links it to the original message
 - `rel_type` is always `m.annotation`
 - `key` contains the emoji or text of the reaction
@@ -277,7 +280,8 @@ uv run skills/matrix-communication/scripts/matrix-react.py ROOM '$eventId' --lis
 
 Every sender's reactions on one event come from
 `GET /_matrix/client/v1/rooms/{roomId}/relations/{eventId}/m.annotation`;
-follow `next_batch` until it is absent. Each `chunk` entry has the shape above.
+follow `next_batch` until it is absent. Each `chunk` entry has the shape above;
+an encrypted one has `"type": "m.room.encrypted"` with the same `m.relates_to`.
 
 ### Use Case: Polls and Attendance via Reactions
 
