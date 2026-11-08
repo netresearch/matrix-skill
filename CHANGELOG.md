@@ -9,6 +9,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-11-08
+
 ### Added
 
 - `matrix-react.py --replace OLD ...` swaps a reaction in one call: it sends the new reaction first, then redacts the account's own old ones; a failed send leaves the old reaction in place, and a reaction the account already set is not sent again. `matrix-react.py --remove` redacts the account's own reaction with that emoji. Both find the account's reactions on the server through the relations endpoint, so no caller has to keep a reaction's event id; plain use is unchanged and makes no lookup ([#197](https://github.com/netresearch/matrix-skill/pull/197))
@@ -434,7 +436,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.1.0...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.2.0...HEAD
+[4.2.0]: https://github.com/netresearch/matrix-skill/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/netresearch/matrix-skill/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/netresearch/matrix-skill/compare/v3.1.9...v4.0.0
 [3.1.9]: https://github.com/netresearch/matrix-skill/compare/v3.1.8...v3.1.9
