@@ -306,8 +306,14 @@ def add_bot_prefix(message: str, prefix: str) -> str:
     """Add bot prefix intelligently.
 
     If message starts with a heading, insert prefix after the heading.
-    Otherwise, prepend prefix to the message.
+    Otherwise, prepend prefix to the message. A message that already opens
+    with the prefix (an announcement written with the leading glyph
+    matrix-announcement recommends, or an edit of a prefixed message) is
+    returned unchanged, so the prefix appears once.
     """
+    if message.lstrip().startswith(prefix):
+        return message
+
     lines = message.split("\n")
     if not lines:
         return f"{prefix} {message}"
@@ -316,6 +322,8 @@ def add_bot_prefix(message: str, prefix: str) -> str:
 
     # Check if first line is a heading
     if re.match(r"^#{1,6}\s+", first_line):
+        if len(lines) > 1 and lines[1].lstrip().startswith(prefix):
+            return message
         # Insert prefix after heading on same line or next line
         lines[0] = first_line
         if len(lines) > 1:
