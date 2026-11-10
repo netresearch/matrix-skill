@@ -100,6 +100,11 @@ Rules:
    applies again, such as ▶️ when work on it resumes. 🤖 stays. This is the
    one state without a status reaction. `--list` shows what the account has
    set on a notification.
+5. React only on a notification the team still sees. When a ticket's
+   notification has scrolled far back in the room, nobody reads its
+   reactions any more, so skip it rather than search for it: a reaction
+   there is work without a reader. The same holds for a ticket whose
+   notification is not in the room at all.
 
 ```bash
 R=skills/matrix-communication/scripts/matrix-react.py
