@@ -102,7 +102,7 @@ Rules:
    set on a notification.
 5. React only on a notification the team still sees. When a ticket's
    notification has scrolled far back in the room, nobody reads its
-   reactions any more, so skip it rather than search for it: a reaction
+   reactions anymore, so skip it rather than search for it: a reaction
    there is work without a reader. The same holds for a ticket whose
    notification is not in the room at all.
 
@@ -123,10 +123,12 @@ call, against 0.7 s with the room ID (measured 2026-11-04).
 Finding the notification: each room can have its own webhook sender, so a
 filter on one sender name misses the other rooms. Filter on the user-ID prefix
 the bridge's webhook senders share AND on the ticket URL (`/browse/<KEY>`) in
-`body`. Busy rooms need a large `--limit`:
+`body`. Read only the recent part of the room, about what a member still sees
+on opening it; a notification that is not in it falls under rule 5 and gets
+no reaction, so a deeper search is not needed:
 
 ```bash
-uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 400 --json
+uv run skills/matrix-communication/scripts/matrix-read-e2ee.py ROOM --limit 50 --json
 ```
 
 ## Visual Effects (Element Clients)
