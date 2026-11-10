@@ -21,6 +21,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(__file__))
 
 from formatting import (
+    add_bot_prefix,
     build_mentions,
     inject_pills,
     markdown_to_html,
@@ -303,6 +304,40 @@ class MarkdownToHtmlEscapingTests(unittest.TestCase):
         html = markdown_to_html("> quoted <b>\n\n```\nif a < b:\n```")
         self.assertIn("<blockquote>quoted &lt;b&gt;</blockquote>", html)
         self.assertIn("<pre><code>if a &lt; b:\n</code></pre>", html)
+
+
+class AddBotPrefixTests(unittest.TestCase):
+    PREFIX = "🤖"
+
+    def test_plain_message_gets_the_prefix(self):
+        self.assertEqual(add_bot_prefix("hello", self.PREFIX), "🤖 hello")
+
+    def test_message_already_opening_with_the_prefix_keeps_one(self):
+        # matrix-announcement recommends 🤖 as the leading glyph; with
+        # bot_prefix set as well, that read "🤖 🤖 🛡 …" in a room.
+        message = "🤖 🛡 **Plugin 0.1.3 installed**"
+        self.assertEqual(add_bot_prefix(message, self.PREFIX), message)
+
+    def test_edit_of_a_prefixed_message_keeps_one(self):
+        self.assertEqual(add_bot_prefix("  🤖 text", self.PREFIX), "  🤖 text")
+
+    def test_heading_with_prefix_below_keeps_one(self):
+        message = "## Release\n🤖 body"
+        self.assertEqual(add_bot_prefix(message, self.PREFIX), message)
+
+    def test_heading_message_prefixed_by_this_function_keeps_one(self):
+        once = add_bot_prefix("## Release\nbody", self.PREFIX)
+        self.assertEqual(add_bot_prefix(once, self.PREFIX), once)
+
+    def test_prefix_with_surrounding_whitespace_is_applied_once(self):
+        for message in ("hello", "## Release\nbody"):
+            once = add_bot_prefix(message, " 🤖 ")
+            self.assertEqual(add_bot_prefix(once, " 🤖 "), once, message)
+
+    def test_heading_without_prefix_gets_it_below(self):
+        out = add_bot_prefix("## Release\nbody", self.PREFIX)
+        self.assertEqual(out.count(self.PREFIX), 1)
+        self.assertTrue(out.startswith("## Release"))
 
 
 if __name__ == "__main__":
