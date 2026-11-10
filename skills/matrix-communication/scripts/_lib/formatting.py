@@ -322,7 +322,9 @@ def add_bot_prefix(message: str, prefix: str) -> str:
 
     # Check if first line is a heading
     if re.match(r"^#{1,6}\s+", first_line):
-        if len(lines) > 1 and lines[1].lstrip().startswith(prefix):
+        # the prefix this function inserts sits after a blank line
+        body = next((line for line in lines[1:] if line.strip()), "")
+        if body.lstrip().startswith(prefix):
             return message
         # Insert prefix after heading on same line or next line
         lines[0] = first_line

@@ -325,6 +325,10 @@ class AddBotPrefixTests(unittest.TestCase):
         message = "## Release\n🤖 body"
         self.assertEqual(add_bot_prefix(message, self.PREFIX), message)
 
+    def test_heading_message_prefixed_by_this_function_keeps_one(self):
+        once = add_bot_prefix("## Release\nbody", self.PREFIX)
+        self.assertEqual(add_bot_prefix(once, self.PREFIX), once)
+
     def test_heading_without_prefix_gets_it_below(self):
         out = add_bot_prefix("## Release\nbody", self.PREFIX)
         self.assertEqual(out.count(self.PREFIX), 1)
