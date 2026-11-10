@@ -311,7 +311,10 @@ def add_bot_prefix(message: str, prefix: str) -> str:
     matrix-announcement recommends, or an edit of a prefixed message) is
     returned unchanged, so the prefix appears once.
     """
-    if message.lstrip().startswith(prefix):
+    # compare without surrounding whitespace on either side, so a configured
+    # prefix such as " 🤖" is recognised in the text it produced earlier
+    marker = prefix.strip()
+    if marker and message.lstrip().startswith(marker):
         return message
 
     lines = message.split("\n")
@@ -324,7 +327,7 @@ def add_bot_prefix(message: str, prefix: str) -> str:
     if re.match(r"^#{1,6}\s+", first_line):
         # the prefix this function inserts sits after a blank line
         body = next((line for line in lines[1:] if line.strip()), "")
-        if body.lstrip().startswith(prefix):
+        if marker and body.lstrip().startswith(marker):
             return message
         # Insert prefix after heading on same line or next line
         lines[0] = first_line

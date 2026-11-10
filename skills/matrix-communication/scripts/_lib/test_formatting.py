@@ -329,6 +329,11 @@ class AddBotPrefixTests(unittest.TestCase):
         once = add_bot_prefix("## Release\nbody", self.PREFIX)
         self.assertEqual(add_bot_prefix(once, self.PREFIX), once)
 
+    def test_prefix_with_surrounding_whitespace_is_applied_once(self):
+        for message in ("hello", "## Release\nbody"):
+            once = add_bot_prefix(message, " 🤖 ")
+            self.assertEqual(add_bot_prefix(once, " 🤖 "), once, message)
+
     def test_heading_without_prefix_gets_it_below(self):
         out = add_bot_prefix("## Release\nbody", self.PREFIX)
         self.assertEqual(out.count(self.PREFIX), 1)
