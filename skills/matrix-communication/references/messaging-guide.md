@@ -84,6 +84,12 @@ these messages, so an agent that works on a ticket reacts to its notification:
 | ✅ | Done: the ticket is in QA, Resolved or Closed |
 | 🤖 | An agent works or worked on this ticket. Here it is NOT a read-receipt |
 
+The same reactions go on every other automated notification whose symptom an
+agent works on: a failed build or deploy, a dependency-bot warning, an
+application error forwarded by a webhook. ✅ there means the symptom is
+resolved or explained with no change needed; 🩹 means a fix waits for review
+or merge; ▶️ means the agent is still on it, for example while a rollout runs.
+
 Rules:
 
 1. Set exactly ONE of ▶️, 🩹 or ✅ per notification, and always 🤖 next to it.
