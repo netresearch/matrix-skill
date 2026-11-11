@@ -89,6 +89,9 @@ agent works on: a failed build or deploy, a dependency-bot warning, an
 application error forwarded by a webhook. ✅ there means the symptom is
 resolved or explained with no change needed; 🩹 means a fix waits for review
 or merge; ▶️ means the agent is still on it, for example while a rollout runs.
+Rule 4 compares with the current state of the symptom instead of a ticket
+status: a build that fails again loses ✅. To find such a notification, filter
+on the webhook sender and on the job, project or run number in `body`.
 
 Rules:
 
