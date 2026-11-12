@@ -9,6 +9,15 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Fixed
+
+- `bot_prefix` is added only once. `matrix-send-e2ee.py`, `matrix-send.py`, `matrix-edit-e2ee.py` and `matrix-edit.py` leave a message unchanged when it already opens with the prefix, or when its heading is followed by it; the prefix is compared without surrounding whitespace. An announcement that opens with 🤖 as its leading glyph, or an edit of a prefixed message, no longer reads `🤖 🤖 …` ([#205](https://github.com/netresearch/matrix-skill/pull/205))
+
+### Documentation
+
+- `SKILL.md` and `references/messaging-guide.md`: a ticket notification that has scrolled far back in the room, or is not in it, gets no reaction (new rule 5). To find a notification, read about the last 50 messages (`--limit 50`) instead of 400 ([#206](https://github.com/netresearch/matrix-skill/pull/206))
+- `SKILL.md` and `references/messaging-guide.md`: the status reactions also go on other automated notifications whose symptom an agent works on, such as a failed build or deploy, a dependency-bot warning or a forwarded application error. ✅ means resolved or explained, 🩹 a fix waiting for review or merge, ▶️ still on it; a symptom that recurs loses ✅, and an agent that stops without a fix or an explanation removes ▶️ and keeps 🤖. The guide says how to find such a notification ([#207](https://github.com/netresearch/matrix-skill/pull/207))
+
 ## [4.3.0] - 2026-11-08
 
 ### Added
