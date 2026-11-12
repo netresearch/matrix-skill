@@ -9,6 +9,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [4.3.1] - 2026-11-12
+
 ### Fixed
 
 - `bot_prefix` is added only once. `matrix-send-e2ee.py`, `matrix-send.py`, `matrix-edit-e2ee.py` and `matrix-edit.py` leave a message unchanged when it already opens with the prefix, or when its heading is followed by it; the prefix is compared without surrounding whitespace. An announcement that opens with 🤖 as its leading glyph, or an edit of a prefixed message, no longer reads `🤖 🤖 …` ([#205](https://github.com/netresearch/matrix-skill/pull/205))
@@ -455,7 +457,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.3.0...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.3.1...HEAD
+[4.3.1]: https://github.com/netresearch/matrix-skill/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/netresearch/matrix-skill/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/netresearch/matrix-skill/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/netresearch/matrix-skill/compare/v4.0.0...v4.1.0
