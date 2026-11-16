@@ -185,7 +185,15 @@ def main() -> int:
 
     try:
         subprocess.run(
-            ["dot", "-Tsvg", args.dot, "-o", args.svg],
+            # Absolute paths start with "/", so a file name can never be
+            # taken for a dot option such as -o or -T.
+            [
+                "dot",
+                "-Tsvg",
+                os.path.abspath(args.dot),
+                "-o",
+                os.path.abspath(args.svg),
+            ],
             check=True,
         )
     except subprocess.CalledProcessError as e:

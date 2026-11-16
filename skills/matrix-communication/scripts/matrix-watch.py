@@ -170,7 +170,7 @@ def main() -> int:
     try:
         follow(log, cursor, seen)
     except KeyboardInterrupt:
-        pass
+        pass  # Ctrl-C is the normal way to stop following; exit cleanly
     return 0
 
 
