@@ -421,7 +421,7 @@ def resolve_room_cli(
                 print(json.dumps({"error": str(e)}))
             else:
                 print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
+            raise SystemExit(1) from None
 
     found_id, matches = find_room_by_name(config, room_input)
     if found_id:
@@ -441,4 +441,4 @@ def resolve_room_cli(
         print(json.dumps({"error": error_msg}))
     else:
         print(f"Error: {error_msg}", file=sys.stderr)
-    sys.exit(1)
+    raise SystemExit(1)

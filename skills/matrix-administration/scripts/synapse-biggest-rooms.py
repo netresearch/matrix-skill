@@ -22,7 +22,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import admin_request, load_config, pretty_bytes, quote
+from _lib import admin_request, load_config, quote
+from _lib.pretty_bytes import pretty_bytes
 
 
 def main() -> int:

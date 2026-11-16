@@ -9,6 +9,8 @@ for IEC units (``KiB``, ``MiB`` …).  Stdlib only.
 
 from __future__ import annotations
 
+import math
+
 _BYTE_UNITS = ["B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
 _BIBYTE_UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"]
 
@@ -25,7 +27,7 @@ def pretty_bytes(number: float, binary: bool = False, space: bool = True) -> str
     >>> pretty_bytes(1500, binary=True)
     '1.46 KiB'
     """
-    if number != number or number in (float("inf"), float("-inf")):  # noqa: PLR0124  # NaN check: NaN != NaN is True
+    if isinstance(number, float) and not math.isfinite(number):
         raise ValueError(f"Expected a finite number, got: {number!r}")
 
     units = _BIBYTE_UNITS if binary else _BYTE_UNITS

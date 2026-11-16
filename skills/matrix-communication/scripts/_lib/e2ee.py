@@ -166,43 +166,42 @@ def store_lock(timeout: float = LOCK_TIMEOUT):
 
     path = store_lock_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    handle = open(path, "a+")  # noqa: SIM115  # released in the finally below
     deadline = time.monotonic() + timeout
-
-    while True:
+    with open(path, "a+") as handle:
+        locked = False
         try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            break
-        except OSError as exc:
-            if exc.errno not in (errno.EACCES, errno.EAGAIN):
-                handle.close()
-                raise
-            if time.monotonic() >= deadline:
-                handle.seek(0)
-                holder = handle.read().strip() or "unknown"
-                handle.close()
-                raise SystemExit(
-                    f"Error: the E2EE store is held by pid {holder}.\n"
-                    "\n"
-                    "That is normally matrix-watchd. Commands that route through "
-                    "it - send, react, redact, edit - work while it runs; this "
-                    "one does not yet. Stop the daemon for the duration:\n"
-                    "  matrix-watchd.py --stop && … && matrix-watchd.py --start"
-                ) from exc
-            time.sleep(0.2)
+            while True:
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    locked = True
+                    break
+                except OSError as exc:
+                    if exc.errno not in (errno.EACCES, errno.EAGAIN):
+                        raise
+                    if time.monotonic() >= deadline:
+                        handle.seek(0)
+                        holder = handle.read().strip() or "unknown"
+                        raise SystemExit(
+                            f"Error: the E2EE store is held by pid {holder}.\n"
+                            "\n"
+                            "That is normally matrix-watchd. Commands that route through "
+                            "it - send, react, redact, edit - work while it runs; this "
+                            "one does not yet. Stop the daemon for the duration:\n"
+                            "  matrix-watchd.py --stop && … && matrix-watchd.py --start"
+                        ) from exc
+                    time.sleep(0.2)
 
-    handle.seek(0)
-    handle.truncate()
-    handle.write(str(os.getpid()))
-    handle.flush()
+            handle.seek(0)
+            handle.truncate()
+            handle.write(str(os.getpid()))
+            handle.flush()
 
-    _LOCK_DEPTH = 1
-    try:
-        yield
-    finally:
-        _LOCK_DEPTH = 0
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-        handle.close()
+            _LOCK_DEPTH = 1
+            yield
+        finally:
+            _LOCK_DEPTH = 0
+            if locked:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def explain_store_error(exc: Exception) -> str | None:
