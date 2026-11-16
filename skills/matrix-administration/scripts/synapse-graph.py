@@ -186,13 +186,15 @@ def main() -> int:
     try:
         subprocess.run(
             # Absolute paths start with "/", so a file name can never be
-            # taken for a dot option such as -o or -T.
+            # taken for a dot option such as -o or -T. Joined to the cwd
+            # rather than abspath()'d, so ".." still resolves through
+            # symlinks exactly as the open() that wrote the file did.
             [
                 "dot",
                 "-Tsvg",
-                os.path.abspath(args.dot),
+                os.path.join(os.getcwd(), args.dot),
                 "-o",
-                os.path.abspath(args.svg),
+                os.path.join(os.getcwd(), args.svg),
             ],
             check=True,
         )
