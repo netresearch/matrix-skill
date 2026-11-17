@@ -48,6 +48,7 @@ from _lib.formatting import (
     inject_pills,
     markdown_to_html,
     mention_pill,
+    rich_text_fields,
     shorten_service_urls,
 )
 
@@ -138,6 +139,7 @@ __all__ = [
     "resolve_room_alias",
     "resolve_room_cli",
     "restore_login_checked",
+    "rich_text_fields",
     "room_matches",
     "room_slug",
     "rooms_dir",

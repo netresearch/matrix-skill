@@ -49,6 +49,7 @@ from _lib import (
     normalize_room_input,
     prefer_ipv4,
     restore_login_checked,
+    rich_text_fields,
     suppress_nio_logging,
 )
 
@@ -85,6 +86,7 @@ def process_event(event, debug=False) -> tuple[dict | None, bool]:
             "timestamp": event.server_timestamp,
             "event_id": event.event_id,
             "encrypted": False,
+            **rich_text_fields(event.source.get("content")),
         }, False
     elif isinstance(event, RoomMessageEmote):
         return {
@@ -94,6 +96,7 @@ def process_event(event, debug=False) -> tuple[dict | None, bool]:
             "timestamp": event.server_timestamp,
             "event_id": event.event_id,
             "encrypted": False,
+            **rich_text_fields(event.source.get("content")),
         }, False
     elif isinstance(event, MegolmEvent):
         return {
@@ -114,6 +117,7 @@ def process_event(event, debug=False) -> tuple[dict | None, bool]:
             "timestamp": event.server_timestamp,
             "event_id": event.event_id,
             "encrypted": True,
+            **rich_text_fields(content),
         }
         # Include media fields when present (m.image, m.file, m.video, m.audio)
         # Only expose mxc URL, not E2EE decryption keys (use download script for that)
