@@ -65,6 +65,13 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' "▶️" --re
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' --list   # own reactions, changes nothing
 ```
 
+`--json` output carries `format` and `formatted_body` next to `body` when the
+event has them. `body` is only the plain-text fallback and can differ from what
+Element shows: a hookshot webhook message without a `text` key has
+`Received webhook data:` plus the raw JSON in `body` and the rendered HTML in
+`formatted_body` (see `hookshot-integration.md`). Judge how a message renders
+from `formatted_body`, never from `body` alone.
+
 `--json` output includes the media URL and info for `m.image` / `m.file` /
 `m.video` / `m.audio` events; `matrix-download-e2ee.py` decrypts and saves by
 event ID. It keeps an existing file of the same name (pass `--overwrite` or

@@ -343,6 +343,26 @@ def add_bot_prefix(message: str, prefix: str) -> str:
         return f"{prefix} {message}"
 
 
+def rich_text_fields(content) -> dict:
+    """`format` and `formatted_body` of an event's content, when it carries them.
+
+    `body` is only the plain-text fallback. A sender may put something entirely
+    different there: matrix-hookshot, for one, writes `Received webhook data:`
+    plus the raw JSON into `body` when the webhook payload has no `text` key,
+    while `formatted_body` holds the HTML that Element actually renders. A
+    reader that returns `body` alone cannot tell the two apart. Non-string
+    values are dropped rather than passed on.
+    """
+    if not isinstance(content, dict):
+        return {}
+    fields = {}
+    for key in ("format", "formatted_body"):
+        value = content.get(key)
+        if isinstance(value, str) and value:
+            fields[key] = value
+    return fields
+
+
 MATRIX_TO = "https://matrix.to/#/"
 
 

@@ -26,6 +26,7 @@ from formatting import (
     inject_pills,
     markdown_to_html,
     mention_pill,
+    rich_text_fields,
     shorten_service_urls,
 )
 
@@ -338,6 +339,40 @@ class AddBotPrefixTests(unittest.TestCase):
         out = add_bot_prefix("## Release\nbody", self.PREFIX)
         self.assertEqual(out.count(self.PREFIX), 1)
         self.assertTrue(out.startswith("## Release"))
+
+
+class RichTextFieldsTests(unittest.TestCase):
+    def test_hookshot_message_without_text_key(self):
+        # Shape of a hookshot webhook message whose payload had no `text` key
+        # (PBS digest into #system-monitoring, 2026-11-16): `body` is the raw
+        # payload dump, `formatted_body` is what Element renders.
+        content = {
+            "msgtype": "m.notice",
+            "body": 'Received webhook data:\n\n```json\n\n{\n  "version": "v2",\n'
+            '  "html": "<details><summary>PBS backup digest</summary>ok</details>"\n}\n\n```',
+            "format": "org.matrix.custom.html",
+            "formatted_body": "<details><summary>PBS backup digest</summary>ok</details>",
+        }
+        self.assertEqual(
+            rich_text_fields(content),
+            {
+                "format": "org.matrix.custom.html",
+                "formatted_body": "<details><summary>PBS backup digest</summary>ok</details>",
+            },
+        )
+
+    def test_plain_message_has_none(self):
+        self.assertEqual(rich_text_fields({"msgtype": "m.text", "body": "hi"}), {})
+
+    def test_non_string_and_empty_values_are_dropped(self):
+        self.assertEqual(
+            rich_text_fields({"format": 1, "formatted_body": ""}),
+            {},
+        )
+
+    def test_non_dict_content(self):
+        self.assertEqual(rich_text_fields(None), {})
+        self.assertEqual(rich_text_fields("body"), {})
 
 
 if __name__ == "__main__":
