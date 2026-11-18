@@ -50,6 +50,7 @@ import json
 import os
 import sys
 import time
+import uuid
 
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -101,7 +102,10 @@ def send_reaction(
             return {"event_id": response["event_id"]}
         return {"error": response.get("error", "daemon refused the reaction")}
 
-    txn_id = str(int(time.time() * 1000))
+    # Unique per send: several reactions in one run can fall into the same
+    # millisecond, and Matrix answers a repeated transaction ID with the first
+    # event instead of sending the second.
+    txn_id = f"{int(time.time() * 1000)}-{uuid.uuid4().hex}"
 
     content = {
         "m.relates_to": {"rel_type": "m.annotation", "event_id": event_id, "key": emoji}
@@ -124,7 +128,7 @@ def redact_reaction(config: dict, room_id: str, reaction_id: str) -> dict:
         if response.get("ok"):
             return {"event_id": response["event_id"]}
         return {"error": response.get("error", "daemon refused the redaction")}
-    txn_id = str(int(time.time() * 1000))
+    txn_id = f"{int(time.time() * 1000)}-{uuid.uuid4().hex}"
     return matrix_request(
         config,
         "PUT",
@@ -228,25 +232,28 @@ def apply_reactions(
 ):
     """Apply each of EMOJIS in order; the swap's removals run after the last one.
 
-    Returns (results, error): one result per emoji applied, and the first error
-    (None when all went through). A reaction in REPLACE that is also being set
-    is kept, as apply_reaction does for a single emoji.
+    Returns (results, failed): one result per emoji applied, and the result
+    dict of the first failure, partial effects included (None when all went
+    through). A reaction in REPLACE that is also being set is kept, as
+    apply_reaction does for a single emoji. In a swap every emoji goes through
+    the lookup, so one this account already set is not sent twice.
     """
     keep = [old for old in replace if old not in emojis]
     results = []
     for index, emoji in enumerate(emojis):
         last = index == len(emojis) - 1
+        swap = (keep if last else []) or ([emoji] if replace else [])
         result = apply_reaction(
             config,
             room_id,
             event_id,
             emoji,
-            replace=keep if last else [],
+            replace=swap,
             remove=remove,
             trust_unverified_devices=trust_unverified_devices,
         )
         if "error" in result:
-            return results, result["error"]
+            return results, result
         results.append(result)
     return results, None
 
@@ -366,7 +373,7 @@ def main():
                 print(f"{item['key']}\t{item['event_id']}")
         return
 
-    results, error = apply_reactions(
+    results, failed = apply_reactions(
         config,
         room_id,
         args.event_id,
@@ -376,17 +383,22 @@ def main():
         trust_unverified_devices=args.trust_unverified_devices,
     )
 
-    if error:
+    if failed is not None:
         done = args.emoji[: len(results)]
         if args.json:
-            payload = {"error": error}
+            payload = dict(failed)
             if done:
                 payload["applied"] = done
             print(json.dumps(payload))
         else:
             if done:
                 print(f"Applied before the error: {' '.join(done)}", file=sys.stderr)
-            print(f"Error: {error}", file=sys.stderr)
+            if failed.get("event_id"):
+                current = args.emoji[len(results)]
+                print(f"Set: {current} ({failed['event_id']})", file=sys.stderr)
+            if failed.get("removed"):
+                print(f"Removed: {' '.join(failed['removed'])}", file=sys.stderr)
+            print(f"Error: {failed['error']}", file=sys.stderr)
         sys.exit(1)
 
     if args.json:
