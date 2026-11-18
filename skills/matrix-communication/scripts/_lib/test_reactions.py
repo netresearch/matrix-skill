@@ -210,6 +210,54 @@ class ApplyReactionTest(unittest.TestCase):
         self.assertEqual(self.calls, [("send", "B")])
 
 
+class ApplyReactionsTest(ApplyReactionTest):
+    """Several emojis in one call: each in order, the swap's removals after the last."""
+
+    def apply_all(self, emojis, replace=(), remove=False):
+        return self.react.apply_reactions(
+            {}, "!r", "$e", list(emojis), list(replace), remove
+        )
+
+    def test_claim_sets_status_and_marker_in_order(self):
+        # A ticket claim: ▶️ and 🤖 on one ticket notification.
+        results, error = self.apply_all(["▶️", "\U0001f916"])
+        self.assertIsNone(error)
+        self.assertEqual(self.calls, [("send", "▶️"), ("send", "\U0001f916")])
+        self.assertEqual(
+            [r["event_id"] for r in results], ["$new-▶️", "$new-\U0001f916"]
+        )
+
+    def test_swap_redacts_after_the_last_and_keeps_the_new_ones(self):
+        self.existing = [
+            {"event_id": "$play", "key": "▶️"},
+            {"event_id": "$bot", "key": "R"},
+        ]
+        _, error = self.apply_all(["✅", "R"], replace=["▶️", "R"])
+        self.assertIsNone(error)
+        self.assertEqual(self.calls, [("send", "✅"), ("redact", "$play")])
+
+    def test_replace_never_removes_an_emoji_set_in_the_same_call(self):
+        self.existing = [{"event_id": "$have", "key": "A"}]
+        _, error = self.apply_all(["A", "B"], replace=["A"])
+        self.assertIsNone(error)
+        self.assertNotIn(("redact", "$have"), self.calls)
+
+    def test_first_error_stops_and_reports_what_was_applied(self):
+        sent = []
+
+        def send(config, room, event, key, trust=False):
+            if key == "B":
+                return {"error": "refused"}
+            sent.append(key)
+            return {"event_id": f"$new-{key}"}
+
+        self.react.send_reaction = send
+        results, error = self.apply_all(["A", "B", "C"])
+        self.assertEqual(error, "refused")
+        self.assertEqual(sent, ["A"])
+        self.assertEqual(len(results), 1)
+
+
 class FindOwnTest(unittest.TestCase):
     """The lookup's wiring: v1 relations path, and whoami when user_id is missing."""
 

@@ -8,14 +8,15 @@
 """React to a Matrix message with an emoji.
 
 Usage:
-    matrix-react.py ROOM EVENT_ID EMOJI [--replace OLD ...]
-    matrix-react.py ROOM EVENT_ID EMOJI --remove
+    matrix-react.py ROOM EVENT_ID EMOJI [EMOJI ...] [--replace OLD ...]
+    matrix-react.py ROOM EVENT_ID EMOJI [EMOJI ...] --remove
     matrix-react.py --help
 
 Arguments:
     ROOM        Room alias (#room:server), room ID (!id:server), or room name
     EVENT_ID    Event ID of message to react to (e.g., $abc123...)
-    EMOJI       Emoji reaction (e.g., checkmark, thumbsup, party)
+    EMOJI       Emoji reaction (e.g., checkmark, thumbsup, party); several set
+                all of them in one call, in the order given
 
 Options:
     --replace OLD [OLD ...]
@@ -34,6 +35,9 @@ never needs a reaction's event id.
 Examples:
     # Add checkmark reaction
     matrix-react.py "#ops:matrix.org" "$eventid" "checkmark"
+
+    # Claim a ticket notification: status and agent marker in one call
+    matrix-react.py "#ops:matrix.org" "$eventid" "▶️" "🤖"
 
     # Move a ticket notification from "working" to "done"
     matrix-react.py "#ops:matrix.org" "$eventid" "✅" --replace "▶️" "🩹"
@@ -213,6 +217,40 @@ def redact_keys(
     return result
 
 
+def apply_reactions(
+    config,
+    room_id,
+    event_id,
+    emojis,
+    replace=(),
+    remove=False,
+    trust_unverified_devices=False,
+):
+    """Apply each of EMOJIS in order; the swap's removals run after the last one.
+
+    Returns (results, error): one result per emoji applied, and the first error
+    (None when all went through). A reaction in REPLACE that is also being set
+    is kept, as apply_reaction does for a single emoji.
+    """
+    keep = [old for old in replace if old not in emojis]
+    results = []
+    for index, emoji in enumerate(emojis):
+        last = index == len(emojis) - 1
+        result = apply_reaction(
+            config,
+            room_id,
+            event_id,
+            emoji,
+            replace=keep if last else [],
+            remove=remove,
+            trust_unverified_devices=trust_unverified_devices,
+        )
+        if "error" in result:
+            return results, result["error"]
+        results.append(result)
+    return results, None
+
+
 def main():
     import argparse
 
@@ -225,8 +263,9 @@ def main():
     parser.add_argument("event_id", help="Event ID of message to react to")
     parser.add_argument(
         "emoji",
-        nargs="?",
-        help="Emoji reaction (e.g., checkmark, thumbsup, party); not with --list",
+        nargs="*",
+        help="Emoji reaction (e.g., checkmark, thumbsup, party); several are set in "
+        "one call; not with --list",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -235,7 +274,7 @@ def main():
         default=[],
         metavar="OLD",
         help="Set EMOJI, then remove this account's own reactions with any of OLD "
-        "on the same event (a status swap)",
+        "on the same event (a status swap); with several EMOJI, after the last",
     )
     mode.add_argument(
         "--remove",
@@ -327,7 +366,7 @@ def main():
                 print(f"{item['key']}\t{item['event_id']}")
         return
 
-    result = apply_reaction(
+    results, error = apply_reactions(
         config,
         room_id,
         args.event_id,
@@ -337,25 +376,33 @@ def main():
         trust_unverified_devices=args.trust_unverified_devices,
     )
 
-    if "error" in result:
+    if error:
+        done = args.emoji[: len(results)]
         if args.json:
-            print(json.dumps(result))
+            payload = {"error": error}
+            if done:
+                payload["applied"] = done
+            print(json.dumps(payload))
         else:
-            print(f"Error: {result['error']}", file=sys.stderr)
+            if done:
+                print(f"Applied before the error: {' '.join(done)}", file=sys.stderr)
+            print(f"Error: {error}", file=sys.stderr)
         sys.exit(1)
 
     if args.json:
-        print(json.dumps(result))
-    elif args.quiet:
-        print(result.get("event_id") or "")
-    elif args.remove:
-        removed = len(result["removed"])
-        print(f"Removed {removed} {args.emoji} reaction(s) from {args.event_id}")
-    else:
-        print(f"Reacted with {args.emoji} to {args.event_id}")
-        print(f"Event ID: {result.get('event_id')}")
-        if result.get("removed"):
-            print(f"Removed: {' '.join(result['removed'])}")
+        print(json.dumps(results[0] if len(results) == 1 else {"results": results}))
+        return
+    for emoji, result in zip(args.emoji, results):
+        if args.quiet:
+            print(result.get("event_id") or "")
+        elif args.remove:
+            removed = len(result["removed"])
+            print(f"Removed {removed} {emoji} reaction(s) from {args.event_id}")
+        else:
+            print(f"Reacted with {emoji} to {args.event_id}")
+            print(f"Event ID: {result.get('event_id')}")
+            if result.get("removed"):
+                print(f"Removed: {' '.join(result['removed'])}")
 
 
 if __name__ == "__main__":
