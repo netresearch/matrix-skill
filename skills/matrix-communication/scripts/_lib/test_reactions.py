@@ -11,6 +11,7 @@ Run directly (stdlib only, no nio):
 import importlib.util
 import os
 import sys
+import types
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -208,6 +209,118 @@ class ApplyReactionTest(unittest.TestCase):
         self.react.find_own = lambda *a: self.fail("plain react must not look up")
         self.apply("B")
         self.assertEqual(self.calls, [("send", "B")])
+
+
+class ApplyReactionsTest(ApplyReactionTest):
+    """Several emojis in one call: each in order, the swap's removals after the last."""
+
+    def apply_all(self, emojis, replace=(), remove=False):
+        return self.react.apply_reactions(
+            {}, "!r", "$e", list(emojis), list(replace), remove
+        )
+
+    def test_claim_sets_status_and_marker_in_order(self):
+        # A ticket claim: ▶️ and 🤖 on one ticket notification.
+        results, error = self.apply_all(["▶️", "\U0001f916"])
+        self.assertIsNone(error)
+        self.assertEqual(self.calls, [("send", "▶️"), ("send", "\U0001f916")])
+        self.assertEqual(
+            [r["event_id"] for r in results], ["$new-▶️", "$new-\U0001f916"]
+        )
+
+    def test_swap_redacts_after_the_last_and_keeps_the_new_ones(self):
+        self.existing = [
+            {"event_id": "$play", "key": "▶️"},
+            {"event_id": "$bot", "key": "R"},
+        ]
+        _, error = self.apply_all(["✅", "R"], replace=["▶️", "R"])
+        self.assertIsNone(error)
+        self.assertEqual(self.calls, [("send", "✅"), ("redact", "$play")])
+
+    def test_replace_never_removes_an_emoji_set_in_the_same_call(self):
+        self.existing = [{"event_id": "$have", "key": "A"}]
+        _, error = self.apply_all(["A", "B"], replace=["A"])
+        self.assertIsNone(error)
+        self.assertNotIn(("redact", "$have"), self.calls)
+
+    def test_swap_does_not_resend_an_earlier_emoji_already_set(self):
+        self.existing = [
+            {"event_id": "$have", "key": "A"},
+            {"event_id": "$x", "key": "X"},
+        ]
+        results, failed = self.apply_all(["A", "B"], replace=["X"])
+        self.assertIsNone(failed)
+        self.assertEqual(self.calls, [("send", "B"), ("redact", "$x")])
+        self.assertEqual(results[0]["event_id"], "$have")
+
+    def test_single_emoji_replacing_itself_keeps_the_lookup(self):
+        self.existing = [{"event_id": "$have", "key": "A"}]
+        results, failed = self.apply_all(["A"], replace=["A"])
+        self.assertIsNone(failed)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(results[0]["event_id"], "$have")
+
+    def test_failure_keeps_its_partial_effects(self):
+        self.existing = [
+            {"event_id": "$a", "key": "A"},
+            {"event_id": "$c", "key": "C"},
+        ]
+
+        def redact(config, room, rid):
+            if rid == "$c":
+                return {"error": "403"}
+            self.calls.append(("redact", rid))
+            return {"event_id": "$redaction"}
+
+        self.react.redact_reaction = redact
+        results, failed = self.apply_all(["B"], replace=["A", "C"])
+        self.assertEqual(results, [])
+        self.assertEqual(failed["event_id"], "$new-B")
+        self.assertEqual(failed["removed"], ["A"])
+        self.assertIn("403", failed["error"])
+
+    def test_empty_error_text_still_counts_as_failure(self):
+        self.react.send_reaction = lambda *a, **k: {"error": ""}
+        results, failed = self.apply_all(["A"])
+        self.assertEqual(results, [])
+        self.assertEqual(failed, {"error": ""})
+
+    def test_first_error_stops_and_reports_what_was_applied(self):
+        sent = []
+
+        def send(config, room, event, key, trust=False):
+            if key == "B":
+                return {"error": "refused"}
+            sent.append(key)
+            return {"event_id": f"$new-{key}"}
+
+        self.react.send_reaction = send
+        results, failed = self.apply_all(["A", "B", "C"])
+        self.assertEqual(failed, {"error": "refused"})
+        self.assertEqual(sent, ["A"])
+        self.assertEqual(len(results), 1)
+
+
+class TransactionIdTest(unittest.TestCase):
+    """Two direct sends in one run must not share a transaction ID."""
+
+    def test_sends_and_redactions_in_the_same_millisecond_differ(self):
+        react = load_react()
+        paths = []
+        react.daemon_request = lambda payload: None
+        react.matrix_request = lambda config, method, endpoint, data=None: (
+            paths.append(endpoint) or {"event_id": "$x"}
+        )
+        # Freeze the clock for this module only; time.time itself stays untouched.
+        react.time = types.SimpleNamespace(time=lambda: 1794962519.123)
+        react.send_reaction({}, "!r", "$e", "A")
+        react.send_reaction({}, "!r", "$e", "B")
+        react.redact_reaction({}, "!r", "$a")
+        react.redact_reaction({}, "!r", "$b")
+        sends = [p.rsplit("/", 1)[1] for p in paths[:2]]
+        redacts = [p.rsplit("/", 1)[1] for p in paths[2:]]
+        self.assertNotEqual(sends[0], sends[1])
+        self.assertNotEqual(redacts[0], redacts[1])
 
 
 class FindOwnTest(unittest.TestCase):
