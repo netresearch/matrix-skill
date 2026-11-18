@@ -9,6 +9,18 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-11-18
+
+### Added
+
+- `matrix-react.py ROOM EVENT EMOJI [EMOJI ...]` sets several reactions in one call, in the given order, for example `▶️ 🤖` on a ticket notification. With `--replace` the removals run after the last emoji is set, and an emoji being set in the same call is never removed; one emoji keeps the previous output and JSON shape. Reaction and redaction transaction IDs carry a UUID, so several requests in one run no longer share an ID ([#217](https://github.com/netresearch/matrix-skill/pull/217))
+- `matrix-read-e2ee.py --json` returns `format` and `formatted_body` next to `body` for every decrypted message that has them. A hookshot webhook message, for example, carries raw JSON in `body` while Element renders `formatted_body`; `references/command-reference.md` says to judge rendering from `formatted_body` ([#216](https://github.com/netresearch/matrix-skill/pull/216))
+
+### Fixed
+
+- `synapse-graph.py` hands `dot` absolute paths, so a `--dot` or `--svg` value that starts with `-` cannot be read as a `dot` option; `..` still resolves through symlinks as it did for the file that was written ([#215](https://github.com/netresearch/matrix-skill/pull/215))
+- The E2EE store lock closes its lock file on every path, also when writing the process ID fails after the lock was taken ([#215](https://github.com/netresearch/matrix-skill/pull/215))
+
 ## [4.3.1] - 2026-11-12
 
 ### Fixed
@@ -457,7 +469,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.3.1...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.4.0...HEAD
+[4.4.0]: https://github.com/netresearch/matrix-skill/compare/v4.3.1...v4.4.0
 [4.3.1]: https://github.com/netresearch/matrix-skill/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/netresearch/matrix-skill/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/netresearch/matrix-skill/compare/v4.1.0...v4.2.0
