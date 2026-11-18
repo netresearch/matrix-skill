@@ -469,7 +469,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.3.1...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.4.0...HEAD
+[4.4.0]: https://github.com/netresearch/matrix-skill/compare/v4.3.1...v4.4.0
 [4.3.1]: https://github.com/netresearch/matrix-skill/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/netresearch/matrix-skill/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/netresearch/matrix-skill/compare/v4.1.0...v4.2.0
