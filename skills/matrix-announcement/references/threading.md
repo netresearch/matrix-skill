@@ -24,6 +24,13 @@ A spec-compliant threaded reply has three relation fields — `rel_type`, the th
 
 When in doubt, thread it. Rooms scroll fast.
 
+**Except an ask.** A question or request someone has to act on goes to the main
+timeline with a mention, not only into a thread: thread replies are easy to miss
+in Element, and the person asked may not find the message even after the
+notification. Status follow-ups on your own question can go into its thread.
+Before posting, check that the room is the one the team uses (recent messages
+from other people), not one whose name merely matches.
+
 **A maintenance window gets one thread per ticket.** A window room carrying three
 tickets in one flat timeline interleaves them, and a reader who cares about one
 of them has to reconstruct which line belongs to which — at the moment they are
@@ -64,6 +71,12 @@ Include the mentions block (MSC3952, now spec) so notifications fire correctly:
   "user_ids": ["@sebastian:example.com"]
 }
 ```
+
+With `matrix-send-e2ee.py` from the matrix-communication skill,
+`--mention '@alex:example.com'` sets `m.mentions`, and the pill is drawn only
+where the localpart `alex` (with or without `@`) appears in the message text.
+A display name such as "Alex Example" does not match, so the reader sees no
+mention. Write `@alex` in the text and pass `--mention` as well.
 
 For room-wide pings (`@room`), set `"room": true` in `m.mentions`. **Reserve them for outages** — every misuse trains people to mute the room.
 
