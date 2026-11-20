@@ -72,11 +72,11 @@ Include the mentions block (MSC3952, now spec) so notifications fire correctly:
 }
 ```
 
-With this skill's send scripts, `--mention '@alex:example.com'` sets
-`m.mentions`, and the pill is drawn only where the localpart `alex` (with or
-without `@`) appears in the message text. A display name such as "Alex
-Example" does not match, so the reader sees no mention. Write `@alex` in the
-text and pass `--mention` as well.
+With `matrix-send-e2ee.py` from the matrix-communication skill,
+`--mention '@alex:example.com'` sets `m.mentions`, and the pill is drawn only
+where the localpart `alex` (with or without `@`) appears in the message text.
+A display name such as "Alex Example" does not match, so the reader sees no
+mention. Write `@alex` in the text and pass `--mention` as well.
 
 For room-wide pings (`@room`), set `"room": true` in `m.mentions`. **Reserve them for outages** — every misuse trains people to mute the room.
 
