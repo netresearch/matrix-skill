@@ -169,14 +169,27 @@ uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key -
 
 ## Element labels for instructions to people
 
-When you write step-by-step instructions for people who use Element (sign out, change the homeserver, set up recovery), take every menu item and button label from the client's translation files at a release tag, never from memory, and name that version in the instructions. Labels change between releases.
+When you write step-by-step instructions for people who use Element (sign out, change the homeserver, set up recovery), take every menu item and button label from the client's translation files at a release tag, never from memory, and name that version in the instructions. Labels change between releases: "Sign out" in Element Web v1.11.100 is "Remove this device" in v1.12.35.
 
-| Client | File at the release tag | Release tag |
-|---|---|---|
-| Element Web and Desktop | `apps/web/src/i18n/strings/<locale>.json` in `element-hq/element-web` (the pre-monorepo path `src/i18n/strings/` returns 404 on current tags); keys such as `action.edit`, `common.homeserver`, `auth.server_picker_custom` | `gh api repos/element-hq/element-web/releases/latest --jq .tag_name` |
-| Element X Android | `features/<feature>/impl/src/main/res/values-<lang>/translations.xml` and `libraries/ui-strings/src/main/res/values-<lang>/translations.xml` in `element-hq/element-x-android`; English, the base language, is `values/localazy.xml` in the same directories | `gh api repos/element-hq/element-x-android/releases/latest --jq .tag_name` |
+Use the tag of the version the readers actually run — ask, or read it in the client under Settings → Help & About. Take the latest release only when that is what they run (a self-hosted Element Web you just upgraded, desktop or mobile apps that update themselves):
 
-The string file gives the words, not the place: find the component that renders a key to say which screen or tab holds the button. In Element Web's source a key is written with `|`, not `.` (`_t("action|sign_out")` for the JSON path `action.sign_out`), so search for that form: `gh search code '"action|sign_out"' --repo element-hq/element-web --json path`.
+```bash
+gh api repos/element-hq/element-web/releases/latest --jq .tag_name
+gh api repos/element-hq/element-x-android/releases/latest --jq .tag_name
+```
+
+| Client | File at the release tag |
+|---|---|
+| Element Web and Desktop, v1.12.12 and later | `apps/web/src/i18n/strings/<locale>.json` in `element-hq/element-web`; keys such as `action.edit`, `common.homeserver`, `auth.server_picker_custom` |
+| Element Web and Desktop, up to v1.12.11 | `src/i18n/strings/<locale>.json` (the path before the monorepo move; 404 from v1.12.12 on) |
+| Element X Android | `features/<feature>/impl/src/main/res/values-<lang>/translations.xml` and `libraries/ui-strings/src/main/res/values-<lang>/translations.xml` in `element-hq/element-x-android`; English, the base language, is `values/localazy.xml` in the same directories |
+
+The string file gives the words, not the place: find the component that renders a key to say which screen or tab holds the button. In Element Web's source a key is written with `|`, not `.` (`_t("action|sign_out")` for the JSON path `action.sign_out`). `gh search code` searches only the default branch, so use it to find candidate files, then confirm the file at the chosen tag; the `apps/web/` prefix is missing before v1.12.12:
+
+```bash
+gh search code '"action|sign_out"' --repo element-hq/element-web --json path --jq '.[].path'
+gh api "repos/element-hq/element-web/contents/<path>?ref=<tag>" --jq .content | base64 -d | grep -n 'action|sign_out'
+```
 
 Two labels that read differently from older instructions (Element Web v1.12.35, Element X Android v26.11.0, English / German):
 
