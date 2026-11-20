@@ -9,6 +9,13 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [4.4.1] - 2026-11-20
+
+### Documentation
+
+- `matrix-announcement` `references/threading.md`: a question or request someone has to act on goes to the main timeline with a mention, not only into a thread, and the room is checked against recent messages from other people before posting. `matrix-send-e2ee.py --mention` sets `m.mentions`, but Element draws the pill only where the localpart appears in the message text, so write `@alex` in the text and pass `--mention` as well ([#220](https://github.com/netresearch/matrix-skill/pull/220))
+- `matrix-communication` `references/setup-guide.md`: new section "Element labels for instructions to people". Menu and button labels come from the client's translation files at the release tag the readers run, with the file paths for Element Web and Desktop before and after v1.12.12 and for Element X Android, and two labels that changed: "Remove this device" for signing out and "Account provider" for the homeserver ([#219](https://github.com/netresearch/matrix-skill/pull/219))
+
 ## [4.4.0] - 2026-11-18
 
 ### Added
@@ -469,7 +476,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.4.0...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.4.1...HEAD
+[4.4.1]: https://github.com/netresearch/matrix-skill/compare/v4.4.0...v4.4.1
 [4.4.0]: https://github.com/netresearch/matrix-skill/compare/v4.3.1...v4.4.0
 [4.3.1]: https://github.com/netresearch/matrix-skill/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/netresearch/matrix-skill/compare/v4.2.0...v4.3.0
