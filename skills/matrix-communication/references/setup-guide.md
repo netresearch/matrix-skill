@@ -167,6 +167,22 @@ uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key -
 
 **Note on non-interactive contexts:** All scripts use line buffering (`sys.stdout.reconfigure(line_buffering=True)`) to prevent output from hanging in piped/non-interactive environments like Claude Code.
 
+## Element labels for instructions to people
+
+When you write step-by-step instructions for people who use Element (sign out, change the homeserver, set up recovery), take every menu item and button label from the client's translation files at a release tag, never from memory, and name that version in the instructions. Labels change between releases.
+
+| Client | File at the release tag | Release tag |
+|---|---|---|
+| Element Web and Desktop | `apps/web/src/i18n/strings/<locale>.json` in `element-hq/element-web` (the pre-monorepo path `src/i18n/strings/` returns 404 on current tags); keys such as `action.edit`, `common.homeserver`, `auth.server_picker_custom` | `gh api repos/element-hq/element-web/releases/latest --jq .tag_name` |
+| Element X Android | `features/<feature>/impl/src/main/res/values-<lang>/translations.xml` and `libraries/ui-strings/src/main/res/values-<lang>/translations.xml` in `element-hq/element-x-android` | `gh api repos/element-hq/element-x-android/releases/latest --jq .tag_name` |
+
+The string file gives the words, not the place: find the component that renders a key (`gh api "search/code?q=<key>+repo:element-hq/element-web"`) to say which screen or tab holds the button.
+
+Two labels that read differently from older instructions (Element Web v1.12.35, Element X Android v26.11.0, English / German):
+
+- Signing out is "Remove this device" / „Dieses Gerät entfernen“ (key `action.sign_out`; Element X `action_signout`), not "Sign out".
+- The homeserver is the "Account provider" / „Kontoanbieter“ (`common.homeserver`). Changing it: "Edit" next to it, then "Other account provider" on Web; "Sign in manually", then "Change account provider" / „Kontoanbieter wechseln“ in Element X.
+
 ## Troubleshooting
 
 **A token you found somewhere is valid — that does not make it yours.**
