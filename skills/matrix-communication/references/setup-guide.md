@@ -174,9 +174,9 @@ When you write step-by-step instructions for people who use Element (sign out, c
 | Client | File at the release tag | Release tag |
 |---|---|---|
 | Element Web and Desktop | `apps/web/src/i18n/strings/<locale>.json` in `element-hq/element-web` (the pre-monorepo path `src/i18n/strings/` returns 404 on current tags); keys such as `action.edit`, `common.homeserver`, `auth.server_picker_custom` | `gh api repos/element-hq/element-web/releases/latest --jq .tag_name` |
-| Element X Android | `features/<feature>/impl/src/main/res/values-<lang>/translations.xml` and `libraries/ui-strings/src/main/res/values-<lang>/translations.xml` in `element-hq/element-x-android` | `gh api repos/element-hq/element-x-android/releases/latest --jq .tag_name` |
+| Element X Android | `features/<feature>/impl/src/main/res/values-<lang>/translations.xml` and `libraries/ui-strings/src/main/res/values-<lang>/translations.xml` in `element-hq/element-x-android`; English, the base language, is `values/localazy.xml` in the same directories | `gh api repos/element-hq/element-x-android/releases/latest --jq .tag_name` |
 
-The string file gives the words, not the place: find the component that renders a key (`gh api "search/code?q=<key>+repo:element-hq/element-web"`) to say which screen or tab holds the button.
+The string file gives the words, not the place: find the component that renders a key to say which screen or tab holds the button. In Element Web's source a key is written with `|`, not `.` (`_t("action|sign_out")` for the JSON path `action.sign_out`), so search for that form: `gh search code '"action|sign_out"' --repo element-hq/element-web --json path`.
 
 Two labels that read differently from older instructions (Element Web v1.12.35, Element X Android v26.11.0, English / German):
 
