@@ -546,7 +546,7 @@ curl -s -X PUT \
   -H "Authorization: Bearer $MATRIX_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"msgtype\":\"m.image\",\"body\":\"…plaintext fallback…\",\"url\":\"$MXC\",\"info\":{\"mimetype\":\"image/png\",\"w\":1200,\"h\":630}}" \
-  "$HOMESERVER/_matrix/client/v3/rooms/$ROOM/send/m.room.message/$(uuidgen)"</code></pre>
+  "$HOMESERVER/_matrix/client/v3/rooms/$ROOM/send/m.room.message/$(date +%s)-$$-$RANDOM"</code></pre>
 
       <div class="callout">
         <strong>Why HTML&rarr;PNG, not LLM-generated images.</strong> HTML/CSS gives pixel-precise control. Templates render deterministically every week &mdash; diffs are obvious, regressions catchable. Coding agents are great at HTML and bad at rasters. Lean into the strength.
