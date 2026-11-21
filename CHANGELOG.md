@@ -9,6 +9,10 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+### Fixed
+
+- `matrix-announcement` `references/image-cards.md` and `references/gallery.html`: the image-card recipe builds the Matrix transaction ID from the date and 8 bytes of `/dev/urandom` instead of `$(uuidgen)`, so the card can be sent on hosts without `uuidgen`, which the Ubuntu 26.04 release upgrade removes ([#224](https://github.com/netresearch/matrix-skill/pull/224))
+
 ## [4.4.1] - 2026-11-20
 
 ### Documentation
