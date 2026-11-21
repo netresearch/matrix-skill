@@ -43,8 +43,8 @@ MXC=$(curl -s -X POST \
 
 # 3. Send m.image (file size via wc -c so it works on both Linux and macOS;
 #    `stat -c%s` is GNU-only, `stat -f%z` is BSD-only — wc -c < FILE is portable).
-#    The transaction ID only has to be unique per access token; date, PID and
-#    $RANDOM need no package (uuidgen is not installed on every Linux host).
+#    The transaction ID has to be unique per device and endpoint; date plus
+#    8 bytes from /dev/urandom need no package (uuidgen is not on every host).
 SIZE=$(wc -c < card.png | tr -d ' ')
 curl -s -X PUT \
   -H "Authorization: Bearer $MATRIX_TOKEN" \
@@ -60,7 +60,7 @@ curl -s -X PUT \
       \"size\": $SIZE
     }
   }" \
-  "$HOMESERVER/_matrix/client/v3/rooms/$ROOM/send/m.room.message/$(date +%s)-$$-$RANDOM"
+  "$HOMESERVER/_matrix/client/v3/rooms/$ROOM/send/m.room.message/$(date +%s)-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
 
 # 4. Follow with the text/links nobody can copy from an image.
 #    ${CLAUDE_SKILL_DIR} is substituted by Claude Code to the active skill's
