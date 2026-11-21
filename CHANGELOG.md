@@ -9,6 +9,8 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [4.4.2] - 2026-11-21
+
 ### Fixed
 
 - `matrix-announcement` `references/image-cards.md` and `references/gallery.html`: the image-card recipe builds the Matrix transaction ID from the date and 8 bytes of `/dev/urandom` instead of `$(uuidgen)`, so the card can be sent on hosts without `uuidgen`, which the Ubuntu 26.04 release upgrade removes ([#224](https://github.com/netresearch/matrix-skill/pull/224))
@@ -480,7 +482,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.4.1...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.4.2...HEAD
+[4.4.2]: https://github.com/netresearch/matrix-skill/compare/v4.4.1...v4.4.2
 [4.4.1]: https://github.com/netresearch/matrix-skill/compare/v4.4.0...v4.4.1
 [4.4.0]: https://github.com/netresearch/matrix-skill/compare/v4.3.1...v4.4.0
 [4.3.1]: https://github.com/netresearch/matrix-skill/compare/v4.3.0...v4.3.1
