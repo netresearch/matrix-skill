@@ -119,7 +119,7 @@ A password given as a command-line argument is refused: every local user can
 read it in the process list while setup runs. `--allow-secret-argument`
 accepts it anyway, for automation that can use neither option above.
 
-This creates a dedicated "Matrix Skill E2EE" device. The password is used once and not stored.
+This creates a dedicated device named "Matrix Skill E2EE @ <hostname>". The password is used once and not stored.
 
 **Why environment variable?** Avoids shell escaping issues with special characters (`!`, `$`, etc.).
 

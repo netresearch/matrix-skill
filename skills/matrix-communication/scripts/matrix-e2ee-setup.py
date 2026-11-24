@@ -114,6 +114,7 @@ async def setup_device(config: dict, password: str) -> dict:
                 "success": True,
                 "device_id": login_response.device_id,
                 "user_id": login_response.user_id,
+                "device_name": device_name,
             }
         else:
             return {"error": str(login_response)}
@@ -283,7 +284,7 @@ def main():
         print(f"  User:      {result['user_id']}")
         print()
         print("You can now use matrix-send-e2ee.py without password.")
-        print("The device appears as 'Matrix Skill E2EE' in your sessions.")
+        print(f"The device appears as '{result['device_name']}' in your sessions.")
 
 
 if __name__ == "__main__":
