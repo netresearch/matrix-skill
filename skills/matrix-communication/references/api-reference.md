@@ -120,6 +120,11 @@ PUT /rooms/{roomId}/state/m.room.power_levels/
 # On newer room versions the creator has implicit, permanent authority and
 # must NOT appear in "users" — setting the creator's own level is rejected:
 # {"error": "Creator user must not appear in content.users", ...}
+# Reading your OWN level: in room version 12 the sender of m.room.create and
+# every id in its content.additional_creators outrank all levels. A creator
+# missing from "users" is not at users_default; read the create event (full
+# state, GET /rooms/{roomId}/state, for its sender) before calling an action
+# forbidden.
 ```
 
 ### Messages
