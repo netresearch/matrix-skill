@@ -121,15 +121,17 @@ the store which nio opens it (`uv run --with "matrix-nio==0.25.2" … --status` 
 `--with "matrix-nio>=0.26"`); only then say which side is wrong. A store that one
 version opens is not broken. Measure with `--status` only: a read or send from the
 copy syncs, and that sync acknowledges the to-device messages (room keys) the
-server holds for the device, so the real store never receives them.
+server holds for the device; the copy then holds keys the real store may never
+receive.
 
 **Old messages stay `[Unable to decrypt]` after a new device.** A device created
 by `matrix-e2ee-setup.py` holds no keys for messages sent before it existed.
 Once it is verified, `matrix-read-e2ee.py ROOM --request-keys` asks your own
 other sessions (Element) for them; read the room again a few seconds later. In a
-session on 2026-11-24 this decrypted eleven days of history without the
+session on 2026-11-24 this decrypted the messages the reader needed without the
 recovery key, after `matrix-key-backup.py --import-keys` had found no stored
-backup key.
+backup key; some older messages stayed undecryptable, so it is a partial
+recovery, not a replacement for the key backup.
 
 
 - **Reusing a running client's access token.** The one mistake here that damages
