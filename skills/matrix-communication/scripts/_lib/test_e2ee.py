@@ -28,6 +28,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -99,6 +100,24 @@ class RestoreLoginCheckedTests(unittest.TestCase):
         e2ee._hold_store_lock = lambda: taken.append(True)
         restore_login_checked(FakeClient(), "@u:example.org", "D", "t")
         self.assertEqual(taken, [True])
+
+    def test_a_nio_that_converts_the_store_never_opens_it(self):
+        for installed, refused in (
+            ("0.25.2", False),
+            ("0.26.0", True),
+            ("0.27.0rc1", True),
+            ("1.0.0", True),
+        ):
+            with self.subTest(installed=installed):
+                client = FakeClient()
+                with mock.patch("importlib.metadata.version", return_value=installed):
+                    if refused:
+                        with self.assertRaises(SystemExit) as caught:
+                            restore_login_checked(client, "@u:e.org", "D", "t")
+                        self.assertIn(installed, str(caught.exception))
+                    else:
+                        restore_login_checked(client, "@u:e.org", "D", "t")
+                self.assertEqual(bool(client.calls), not refused)
 
     def test_success_passes_the_credentials_through(self):
         client = FakeClient()

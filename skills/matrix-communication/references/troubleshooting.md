@@ -24,7 +24,8 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 | `Invalid password` | special characters eaten by the shell | `MATRIX_PASSWORD="pass" uv run …` |
 | `libolm not found` | missing native dependency | Linux: `apt install libolm-dev`; macOS 26+ is unsupported, see `setup-guide.md` |
 | `matrix-nio not found` | Python dependency missing | `uv run …/matrix-doctor.py --install` |
-| `The E2EE store cannot be opened by the installed matrix-nio (0.25.x)` | **backend mismatch, not a broken store**: the store was written by nio ≥ 0.26 (vodozemac format), the installed nio is < 0.26 (libolm), or the reverse. The error says so in its first lines — read them before claiming the store is defective | pin nio to the version that wrote the store, or re-create the device with `matrix-e2ee-setup.py` and re-import keys |
+| `The E2EE store cannot be opened by the installed matrix-nio (0.25.x)` | **backend mismatch, not a broken store**: the store was written by nio ≥ 0.26 (vodozemac format), the installed nio is < 0.26 (libolm). The error says so in its first lines — read them before claiming the store is defective | never open the store with nio ≥ 0.26, not even to test: it converts the store and the skill cannot read the result. Find and stop the script that wrote it, or the new store is converted again. Run `matrix-key-backup.py --status`: `--logout` deletes this device's store files, and keys that are in no server backup are lost with them. Then `matrix-e2ee-setup.py --logout`, `matrix-e2ee-setup.py`, and `matrix-key-backup.py --import-keys` (add `--recovery-key` when no stored backup key is found) |
+| `matrix-nio 0.26.x must not open the E2EE store` | the script runs with nio ≥ 0.26: an edited or unpinned copy, or a `--with matrix-nio` | run the installed script unchanged; the store is untouched, the script stopped before opening it |
 
 Two of these look like the same error and are not: `M_UNKNOWN_TOKEN` says the
 token is dead, while `Room not found` on a room you are demonstrably in says the
@@ -116,10 +117,10 @@ access" before checking the other token against an admin endpoint.
 the last line of the store error, matched it against an old memory note and reported
 the E2EE store as defective — the message had named the real cause (nio 0.25 cannot
 read a vodozemac store) in its first two lines, and the user had already fixed exactly
-that once. Before any such claim: read the whole error; then measure on a **copy** of
-the store which nio opens it (`uv run --with "matrix-nio==0.25.2" … --status` vs
-`--with "matrix-nio>=0.26"`); only then say which side is wrong. A store that one
-version opens is not broken.
+that once. Before any such claim, read the whole error. Do not try nio 0.26 on the store: it
+opens libolm stores too and rewrites them, so one read breaks every pinned script, and
+"0.26 opens it" does not show which side wrote it. The fix is the recovery in the table
+above.
 
 
 - **Reusing a running client's access token.** The one mistake here that damages

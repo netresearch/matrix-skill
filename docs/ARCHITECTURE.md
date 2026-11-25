@@ -40,9 +40,10 @@ exclusive `flock` on the store directory, held until the process exits. A comman
 that arrives while another holds it waits, then refuses and names the holder's pid.
 
 **The pin is part of the format.** `matrix-nio[e2e]<0.26` is pinned in every script
-that imports nio. 0.26 changed the crypto backend, and the two backends write
-incompatible stores — so the pin and the store on disk belong together, and moving
-one means recreating the other.
+that imports nio. 0.26 changed the crypto backend and converts a 0.25 store
+one way, so the pin and the store on disk belong together, and moving one means
+recreating the other. `refuse_unsupported_nio` stops a script that runs with 0.26 or
+later before it opens the store.
 
 ## Live Room Awareness
 

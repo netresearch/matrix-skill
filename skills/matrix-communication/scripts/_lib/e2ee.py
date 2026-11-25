@@ -13,6 +13,7 @@ import errno
 import fcntl
 import json
 import os
+import re
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -204,12 +205,37 @@ def store_lock(timeout: float = LOCK_TIMEOUT):
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def refuse_unsupported_nio() -> None:
+    """Exit when the installed matrix-nio would convert the E2EE store.
+
+    nio 0.26 reads a libolm store and writes it back in vodozemac's format, one
+    way: after that the pinned scripts cannot open it. The inline pin does not
+    stop a copy whose pin was edited, so the store is refused here as well.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        installed = version("matrix-nio")
+    except PackageNotFoundError:
+        return
+    match = re.match(r"(\d+)\.(\d+)", installed)
+    if match is None or (int(match[1]), int(match[2])) < (0, 26):
+        return
+    raise SystemExit(
+        f"Error: matrix-nio {installed} must not open the E2EE store.\n"
+        "\n"
+        "It converts the store to a format the skill cannot read (the skill "
+        "pins matrix-nio<0.26). Run the installed script unchanged: no --with "
+        "for matrix-nio, no edited copy, no older checkout."
+    )
+
+
 def explain_store_error(exc: Exception) -> str | None:
     """Diagnose a store that cannot be opened, or return None.
 
-    A store written by one matrix-nio crypto backend cannot be read by the
-    other: 0.25 serializes the olm account through libolm, 0.26 through
-    vodozemac, and the two formats are not interchangeable. The failure surfaces
+    0.25 serializes the olm account through libolm and cannot read what 0.26
+    wrote through vodozemac. 0.26 does open a libolm store, and converts it one
+    way (see ``refuse_unsupported_nio``). The failure surfaces
     as ``OlmAccountError: BAD_ACCOUNT_KEY``, which names a key, so the search
     goes to credentials.json, to the token, to the store path - none of which
     are wrong. Say what actually happened instead.
@@ -233,8 +259,8 @@ def explain_store_error(exc: Exception) -> str | None:
         f"The E2EE store cannot be opened by the installed matrix-nio ({installed}).\n"
         "\n"
         "This is a backend mismatch, not a bad credential: matrix-nio 0.25 keeps "
-        "the olm account in libolm's format and 0.26 in vodozemac's, and neither "
-        "can read the other's. The store was written by the other one.\n"
+        "the olm account in libolm's format and 0.26 in vodozemac's, and 0.25 "
+        "cannot read the latter. The store was written by 0.26 or later.\n"
         "\n"
         "The usual writer is a script copy from an OLDER skill version - a plugin\n"
         "cache directory or a stale checkout - whose unpinned dependency resolves\n"
@@ -281,6 +307,7 @@ def restore_login_checked(client, user_id: str, device_id: str, access_token: st
     Takes the client as a parameter rather than importing nio, keeping this
     module stdlib-only.
     """
+    refuse_unsupported_nio()
     _hold_store_lock()
     try:
         client.restore_login(
