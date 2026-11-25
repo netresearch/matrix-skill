@@ -49,6 +49,7 @@ from _lib import (
     load_config,
     load_credentials,
     prefer_ipv4,
+    refuse_unsupported_nio,
     save_credentials,
     store_lock,
     suppress_nio_logging,
@@ -70,6 +71,7 @@ sys.stderr.reconfigure(line_buffering=True)
 
 async def setup_device(config: dict, password: str) -> dict:
     """Create a new E2EE device using password login."""
+    refuse_unsupported_nio()
     store_path = get_store_path()
 
     client_config = AsyncClientConfig(

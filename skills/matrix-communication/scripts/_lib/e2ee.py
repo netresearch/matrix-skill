@@ -13,6 +13,7 @@ import errno
 import fcntl
 import json
 import os
+import re
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -204,6 +205,31 @@ def store_lock(timeout: float = LOCK_TIMEOUT):
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def refuse_unsupported_nio() -> None:
+    """Exit when the installed matrix-nio would convert the E2EE store.
+
+    nio 0.26 reads a libolm store and writes it back in vodozemac's format, one
+    way: after that the pinned scripts cannot open it. The inline pin does not
+    stop a copy whose pin was edited, so the store is refused here as well.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        installed = version("matrix-nio")
+    except PackageNotFoundError:
+        return
+    match = re.match(r"(\d+)\.(\d+)", installed)
+    if match is None or (int(match[1]), int(match[2])) < (0, 26):
+        return
+    raise SystemExit(
+        f"Error: matrix-nio {installed} must not open the E2EE store.\n"
+        "\n"
+        "It converts the store to a format the skill cannot read (the skill "
+        "pins matrix-nio<0.26). Run the installed script unchanged: no --with "
+        "for matrix-nio, no edited copy, no older checkout."
+    )
+
+
 def explain_store_error(exc: Exception) -> str | None:
     """Diagnose a store that cannot be opened, or return None.
 
@@ -281,6 +307,7 @@ def restore_login_checked(client, user_id: str, device_id: str, access_token: st
     Takes the client as a parameter rather than importing nio, keeping this
     module stdlib-only.
     """
+    refuse_unsupported_nio()
     _hold_store_lock()
     try:
         client.restore_login(
