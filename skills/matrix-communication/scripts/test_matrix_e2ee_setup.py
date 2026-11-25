@@ -17,8 +17,7 @@ import importlib.util
 import os
 import sys
 import types
-import unittest
-from unittest import mock
+import unittest.mock
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _SCRIPT = os.path.join(_HERE, "matrix-e2ee-setup.py")
@@ -39,10 +38,10 @@ def _load_script():
     nio.LoginResponse = dict
     spec = importlib.util.spec_from_file_location("matrix_e2ee_setup", _SCRIPT)
     module = importlib.util.module_from_spec(spec)
-    streams = {name: mock.Mock() for name in ("stdout", "stderr")}
+    streams = {name: unittest.mock.Mock() for name in ("stdout", "stderr")}
     with (
-        mock.patch.dict(sys.modules, {"nio": nio}),
-        mock.patch.multiple(sys, **streams),
+        unittest.mock.patch.dict(sys.modules, {"nio": nio}),
+        unittest.mock.patch.multiple(sys, **streams),
     ):
         spec.loader.exec_module(module)
     return module
@@ -58,7 +57,7 @@ class SetupDeviceGuardTests(unittest.TestCase):
 
         script = _load_script()
         config = {"user_id": "@u:example.org", "homeserver": "https://example.org"}
-        with mock.patch.multiple(
+        with unittest.mock.patch.multiple(
             script,
             refuse_unsupported_nio=guard,
             get_store_path=lambda: "/nonexistent",
