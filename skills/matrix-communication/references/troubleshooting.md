@@ -24,7 +24,8 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 | `Invalid password` | special characters eaten by the shell | `MATRIX_PASSWORD="pass" uv run …` |
 | `libolm not found` | missing native dependency | Linux: `apt install libolm-dev`; macOS 26+ is unsupported, see `setup-guide.md` |
 | `matrix-nio not found` | Python dependency missing | `uv run …/matrix-doctor.py --install` |
-| `The E2EE store cannot be opened by the installed matrix-nio (0.25.x)` | **backend mismatch, not a broken store**: the store was written by nio ≥ 0.26 (vodozemac format), the installed nio is < 0.26 (libolm), or the reverse. The error says so in its first lines — read them before claiming the store is defective | never open the store with nio ≥ 0.26, not even to test: it converts the store and the skill cannot read the result. Re-create the device with `matrix-e2ee-setup.py --logout` and `matrix-e2ee-setup.py`, then `matrix-key-backup.py --import-keys` |
+| `The E2EE store cannot be opened by the installed matrix-nio (0.25.x)` | **backend mismatch, not a broken store**: the store was written by nio ≥ 0.26 (vodozemac format), the installed nio is < 0.26 (libolm). The error says so in its first lines — read them before claiming the store is defective | never open the store with nio ≥ 0.26, not even to test: it converts the store and the skill cannot read the result. Re-create the device with `matrix-e2ee-setup.py --logout` and `matrix-e2ee-setup.py`, then `matrix-key-backup.py --import-keys` |
+| `matrix-nio 0.26.x must not open the E2EE store` | the script runs with nio ≥ 0.26: an edited or unpinned copy, or a `--with matrix-nio` | run the installed script unchanged; the store is untouched, the script stopped before opening it |
 
 Two of these look like the same error and are not: `M_UNKNOWN_TOKEN` says the
 token is dead, while `Room not found` on a room you are demonstrably in says the

@@ -160,9 +160,10 @@ The scripts pin `matrix-nio[e2e]<0.26`. That is not cosmetic:
 - 0.26 sends the SAS commitment as a hex digest where 0.25 sent unpadded base64,
   so Element rejects every verification before it shows emoji
   (matrix-nio/matrix-nio#570)
-- the two releases use different crypto backends (libolm vs vodozemac) and write
-  incompatible stores — opening one with the other fails as `BAD_ACCOUNT_KEY`,
-  which reads like a credential problem and is not one
+- the two releases use different crypto backends (libolm vs vodozemac). 0.26
+  opens a 0.25 store and converts it one way; 0.25 then fails on it as
+  `BAD_ACCOUNT_KEY`, which reads like a credential problem and is not one. The
+  scripts therefore refuse to open the store with nio 0.26 or later
 
 Moving the pin is therefore a migration, not a version bump:
 
