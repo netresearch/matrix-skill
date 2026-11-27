@@ -202,6 +202,18 @@ class CheckE2eeSetupTests(CredentialTestCase):
         self.assertIn("DEVICEAAAA", message)
         self.assertEqual(self.requests, [("syt_device", "GET", "/account/whoami")])
 
+    def test_no_home_at_all_fails_instead_of_raising(self):
+        def no_home():
+            raise doctor.cutover.CutoverError("neither XDG_DATA_HOME nor HOME is set")
+
+        doctor.get_session_path = no_home
+        try:
+            state, message = doctor.check_e2ee_setup(CONFIG)
+        except doctor.cutover.CutoverError:
+            self.fail("check_e2ee_setup raised instead of failing the check")
+        self.assertIs(state, False)
+        self.assertIn("HOME", message)
+
     def test_missing_session_file(self):
         state, message = doctor.check_e2ee_setup(CONFIG)
         self.assertIs(state, False)

@@ -44,11 +44,14 @@ class CutoverError(Exception):
 
 
 def _data_home(env) -> Path:
-    """$XDG_DATA_HOME, else ~/.local/share, as the nio skill and the CLI compute it."""
+    """$XDG_DATA_HOME, else <home>/.local/share, as the nio skill and the CLI compute it.
+
+    <home> is HOME, else USERPROFILE (Windows), like the CLI's ``home_dir``.
+    """
     xdg = env.get("XDG_DATA_HOME")
     if xdg:
         return Path(xdg)
-    home = env.get("HOME")
+    home = env.get("HOME") or env.get("USERPROFILE")
     if not home:
         raise CutoverError("neither XDG_DATA_HOME nor HOME is set")
     return Path(home) / ".local" / "share"

@@ -16,8 +16,19 @@ import sys
 
 from _lib import cli, cutover
 
-# Commands and flags that must not trigger the takeover of the nio device.
-NO_TAKEOVER = {"migrate-nio", "logout", "help", "--help", "-h", "--version", "-V"}
+# Commands, and flags before "--", that must not trigger the takeover of the
+# nio device. Only the command (the first argument) and the flags count: a
+# message or room called "logout" must not skip it.
+NO_TAKEOVER_COMMANDS = {
+    "migrate-nio",
+    "logout",
+    "help",
+    "--help",
+    "-h",
+    "--version",
+    "-V",
+}
+HELP_FLAGS = {"--help", "-h", "--version", "-V"}
 
 
 class Unsupported(Exception):
@@ -25,7 +36,10 @@ class Unsupported(Exception):
 
 
 def needs_takeover(args) -> bool:
-    return bool(args) and not any(arg in NO_TAKEOVER for arg in args)
+    if not args or args[0] in NO_TAKEOVER_COMMANDS:
+        return False
+    flags = args[: args.index("--")] if "--" in args else args
+    return not any(arg in HELP_FLAGS for arg in flags)
 
 
 def run_cli(args, extra_env=None, env=None) -> int:

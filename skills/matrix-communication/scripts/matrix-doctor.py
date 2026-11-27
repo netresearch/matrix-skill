@@ -264,7 +264,10 @@ def check_e2ee_setup(config: dict, offline: bool = False) -> tuple[bool | None, 
     belongs to that client's device - and driving one device from two clients
     breaks decryption in both.
     """
-    session_file = get_session_path()
+    try:
+        session_file = get_session_path()
+    except cutover.CutoverError as exc:
+        return False, f"E2EE session not found: {exc}"
 
     if not session_file.exists():
         if nio_pending():

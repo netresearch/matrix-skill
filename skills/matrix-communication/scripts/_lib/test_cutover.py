@@ -25,6 +25,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from _lib import cutover
 
@@ -49,6 +50,13 @@ class CutoverTestCase(unittest.TestCase):
             "HOME": str(self.root / "home"),
             "XDG_DATA_HOME": str(self.root / "data"),
         }
+        # The process environment too: the lock refusal asks an old daemon's
+        # socket for its pid, and that path comes from HOME / XDG_RUNTIME_DIR.
+        patcher = mock.patch.dict(
+            os.environ, {**self.env, "XDG_RUNTIME_DIR": str(self.root / "run")}
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.store = self.root / "data" / "matrix-skill" / "store"
         self.logged = []
 
@@ -97,6 +105,15 @@ class PendingTests(CutoverTestCase):
         self.assertEqual(
             cutover.cli_session_path({"HOME": "/home/u"}),
             Path("/home/u/.local/share/matrix-e2ee-cli/session.json"),
+        )
+
+    def test_userprofile_stands_in_for_a_missing_home_as_in_the_cli(self):
+        try:
+            path = cutover.cli_session_path({"USERPROFILE": "/profile"})
+        except cutover.CutoverError as exc:
+            self.fail(f"USERPROFILE was not used: {exc}")
+        self.assertEqual(
+            path, Path("/profile/.local/share/matrix-e2ee-cli/session.json")
         )
 
 
@@ -155,7 +172,10 @@ class MigrateTests(CutoverTestCase):
 
     def test_two_backups_in_one_second_do_not_collide(self):
         first = cutover.backup_store(self.store)
-        second = cutover.backup_store(self.store)
+        try:
+            second = cutover.backup_store(self.store)
+        except FileExistsError:
+            self.fail("the second backup collided with the first")
         self.assertNotEqual(first, second)
 
     def test_nothing_happens_when_nothing_is_pending(self):

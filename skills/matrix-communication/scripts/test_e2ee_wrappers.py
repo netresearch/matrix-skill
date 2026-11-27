@@ -313,6 +313,12 @@ class TakeoverTests(WrapperTestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual([c["argv"][0] for c in self.calls()], ["migrate-nio"])
 
+    def test_a_message_or_room_named_like_a_command_still_takes_over(self):
+        self.run_script("matrix-send-e2ee.py", "logout", "help")
+        argvs = [c["argv"] for c in self.calls()]
+        self.assertEqual(argvs[0][0], "migrate-nio")
+        self.assertEqual(argvs[1], ["send", "logout", "--", "help"])
+
     def test_logout_and_help_never_trigger_a_takeover(self):
         self.run_script("matrix-e2ee-cli.py", "logout")
         self.run_script("matrix-e2ee-cli.py", "send", "--help")
