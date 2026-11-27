@@ -93,12 +93,25 @@ def _parse_http_error(e: urllib.error.HTTPError) -> dict:
         e.close()
     try:
         error_json = json.loads(error_body)
-        return {
-            "error": error_json.get("error", error_body),
-            "errcode": error_json.get("errcode"),
-        }
     except json.JSONDecodeError:
+        error_json = None
+    if not isinstance(error_json, dict):  # not JSON, or [] / null / a string
         return {"error": error_body, "errcode": str(e.code)}
+    return {
+        "error": error_json.get("error", error_body),
+        "errcode": error_json.get("errcode"),
+    }
+
+
+def _lenient_http_error(e: urllib.error.HTTPError) -> dict:
+    """_parse_http_error, and an error dict too when the body is cut off."""
+    try:
+        return _parse_http_error(e)
+    except http.client.HTTPException as broken:
+        return {
+            "error": f"HTTP {e.code} with a broken body ({broken!r})",
+            "errcode": str(e.code),
+        }
 
 
 class RequestFailed(OSError):
@@ -174,7 +187,7 @@ def matrix_request(
     except urllib.error.HTTPError as e:
         if strict:
             return _strict_http_error(e, endpoint)
-        return _parse_http_error(e)
+        return _lenient_http_error(e)
     except http.client.HTTPException as e:
         if strict:
             raise RequestFailed(f"{endpoint}: broken HTTP answer ({e!r})") from e
@@ -196,7 +209,7 @@ def matrix_request(
         except urllib.error.HTTPError as e2:
             if strict:
                 return _strict_http_error(e2, endpoint)
-            return _parse_http_error(e2)
+            return _lenient_http_error(e2)
         except http.client.HTTPException as e2:
             if strict:
                 raise RequestFailed(f"{endpoint}: broken HTTP answer ({e2!r})") from e2

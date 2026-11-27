@@ -55,9 +55,13 @@ class Recorder(BaseHTTPRequestHandler):
             self.send_header("Location", self.redirect_to)
             self.end_headers()
             return
-        body = json.dumps(
-            {"ok": True} if self.payload is None else self.payload
-        ).encode()
+        body = (
+            b"null"
+            if self.payload == "__null__"
+            else json.dumps(
+                {"ok": True} if self.payload is None else self.payload
+            ).encode()
+        )
         try:
             self.send_response(self.status)
             self.send_header("Content-Type", "application/json")
@@ -229,6 +233,45 @@ class StrictTests(unittest.TestCase):
         config = self.start(payload=["!a:e"])
         with self.assertRaises(ValueError):
             matrix_http.matrix_request(config, "GET", "/joined_rooms")
+
+
+class ErrorBodyTests(unittest.TestCase):
+    """Error answers whose body is not a JSON object, or is cut off."""
+
+    start = StrictTests.start
+
+    def lenient(self, **attrs):
+        config = self.start(**attrs)
+        del config["strict"]
+        return config
+
+    def test_a_cut_off_error_body_is_an_error_dict_without_strict(self):
+        config = self.lenient(status=502, payload={"error": "bad"}, truncate=True)
+        try:
+            result = matrix_http.matrix_request(config, "GET", "/joined_rooms")
+        except Exception as exc:  # noqa: BLE001  # the defect under test
+            self.fail(f"{exc!r} escaped")
+        else:
+            self.assertEqual(result["errcode"], "502")
+            self.assertIn("broken body", result["error"])
+
+    def test_an_error_body_that_is_not_an_object_falls_back_to_the_raw_body(self):
+        # "__null__" makes the recorder send the JSON literal null.
+        for payload in ([], "__null__", "text"):
+            with self.subTest(payload=payload):
+                config = self.lenient(status=500, payload=payload)
+                try:
+                    result = matrix_http.matrix_request(config, "GET", "/joined_rooms")
+                except Exception as exc:  # noqa: BLE001  # the defect under test
+                    self.fail(f"{exc!r} escaped")
+                else:
+                    self.assertEqual(result["errcode"], "500")
+
+    def test_a_state_event_not_set_with_a_list_body_is_not_mistaken(self):
+        # Strict: a 404 whose body is not an object has no M_NOT_FOUND: fatal.
+        config = self.start(status=404, payload=[])
+        with self.assertRaises(matrix_http.RequestFailed):
+            matrix_http.matrix_request(config, "GET", "/rooms/x/state/m.room.name")
 
 
 class PathSegmentTests(unittest.TestCase):
