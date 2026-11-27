@@ -299,8 +299,15 @@ class ErrorBodyTests(unittest.TestCase):
     def test_strict_still_raises_on_a_timeout_while_reading_the_error_body(self):
         config = self.start(status=502, payload={"error": "bad"}, body_delay=1.0)
         config["timeout"] = 0.3
-        with self.assertRaises(OSError):
+        try:
             matrix_http.matrix_request(config, "GET", "/joined_rooms")
+        except matrix_http.RequestFailed as exc:
+            self.assertIn("502", str(exc))
+            self.assertIsInstance(exc.__cause__, OSError)
+        except OSError as exc:
+            self.fail(f"{exc!r} lost the status")
+        else:
+            self.fail("a broken error answer was accepted")
 
     def test_a_state_event_not_set_with_a_list_body_is_not_mistaken(self):
         # Strict: a 404 whose body is not an object has no M_NOT_FOUND: fatal.

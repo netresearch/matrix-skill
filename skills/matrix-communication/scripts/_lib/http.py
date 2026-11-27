@@ -132,10 +132,12 @@ def _strict_http_error(e: urllib.error.HTTPError, endpoint: str) -> dict:
     """
     try:
         result = _parse_http_error(e)
-    except http.client.HTTPException as broken:
+    except (http.client.HTTPException, OSError) as broken:
+        # A cut-off body, or a timeout or reset while reading it: the status
+        # still says the request failed.
         raise RequestFailed(
             f"{endpoint} answered HTTP {e.code} with a broken body ({broken!r})"
-        ) from e
+        ) from broken
     if (
         e.code == 404
         and result.get("errcode") == "M_NOT_FOUND"
