@@ -21,6 +21,7 @@ sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != HERE]
 
 import json
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -35,21 +36,27 @@ class Recorder(BaseHTTPRequestHandler):
     """Answers with a redirect when `redirect_to` is set, else with JSON."""
 
     redirect_to = None
+    delay = 0
     seen: list
 
     def do_GET(self):
         self.seen.append((self.path, self.headers.get("Authorization")))
+        if self.delay:
+            time.sleep(self.delay)
         if self.redirect_to and not self.path.startswith("/done"):
             self.send_response(302)
             self.send_header("Location", self.redirect_to)
             self.end_headers()
             return
         body = json.dumps({"ok": True}).encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # the client gave up (TimeoutTests)
 
     def log_message(self, *args):
         pass
@@ -88,6 +95,33 @@ class RedirectAuthorizationTests(unittest.TestCase):
         self.assertEqual(
             [auth for _, auth in home.seen], ["Bearer SECRET", "Bearer SECRET"]
         )
+
+
+class TimeoutTests(unittest.TestCase):
+    """A timeout in the config bounds each request; strict raises on it."""
+
+    def setUp(self):
+        server, handler = serve()
+        handler.delay = 1.0
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.config = {
+            "homeserver": f"http://127.0.0.1:{server.server_address[1]}",
+            "access_token": "t",
+            "timeout": 0.2,
+        }
+
+    def test_a_slow_server_is_given_up_on(self):
+        started = time.monotonic()
+        result = matrix_http.matrix_request(self.config, "GET", "/joined_rooms")
+        self.assertLess(time.monotonic() - started, 0.9)
+        self.assertIn("error", result)
+
+    def test_strict_raises_the_transport_error(self):
+        with self.assertRaises(OSError):
+            matrix_http.matrix_request(
+                {**self.config, "strict": True}, "GET", "/joined_rooms"
+            )
 
 
 class PathSegmentTests(unittest.TestCase):

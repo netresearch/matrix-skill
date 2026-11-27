@@ -10,19 +10,26 @@ part (``ops`` or ``#ops`` for ``#ops:example.org``) came before a display
 name, and a single partial match counted too. Passed on unchanged, ``ops``
 can therefore reach a different room than before, and both succeed.
 
-So a shorthand is resolved here, with the old precedence (``find_room_by_name``
-in rooms.py), to a room ID, and only the ID reaches the CLI. Room IDs and full
-aliases pass unchanged, without a request. The lookup reads the joined rooms
-over HTTP with the skill's own device token from matrix-e2ee-cli's
-session.json: two requests per joined room (name and alias), one more for a
-room without either, as before for matrix-react.py and matrix-redact.py. No match, several matches, or rooms that cannot be listed
-stop the command: it never falls back to the CLI's own, different choice.
+So a shorthand is resolved here to a room ID, in the order of
+``find_room_in_nio_client``, which the E2EE scripts of version 4 used: alias
+without server, then a single exact display name (or, for a room named after
+its members, a member's user ID), then a single partial match. Only the ID
+reaches the CLI. Two deviations, both refusals: several rooms with the same
+alias name are refused instead of taking the first, and a command that writes
+(send, edit, react, redact) takes no partial match. Room IDs and full aliases
+pass unchanged, without a request. The lookup reads the joined rooms over HTTP
+with the skill's own device token from matrix-e2ee-cli's session.json (two
+requests per joined room, one more for a room without name and alias, 30 s
+each at most). No match, several matches, or rooms that cannot be read stop
+the command: it never falls back to the CLI's own, different choice.
 """
 
 import json
 
 from _lib import cutover
-from _lib.rooms import find_room_by_name, list_joined_rooms, room_matches
+from _lib.rooms import list_joined_rooms, room_matches
+
+TIMEOUT = 30  # seconds per request
 
 
 class RoomLookupError(Exception):
@@ -41,6 +48,41 @@ def _alias_localpart(room: dict) -> str:
 def _listed(rooms) -> str:
     return ", ".join(
         f"{r.get('name')} ({r.get('alias') or r['room_id']})" for r in rooms
+    )
+
+
+def choose(room: str, term: str, rooms: list, write: bool) -> str:
+    """The room ID TERM names among ROOMS, in the order of version 4."""
+    lowered = term.lower()
+    for tier, matches in (
+        (
+            "alias",
+            [r for r in rooms if r.get("alias") and _alias_localpart(r) == lowered],
+        ),
+        ("name", [r for r in rooms if room_matches(r, lowered, exact=True)]),
+    ):
+        if len(matches) == 1:
+            return matches[0]["room_id"]
+        if len(matches) > 1:
+            raise RoomLookupError(
+                f"{room!r} matches several rooms by {tier}: {_listed(matches)}; pass "
+                "the room ID or full alias"
+            )
+    partial = [r for r in rooms if room_matches(r, lowered)]
+    if len(partial) > 1:
+        raise RoomLookupError(
+            f"{room!r} matches several rooms: {_listed(partial)}; pass the room ID or "
+            "full alias"
+        )
+    if partial and write:
+        raise RoomLookupError(
+            f"{room!r} is only part of the name of {_listed(partial)}; a command that "
+            "writes needs the exact name, the room ID or the full alias"
+        )
+    if partial:
+        return partial[0]["room_id"]
+    raise RoomLookupError(
+        f"no joined room matches {room!r}; matrix-rooms.py lists them"
     )
 
 
@@ -65,6 +107,8 @@ def resolve(room: str, env, lister=list_joined_rooms, write=False) -> str:
         "homeserver": session.get("homeserver"),
         "access_token": session.get("access_token"),
         "user_id": session.get("user_id"),
+        "timeout": TIMEOUT,
+        "strict": True,
     }
     if not config["homeserver"] or not config["access_token"]:
         # The CLI would pick by display name alone: refuse rather than guess.
@@ -72,39 +116,16 @@ def resolve(room: str, env, lister=list_joined_rooms, write=False) -> str:
             f"cannot look {room!r} up: the matrix-e2ee-cli session has no homeserver "
             "or access token; pass the room ID (!…) or full alias (#name:server)"
         )
-    rooms = lister(config)
+    try:
+        rooms = lister(config)
+    except (OSError, ValueError) as exc:  # timeouts, refused connections, non-JSON
+        raise RoomLookupError(
+            f"cannot list the joined rooms to find {room!r} ({exc}); pass its room ID "
+            "(!…) or full alias (#name:server)"
+        ) from exc
     if not rooms:
         raise RoomLookupError(
             f"cannot list the joined rooms to find {room!r}; pass its room ID (!…) "
             "or full alias (#name:server)"
         )
-    lowered = term.lower()
-    by_alias = [r for r in rooms if r.get("alias") and _alias_localpart(r) == lowered]
-    if len(by_alias) > 1:
-        # find_room_by_name would take the first: two servers, one localpart.
-        raise RoomLookupError(
-            f"{room!r} matches several rooms: {_listed(by_alias)}; pass the room ID "
-            "or full alias"
-        )
-    room_id, matches = find_room_by_name(config, term, rooms=rooms)
-    if room_id and write:
-        chosen = [r for r in rooms if r["room_id"] == room_id]
-        exact = any(
-            _alias_localpart(r) == lowered or room_matches(r, lowered, exact=True)
-            for r in chosen
-        )
-        if not exact:
-            raise RoomLookupError(
-                f"{room!r} is only part of the name of {_listed(chosen)}; a command "
-                "that writes needs the exact name, the room ID or the full alias"
-            )
-    if room_id:
-        return room_id
-    if matches:
-        raise RoomLookupError(
-            f"{room!r} matches several rooms: {_listed(matches)}; pass the room ID or "
-            "full alias"
-        )
-    raise RoomLookupError(
-        f"no joined room matches {room!r}; matrix-rooms.py lists them"
-    )
+    return choose(room, term, rooms, write)

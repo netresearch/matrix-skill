@@ -608,7 +608,10 @@ class StubHomeserver(http.server.BaseHTTPRequestHandler):
         "!b:e": {"m.room.name": {"name": "ops"}},
         "!c:e": {"m.room.name": {"name": "dev chat"}},
         "!d:e": {"m.room.name": {"name": "dev talk"}},
+        "!t:e": {"m.room.name": {"name": "test"}},
+        "!ta:e": {"m.room.name": {"name": "test-archive"}},
     }
+    BROKEN = False  # answer joined_rooms with a 200 that is not JSON
 
     def do_GET(self):
         from urllib.parse import unquote
@@ -617,6 +620,14 @@ class StubHomeserver(http.server.BaseHTTPRequestHandler):
         body, status = {"errcode": "M_NOT_FOUND", "error": "not found"}, 404
         if self.headers.get("Authorization") != "Bearer syt_device":
             body, status = {"errcode": "M_UNKNOWN_TOKEN", "error": "token"}, 401
+        elif path.endswith("/joined_rooms") and self.BROKEN:
+            data = b"<html>proxy error</html>"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         elif path.endswith("/joined_rooms"):
             body, status = {"joined_rooms": list(self.STATE)}, 200
         elif "/rooms/" in path and "/state/" in path:
@@ -638,7 +649,8 @@ class StubHomeserver(http.server.BaseHTTPRequestHandler):
 class RoomLookupTests(WrapperTestCase):
     def setUp(self):
         super().setUp()
-        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), StubHomeserver)
+        self.handler = type("Stub", (StubHomeserver,), {})
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), self.handler)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
@@ -653,6 +665,45 @@ class RoomLookupTests(WrapperTestCase):
                 }
             )
         )
+
+    def test_one_exact_name_wins_over_a_room_that_contains_it(self):
+        # Rooms "test" and "test-archive": version 4's E2EE scripts took "test".
+        cases = (
+            ("matrix-send-e2ee.py", ["test", "hi"], ["send", "!t:e", "--", "hi"]),
+            ("matrix-read-e2ee.py", ["test"], ["read", "--", "!t:e"]),
+            (
+                "matrix-edit-e2ee.py",
+                ["test", "$e", "x"],
+                ["edit", "--", "!t:e", "$e", "x"],
+            ),
+            (
+                "matrix-react.py",
+                ["test", "$e", "✅"],
+                ["react", "--", "!t:e", "$e", "✅"],
+            ),
+            ("matrix-redact.py", ["test", "$e"], ["redact", "--", "!t:e", "$e"]),
+            (
+                "matrix-download-e2ee.py",
+                ["test", "$e"],
+                ["download", "--", "!t:e", "$e"],
+            ),
+            ("matrix-fetch-keys.py", ["test"], ["fetch-keys", "--", "!t:e"]),
+        )
+        for script, args, expected in cases:
+            with self.subTest(script=script):
+                self.log.unlink(missing_ok=True)
+                self.assertTranslates(script, args, expected)
+
+    def test_a_homeserver_answer_that_is_not_json_is_a_json_error(self):
+        self.handler.BROKEN = True
+        result = self.run_script("matrix-send-e2ee.py", "ops", "hi", "--json")
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue(result.stdout.strip(), result.stderr)
+        self.assertIn(
+            "cannot list the joined rooms", json.loads(result.stdout)["error"]
+        )
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertEqual(self.calls(), [])
 
     def test_a_shorthand_reaches_the_room_the_old_scripts_chose(self):
         cases = (

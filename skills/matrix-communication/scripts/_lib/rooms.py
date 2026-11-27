@@ -198,9 +198,7 @@ def list_joined_rooms(config: dict) -> list:
     return rooms
 
 
-def find_room_by_name(
-    config: dict, search_term: str, rooms: list | None = None
-) -> tuple[str | None, list]:
+def find_room_by_name(config: dict, search_term: str) -> tuple[str | None, list]:
     """Find a room by name or alias (case-insensitive).
 
     Match priority:
@@ -221,8 +219,7 @@ def find_room_by_name(
         - room_id is the matched room ID (or None if no/ambiguous match)
         - matches is list of matching rooms (for error reporting)
     """
-    if rooms is None:
-        rooms = list_joined_rooms(config)
+    rooms = list_joined_rooms(config)
     search_lower = search_term.lower()
 
     # Try exact alias match (most specific)

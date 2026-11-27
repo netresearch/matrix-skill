@@ -12,14 +12,19 @@ full surface.
 everywhere below. A room without a name — a direct chat, usually — goes by
 the name Element shows for it: the other person's display name, or their
 user ID (`@jane:server`). A short name, also `#name` without the server, is
-looked up with the skill's device token in the order version 4 used: alias
-without server, then display name, then a single partial match. That costs two
-requests per joined room (three for a room without name and alias). Send,
+looked up with the skill's device token in the order the E2EE scripts of
+version 4 used: alias without server, then a single exact display name (one
+exact name wins even when other names contain it), then a single partial
+match. `matrix-react.py` and `matrix-redact.py` now follow that order too;
+in version 4 they refused an exact name that another room's name contained.
+That costs two requests per joined room (three for a room without name and
+alias), 30 s each at most; a request that fails or answers with something
+other than JSON stops the command. Send,
 edit, react and redact accept only an exact alias or exact name: anyone who
 can name a room you are in could otherwise steer a partial match. A name
 that matches several rooms, or none, stops the command before anything is
-sent. A room ID or full alias goes to
-matrix-e2ee-cli unchanged, without the lookup.
+sent. A room ID or full alias goes to matrix-e2ee-cli unchanged, without the
+lookup.
 
 **Prepend `set +H &&` whenever an argument contains `!`** — bash history
 expansion mangles it otherwise, and the corruption is silent.

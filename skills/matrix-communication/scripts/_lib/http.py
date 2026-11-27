@@ -71,7 +71,7 @@ def _prefer_ipv4():
         socket.getaddrinfo = original
 
 
-def _do_request(req: urllib.request.Request) -> dict:
+def _do_request(req: urllib.request.Request, timeout=None) -> dict:
     """Execute a request and return parsed JSON response.
 
     The caller must have validated the URL scheme via
@@ -79,7 +79,8 @@ def _do_request(req: urllib.request.Request) -> dict:
     """
     _require_http_scheme(req.full_url)
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-    with _OPENER.open(req) as response:
+    kwargs = {} if timeout is None else {"timeout": timeout}
+    with _OPENER.open(req, **kwargs) as response:
         return json.loads(response.read().decode())
 
 
@@ -113,9 +114,15 @@ def matrix_request(
         api_version: Client-API version in the path; the relations endpoint
             exists only under v1
 
+    ``config`` may carry ``timeout`` (seconds per request) and ``strict``: with
+    ``strict`` a transport failure (timeout, refused connection) raises the
+    OSError instead of coming back as an error dict.
+
     Returns:
         Response dict, or dict with 'error' key on failure
     """
+    timeout = config.get("timeout")
+    strict = config.get("strict", False)
     url = f"{config['homeserver']}/_matrix/client/{api_version}{endpoint}"
     _require_http_scheme(url)
     headers = {
@@ -127,11 +134,13 @@ def matrix_request(
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
 
     try:
-        return _do_request(req)
+        return _do_request(req, timeout)
     except urllib.error.HTTPError as e:
         return _parse_http_error(e)
     except OSError as e:
         if e.errno not in (101, 113):  # ENETUNREACH, EHOSTUNREACH
+            if strict:
+                raise
             return {"error": str(e)}
         # IPv6 likely unreachable — retry with IPv4 preference
         try:
@@ -139,10 +148,12 @@ def matrix_request(
                 req2 = urllib.request.Request(
                     url, data=body, headers=headers, method=method
                 )
-                return _do_request(req2)
+                return _do_request(req2, timeout)
         except urllib.error.HTTPError as e2:
             return _parse_http_error(e2)
         except OSError as e2:
+            if strict:
+                raise
             return {"error": str(e2)}
 
 

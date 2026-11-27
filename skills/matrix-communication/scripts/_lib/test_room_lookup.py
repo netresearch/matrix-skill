@@ -71,7 +71,15 @@ class ResolveTests(unittest.TestCase):
         self.resolve("ops")
         self.assertEqual(
             self.configs,
-            [{"homeserver": "https://m.e", "access_token": "syt_d", "user_id": "@u:e"}],
+            [
+                {
+                    "homeserver": "https://m.e",
+                    "access_token": "syt_d",
+                    "user_id": "@u:e",
+                    "timeout": 30,
+                    "strict": True,
+                }
+            ],
         )
 
     def test_ids_and_full_aliases_pass_without_a_request(self):
@@ -151,8 +159,43 @@ class ResolveTests(unittest.TestCase):
         ]
         with self.assertRaises(room_lookup.RoomLookupError) as ctx:
             self.resolve("ops")
+        self.assertIn("by alias", str(ctx.exception))
         self.assertIn("#ops:a", str(ctx.exception))
         self.assertIn("#ops:b", str(ctx.exception))
+
+    def test_one_exact_name_wins_over_rooms_that_contain_it(self):
+        # find_room_in_nio_client, which the E2EE scripts of version 4 used,
+        # took the single exact name; "test-archive" is no competitor.
+        self.rooms = [
+            {"room_id": "!t:e", "name": "test", "alias": None},
+            {"room_id": "!ta:e", "name": "test-archive", "alias": None},
+        ]
+        for write in (False, True):
+            with self.subTest(write=write):
+                try:
+                    resolved = room_lookup.resolve(
+                        "test", self.env, lister=self.lister, write=write
+                    )
+                except room_lookup.RoomLookupError as exc:
+                    self.fail(f"refused: {exc}")
+                else:
+                    self.assertEqual(resolved, "!t:e")
+
+    def test_a_listing_that_breaks_is_a_lookup_error(self):
+        for error in (ValueError("Expecting value"), TimeoutError("timed out")):
+
+            def lister(config, error=error):
+                raise error
+
+            with self.subTest(error=type(error).__name__):
+                try:
+                    room_lookup.resolve("ops", self.env, lister=lister)
+                except room_lookup.RoomLookupError as exc:
+                    self.assertIn(str(error), str(exc))
+                except Exception as exc:  # noqa: BLE001  # the defect under test
+                    self.fail(f"{exc!r} escaped the lookup")
+                else:
+                    self.fail("a broken listing resolved a room")
 
     def test_without_a_session_the_room_passes_unchanged(self):
         self.session.unlink()
