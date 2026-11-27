@@ -610,8 +610,10 @@ class StubHomeserver(http.server.BaseHTTPRequestHandler):
         "!d:e": {"m.room.name": {"name": "dev talk"}},
         "!t:e": {"m.room.name": {"name": "test"}},
         "!ta:e": {"m.room.name": {"name": "test-archive"}},
+        "!dm:e": {},  # no name, no alias: named after its member
     }
     BROKEN = False  # answer joined_rooms with a 200 that is not JSON
+    FAIL: ClassVar[dict] = {}  # path suffix -> (status, errcode)
 
     def do_GET(self):
         from urllib.parse import unquote
@@ -620,6 +622,21 @@ class StubHomeserver(http.server.BaseHTTPRequestHandler):
         body, status = {"errcode": "M_NOT_FOUND", "error": "not found"}, 404
         if self.headers.get("Authorization") != "Bearer syt_device":
             body, status = {"errcode": "M_UNKNOWN_TOKEN", "error": "token"}, 401
+        elif any(path.endswith(suffix) for suffix in self.FAIL):
+            suffix = next(s for s in self.FAIL if path.endswith(s))
+            status, errcode = self.FAIL[suffix]
+            body = {"errcode": errcode, "error": f"stub {status}"}
+        elif path.endswith("/members"):
+            member = {"displayname": "Jane", "membership": "join"}
+            body, status = (
+                {
+                    "chunk": [
+                        {"state_key": "@jane:e", "content": member},
+                        {"state_key": "@u:e", "content": {"membership": "join"}},
+                    ]
+                },
+                200,
+            )
         elif path.endswith("/joined_rooms") and self.BROKEN:
             data = b"<html>proxy error</html>"
             self.send_response(200)
@@ -649,7 +666,7 @@ class StubHomeserver(http.server.BaseHTTPRequestHandler):
 class RoomLookupTests(WrapperTestCase):
     def setUp(self):
         super().setUp()
-        self.handler = type("Stub", (StubHomeserver,), {})
+        self.handler = type("Stub", (StubHomeserver,), {"FAIL": {}})
         server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), self.handler)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         self.addCleanup(server.server_close)
@@ -693,6 +710,42 @@ class RoomLookupTests(WrapperTestCase):
             with self.subTest(script=script):
                 self.log.unlink(missing_ok=True)
                 self.assertTranslates(script, args, expected)
+
+    def test_a_failed_alias_request_stops_reads_and_writes(self):
+        # Read as "no alias", it would send "ops" to !b:e, named "ops".
+        self.handler.FAIL = {
+            "/rooms/!a:e/state/m.room.canonical_alias": (502, "M_UNKNOWN")
+        }
+        for script, args in (
+            ("matrix-send-e2ee.py", ["ops", "hi"]),
+            ("matrix-read-e2ee.py", ["ops"]),
+        ):
+            with self.subTest(script=script):
+                result = self.run_script(script, *args)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("502", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertEqual(self.calls(), [])
+
+    def test_an_alias_that_is_not_set_falls_through_to_the_name(self):
+        self.handler.FAIL = {
+            "/rooms/!a:e/state/m.room.canonical_alias": (404, "M_NOT_FOUND")
+        }
+        self.assertTranslates(
+            "matrix-send-e2ee.py", ["ops", "hi"], ["send", "!b:e", "--", "hi"]
+        )
+        self.log.unlink()
+        self.assertTranslates("matrix-read-e2ee.py", ["ops"], ["read", "--", "!b:e"])
+
+    def test_a_room_named_after_its_member_is_found(self):
+        self.assertTranslates("matrix-read-e2ee.py", ["Jane"], ["read", "--", "!dm:e"])
+
+    def test_a_failed_members_request_stops_the_lookup(self):
+        self.handler.FAIL = {"/rooms/!dm:e/members": (502, "M_UNKNOWN")}
+        result = self.run_script("matrix-read-e2ee.py", "ops")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("502", result.stderr)
+        self.assertEqual(self.calls(), [])
 
     def test_a_homeserver_answer_that_is_not_json_is_a_json_error(self):
         self.handler.BROKEN = True

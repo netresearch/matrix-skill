@@ -37,6 +37,9 @@ class Recorder(BaseHTTPRequestHandler):
 
     redirect_to = None
     delay = 0
+    status = 200
+    payload = None  # JSON to answer with instead of {"ok": true}
+    truncate = False  # promise more bytes than are sent
     seen: list
 
     def do_GET(self):
@@ -48,11 +51,15 @@ class Recorder(BaseHTTPRequestHandler):
             self.send_header("Location", self.redirect_to)
             self.end_headers()
             return
-        body = json.dumps({"ok": True}).encode()
+        body = json.dumps(
+            {"ok": True} if self.payload is None else self.payload
+        ).encode()
         try:
-            self.send_response(200)
+            self.send_response(self.status)
             self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
+            self.send_header(
+                "Content-Length", str(len(body) + (50 if self.truncate else 0))
+            )
             self.end_headers()
             self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError):
@@ -122,6 +129,64 @@ class TimeoutTests(unittest.TestCase):
             matrix_http.matrix_request(
                 {**self.config, "strict": True}, "GET", "/joined_rooms"
             )
+
+
+class StrictTests(unittest.TestCase):
+    """With strict, no failed answer comes back looking like "not set"."""
+
+    def start(self, **attrs):
+        server, handler = serve()
+        for name, value in attrs.items():
+            setattr(handler, name, value)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return {
+            "homeserver": f"http://127.0.0.1:{server.server_address[1]}",
+            "access_token": "t",
+            "strict": True,
+            "timeout": 5,
+        }
+
+    def test_an_error_status_on_a_state_request_raises(self):
+        config = self.start(status=502, payload={"error": "bad gateway"})
+        with self.assertRaises(matrix_http.RequestFailed) as ctx:
+            matrix_http.matrix_request(config, "GET", "/rooms/x/state/m.room.name")
+        self.assertIn("502", str(ctx.exception))
+
+    def test_a_state_event_that_is_not_set_is_an_answer(self):
+        not_found = {"errcode": "M_NOT_FOUND", "error": "Event not found."}
+        config = self.start(status=404, payload=not_found)
+        try:
+            result = matrix_http.matrix_request(
+                config, "GET", "/rooms/x/state/m.room.canonical_alias"
+            )
+        except matrix_http.RequestFailed as exc:
+            self.fail(f"a state event that is not set raised: {exc}")
+        self.assertEqual(result["errcode"], "M_NOT_FOUND")
+        with self.assertRaises(matrix_http.RequestFailed):
+            matrix_http.matrix_request(config, "GET", "/rooms/x/members")
+
+    def test_without_strict_an_error_status_stays_a_dict(self):
+        config = self.start(status=502, payload={"error": "bad gateway"})
+        del config["strict"]
+        result = matrix_http.matrix_request(config, "GET", "/joined_rooms")
+        self.assertEqual(result["error"], "bad gateway")
+
+    def test_a_cut_off_answer_raises(self):
+        config = self.start(truncate=True)
+        try:
+            matrix_http.matrix_request(config, "GET", "/joined_rooms")
+        except matrix_http.RequestFailed as exc:
+            self.assertIn("IncompleteRead", str(exc))
+        except Exception as exc:  # noqa: BLE001  # the defect under test
+            self.fail(f"{exc!r} escaped unconverted")
+        else:
+            self.fail("a cut-off answer was accepted")
+
+    def test_json_that_is_not_an_object_raises(self):
+        config = self.start(payload=["!a:e"])
+        with self.assertRaises(ValueError):
+            matrix_http.matrix_request(config, "GET", "/joined_rooms")
 
 
 class PathSegmentTests(unittest.TestCase):
