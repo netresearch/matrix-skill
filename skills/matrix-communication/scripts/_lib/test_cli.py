@@ -26,6 +26,7 @@ import io
 import json
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from _lib import cli
@@ -185,6 +186,18 @@ class EnsureBinaryTests(unittest.TestCase):
         self.assertIn("0" * 64, str(ctx.exception))
         directory = self.dir / "data" / "matrix-skill" / "cli" / "1.2.3"
         self.assertEqual(list(directory.iterdir()), [])
+
+    def test_an_unwritable_data_directory_is_a_cli_error(self):
+        denied = PermissionError(13, "Permission denied")
+        with unittest.mock.patch.object(cli.tempfile, "mkstemp", side_effect=denied):
+            try:
+                self.ensure(FakeOpener(PAYLOAD))
+            except cli.CliError as exc:
+                self.assertIn("Permission denied", str(exc))
+            except Exception as exc:  # noqa: BLE001 - any other raise is the defect
+                self.fail(f"{exc!r} escaped instead of a CliError")
+            else:
+                self.fail("an unwritable data directory went unreported")
 
     def test_an_installed_binary_is_not_downloaded_again(self):
         self.ensure(FakeOpener(PAYLOAD))
