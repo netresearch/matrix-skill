@@ -4,10 +4,10 @@
 """Tests for `_lib.rooms`: how a ROOM argument finds its room.
 
 `find_direct_room` decides which room `--to` sends to; the rest covers
-names for rooms without m.room.name (direct chats), matching on them on the
-HTTP and the nio path, and matrix.to links as ROOM.
+names for rooms without m.room.name (direct chats), matching on them, and
+matrix.to links as ROOM.
 
-Run directly (stdlib only, no nio):
+Run directly (stdlib only):
 
     python3 skills/matrix-communication/scripts/_lib/test_rooms.py
 

@@ -37,9 +37,10 @@ def normalize_room_input(room_input: str) -> str:
 def group_name(names: list[str]) -> str:
     """Name a room without m.room.name or alias after its members.
 
-    Same wording as matrix-nio's MatrixRoom.group_name(), so the HTTP path
-    and the nio path give a direct chat the same name: the other person's
-    display name, "A and B", "A, B and 3 others", or "Empty Room".
+    Same wording as matrix-nio's MatrixRoom.group_name(), which named rooms
+    for the E2EE scripts up to version 4, so a direct chat keeps the name it
+    had there: the other person's display name, "A and B", "A, B and 3
+    others", or "Empty Room".
     """
     names = sorted(names, key=str.lower)
     shown = names[:GROUP_NAME_HEROES]
