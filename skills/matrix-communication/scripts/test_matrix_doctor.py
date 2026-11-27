@@ -183,7 +183,7 @@ class CheckE2eeSetupTests(CredentialTestCase):
         state, message = doctor.check_e2ee_setup(CONFIG)
         self.assertIs(state, False)
         self.assertIn("DEVICEAAAA", message)
-        self.assertIn("matrix-e2ee-setup.py", message)
+        self.assertIn("matrix-e2ee-setup.py --force", message)
 
     def test_credential_of_another_device_fails(self):
         """Another client's token verifies fine - it just is not ours."""
@@ -193,6 +193,12 @@ class CheckE2eeSetupTests(CredentialTestCase):
         self.assertIs(state, False)
         self.assertIn("ELEMENTBBBB", message)
         self.assertIn("another client's token", message)
+        self.assertIn("matrix-e2ee-setup.py --force", message)
+
+    def test_setup_command_names_force_only_when_a_session_exists(self):
+        self.assertEqual(doctor.setup_command(), "matrix-e2ee-setup.py")
+        self._write_session()
+        self.assertEqual(doctor.setup_command(), "matrix-e2ee-setup.py --force")
 
     def test_live_credential_passes(self):
         self._write_session()
@@ -232,6 +238,7 @@ class CheckE2eeSetupTests(CredentialTestCase):
         state, message = doctor.check_e2ee_setup(CONFIG)
         self.assertIs(state, False)
         self.assertIn("no access_token", message)
+        self.assertIn("matrix-e2ee-setup.py --force", message)
         self.assertEqual(self.requests, [])
 
     def test_offline_is_unknown_not_ok(self):

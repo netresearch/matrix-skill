@@ -127,6 +127,10 @@ A machine that ran version 4 or older of this skill keeps its device: the first
 E2EE command takes the matrix-nio device over instead of creating a new one
 (`e2ee-guide.md`, "Moving from matrix-nio").
 
+Run with a session already in place, `matrix-e2ee-setup.py` only shows its
+state. `--force` replaces a dead or foreign device with a new one; the old
+device stays on the server until you remove it in Element.
+
 **Why environment variable?** Avoids shell escaping issues with special characters (`!`, `$`, etc.).
 
 ### Step 6: Add access token to config

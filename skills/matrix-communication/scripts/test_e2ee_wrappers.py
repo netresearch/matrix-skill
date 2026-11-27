@@ -31,6 +31,11 @@ with open(os.environ["FAKE_CLI_LOG"], "a") as log:
         "env": {{k: os.environ.get(k) for k in (
             "MATRIX_PASSWORD", "MATRIX_RECOVERY_KEY", "MATRIX_RECOVERY_PASSPHRASE")}},
     }}) + "\\n")
+if sys.argv[1:2] == ["migrate-nio"] and os.environ.get("FAKE_MIGRATE_SESSION"):
+    session = os.environ["FAKE_MIGRATE_SESSION"]
+    os.makedirs(os.path.dirname(session), exist_ok=True)
+    with open(session, "w") as handle:
+        handle.write("{{}}")
 print("Event ID: $fake:example.org" if sys.argv[1:2] != ["migrate-nio"] else "Migrated device DEV")
 sys.exit(int(os.environ.get("FAKE_CLI_RC", "0")))
 """
@@ -197,6 +202,24 @@ class TranslationTests(WrapperTestCase):
 
     def test_setup_logs_in(self):
         self.assertTranslates("matrix-e2ee-setup.py", ["--debug"], ["login"])
+
+    def session_file(self):
+        return self.root / "data" / "matrix-e2ee-cli" / "session.json"
+
+    def test_setup_with_a_session_shows_status_instead_of_logging_in(self):
+        self.session_file().parent.mkdir(parents=True)
+        self.session_file().write_text("{}")
+        result = self.assertTranslates("matrix-e2ee-setup.py", [], ["status"])
+        self.assertIn("already set up", result.stdout)
+        self.assertIn("--force", result.stdout)
+
+    def test_setup_force_replaces_an_existing_session(self):
+        self.session_file().parent.mkdir(parents=True)
+        self.session_file().write_text("{}")
+        self.assertTranslates("matrix-e2ee-setup.py", ["--force"], ["login", "--force"])
+
+    def test_setup_force_with_status_is_refused(self):
+        self.assertRefused("matrix-e2ee-setup.py", ["--force", "--status"], "--force")
 
     def test_setup_status(self):
         self.assertTranslates(
@@ -392,6 +415,17 @@ class TakeoverTests(WrapperTestCase):
         self.log.unlink()
         self.run_script("matrix-read-e2ee.py", "ops")
         self.assertEqual([c["argv"][0] for c in self.calls()], ["read"])
+
+    def test_setup_right_after_the_takeover_keeps_the_migrated_device(self):
+        session = self.root / "data" / "matrix-e2ee-cli" / "session.json"
+        result = self.run_script(
+            "matrix-e2ee-setup.py", FAKE_MIGRATE_SESSION=str(session)
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        argvs = [c["argv"] for c in self.calls()]
+        self.assertEqual(argvs[0][0], "migrate-nio")
+        self.assertEqual(argvs[1:], [["status"]])
+        self.assertIn("already set up", result.stdout)
 
     def test_a_failed_takeover_runs_no_command(self):
         result = self.run_script("matrix-e2ee-setup.py", FAKE_CLI_RC="1")

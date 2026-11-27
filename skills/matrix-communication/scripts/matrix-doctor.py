@@ -242,6 +242,19 @@ def get_session_path():
     return cutover.cli_session_path()
 
 
+def setup_command() -> str:
+    """The setup call that mints a device: --force when a session is in the way.
+
+    Without --force, matrix-e2ee-setup.py keeps an existing session and only
+    shows its state, so a dead or foreign one needs the flag.
+    """
+    try:
+        exists = get_session_path().exists()
+    except cutover.CutoverError:
+        exists = False
+    return "matrix-e2ee-setup.py --force" if exists else "matrix-e2ee-setup.py"
+
+
 def nio_pending() -> bool:
     """A matrix-nio device of an older version still waits for its takeover."""
     return cutover.pending()
@@ -296,7 +309,10 @@ def check_e2ee_setup(config: dict, offline: bool = False) -> tuple[bool | None, 
     if not token:
         return (
             False,
-            f"E2EE session for {device_id} carries no access_token - run matrix-e2ee-setup.py",
+            (
+                f"E2EE session for {device_id} carries no access_token - run "
+                "matrix-e2ee-setup.py --force"
+            ),
         )
     if not config.get("homeserver"):
         return None, f"E2EE device {device_id} configured - no homeserver to verify it"
@@ -307,7 +323,7 @@ def check_e2ee_setup(config: dict, offline: bool = False) -> tuple[bool | None, 
         config,
         token,
         f"E2EE credential ({device_id})",
-        "the device is gone - run matrix-e2ee-setup.py to mint a new one, "
+        "the device is gone - run matrix-e2ee-setup.py --force to mint a new one, "
         "then matrix-key-backup.py --import-keys to restore the room keys",
     )
     if state is not True:
@@ -318,8 +334,8 @@ def check_e2ee_setup(config: dict, offline: bool = False) -> tuple[bool | None, 
             False,
             (
                 f"E2EE credential belongs to device {served_device}, but session.json "
-                f"says {device_id} - this is another client's token; run matrix-e2ee-setup.py "
-                "for a device of your own"
+                f"says {device_id} - this is another client's token; run "
+                "matrix-e2ee-setup.py --force for a device of your own"
             ),
         )
 
@@ -445,11 +461,11 @@ def main():
             and not checks["e2ee_setup"].get("unknown")
             and checks["config"]["ok"]
         ):
-            print("  - Run: matrix-e2ee-setup.py")
+            print(f"  - Run: {setup_command()}")
         if not checks["token"]["ok"] and not checks["token"].get("unknown"):
             print(
                 "  - Token rejected: mint a new one for the skill "
-                "(matrix-e2ee-setup.py), never copy one out of a client you use"
+                f"({setup_command()}), never copy one out of a client you use"
             )
 
     sys.exit(0 if critical_ok else 1)

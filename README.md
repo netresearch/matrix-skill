@@ -191,7 +191,8 @@ uv run $C/matrix-doctor.py           # verifies every credential against the hom
 
 `matrix-e2ee-setup.py` creates a dedicated "Matrix Skill E2EE (Rust)" device that
 runs alongside your Element client. It logs in once with your password, which is
-used and not stored. The E2EE scripts are wrappers around
+used and not stored. With a session already in place it only shows its state;
+`--force` replaces a dead or foreign device. The E2EE scripts are wrappers around
 [matrix-e2ee-cli](https://github.com/netresearch/matrix-e2ee-cli) (matrix-sdk);
 `matrix-e2ee-cli.py` runs any of its other commands.
 

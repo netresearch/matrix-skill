@@ -15,12 +15,12 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 | Error | What it is | Fix |
 |-------|-----------|-----|
 | `M_FORBIDDEN` | not in the room | join it in Element first |
-| `M_UNKNOWN_TOKEN` / HTTP 401 | the config token expired or was revoked — `matrix-doctor.py` reports `[FAIL] token` | mint a new one for the skill via `matrix-e2ee-setup.py`; **do not** copy a token out of Element |
+| `M_UNKNOWN_TOKEN` / HTTP 401 | the config token expired or was revoked — `matrix-doctor.py` reports `[FAIL] token` | mint a new one for the skill via `matrix-e2ee-setup.py --force` when the skill's own device is dead too (else copy its token, setup-guide step 6); **do not** copy a token out of Element |
 | `M_LIMIT_EXCEEDED` | rate limited | wait, retry |
 | `Could not find room` | name/alias did not resolve | `matrix-rooms.py` to list what you are in |
-| `Room not found` **on a room you are in** | the E2EE credential is dead — a rejected token yields an empty joined-rooms list, which looks like the room is gone. `matrix-doctor.py` reports `[FAIL] e2ee_setup` | re-run `matrix-e2ee-setup.py` |
+| `Room not found` **on a room you are in** | the E2EE credential is dead — a rejected token yields an empty joined-rooms list, which looks like the room is gone. `matrix-doctor.py` reports `[FAIL] e2ee_setup` | `matrix-e2ee-setup.py --force` (without `--force` it keeps the dead session and only shows its state) |
 | `[Unable to decrypt]` | keys for those messages are not in this device's store | first `matrix-fetch-keys.py ROOM --sync-time 60` (asks other devices, no recovery key needed); only then `matrix-key-backup.py --recovery-key --import-keys` (prompts for the key) |
-| `signature failed` | running on a foreign device | dedicated device via `matrix-e2ee-setup.py` |
+| `signature failed` | running on a foreign device | dedicated device via `matrix-e2ee-setup.py --force` |
 | `Invalid password` | special characters eaten by the shell | `MATRIX_PASSWORD="pass" uv run …` |
 | `no matrix-e2ee-cli release for …` | no release binary for this platform | build matrix-e2ee-cli yourself and set `MATRIX_E2EE_CLI` to the binary |
 | `downloaded … has SHA-256 …, but the skill pins …` | the downloaded binary is not the pinned release; it was deleted and not run | do not work around it: retry, and report it if it persists |

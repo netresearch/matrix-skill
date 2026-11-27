@@ -42,13 +42,20 @@ def needs_takeover(args) -> bool:
     return not any(arg in HELP_FLAGS for arg in flags)
 
 
-def run_cli(args, extra_env=None, env=None) -> int:
-    """Run matrix-e2ee-cli ARGS; its exit code (1 when it could not start)."""
+def run_cli(args, extra_env=None, env=None, choose=None) -> int:
+    """Run matrix-e2ee-cli ARGS; its exit code (1 when it could not start).
+
+    CHOOSE, when given, gets ARGS and the environment after the takeover and
+    returns the arguments to run instead: what to run can depend on state the
+    takeover creates (a session).
+    """
     env = dict(os.environ if env is None else env)
     try:
         binary = cli.ensure_binary(env=env, log=cli.stderr_log)
         if needs_takeover(args):
             cutover.migrate_if_pending(binary, env=env)
+        if choose is not None:
+            args = choose(list(args), env)
         child_env = {**env, **extra_env} if extra_env else env
         return cli.run(binary, list(args), env=child_env)
     except (cli.CliError, cutover.CutoverError) as exc:
@@ -56,9 +63,9 @@ def run_cli(args, extra_env=None, env=None) -> int:
         return 1
 
 
-def exit_with(args, extra_env=None) -> None:
+def exit_with(args, extra_env=None, choose=None) -> None:
     sys.stdout.flush()
-    sys.exit(run_cli(args, extra_env))
+    sys.exit(run_cli(args, extra_env, choose=choose))
 
 
 def refuse(message: str) -> None:

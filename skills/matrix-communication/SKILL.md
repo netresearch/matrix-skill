@@ -26,7 +26,8 @@ Send, read and download media in Matrix rooms. **Always use `*-e2ee.py`.**
 > the client you use** — it shows `[Unable to decrypt]` for its own messages until
 > logged out and back in. Nothing fails at the moment you paste.
 >
-> `matrix-e2ee-setup.py` mints a device of its own. No password → no E2EE, and
+> `matrix-e2ee-setup.py` mints a device of its own (`--force` replaces a dead
+> or foreign one). No password → no E2EE, and
 > that is the answer.
 
 ## Who governs the agent
