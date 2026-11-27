@@ -1,2 +1,0 @@
-- `_lib/cli.py` downloads the matrix-e2ee-cli release binary for the platform (Linux and macOS on x86_64 and arm64, Windows on x86_64) into `<data dir>/matrix-skill/cli/<version>/` and checks it against the SHA-256 pinned in `_lib/cli_release.json` before every run; a download that does not match is deleted unrun. `MATRIX_E2EE_CLI=/path` uses a binary of your own. `Build/Scripts/pin-cli-release.py SHA256SUMS VERSION` writes the pin
-- `matrix-e2ee-cli.py` runs any other matrix-e2ee-cli command with its arguments unchanged, for example `logout` or `verify --hand-over`

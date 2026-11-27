@@ -9,6 +9,38 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-11-27
+
+### Upgrading from 4.4
+
+- The E2EE scripts run [matrix-e2ee-cli](https://github.com/netresearch/matrix-e2ee-cli) instead of matrix-nio. The first E2EE command on a machine that has the matrix-nio store (`~/.local/share/matrix-skill/store`) and no matrix-e2ee-cli session copies that store to an owner-only `store.backup-<time>` beside it, then takes the device over with `migrate-nio`: device id, identity keys, verification and room keys stay. Stop a running `matrix-watchd.py` of the old version first; while it holds the store, the command stops and says so. Afterwards run `matrix-key-backup.py --import-keys` once (it restores the keys of joined rooms only; after rejoining a room, run it again), keep the old store until the takeover has succeeded and the new device works, then delete it yourself if you like (never with `matrix-e2ee-cli.py logout`, which ends the device on the server), and do not run an older version of the skill on the same machine ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- `matrix-e2ee-verify.py --request` and `--listen` ask on the terminal whether the emoji match; without a terminal (an agent) use `matrix-e2ee-cli.py verify --listen --hand-over` and `verify --confirm TOKEN` after the person compared the emoji (`references/e2ee-guide.md`) ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- `matrix-react.py` and `matrix-redact.py` run matrix-e2ee-cli's `react` and `redact` with the skill's E2EE device; an `access_token` in the config alone no longer carries them, so set up the device with `matrix-e2ee-setup.py` first. Flags and output (`Event ID: …`, `--list`, `--json`, `--quiet`) stay ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- `matrix-watch.py` follows the logs of the new daemon, so restart `matrix-watchd.py` after the upgrade; its ROOM is a room ID or the alias or name as written in `watch_rooms` ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- A room given by short name may need its ID or full alias now: when the name matches several rooms the command stops instead of picking one. The lookup reads every joined room (two or three requests each) before the command runs, so on an account in many rooms pass the room ID ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+
+### Added
+
+- `_lib/cli.py` downloads the matrix-e2ee-cli release binary for the platform (Linux and macOS on x86_64 and arm64, Windows on x86_64) into `<data dir>/matrix-skill/cli/<version>/` and checks it against the SHA-256 pinned in `_lib/cli_release.json` before every run; a download that does not match is deleted unrun. `MATRIX_E2EE_CLI=/path` uses a binary of your own. `Build/Scripts/pin-cli-release.py SHA256SUMS VERSION` writes the pin ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- `matrix-e2ee-cli.py` runs any other matrix-e2ee-cli command with its arguments unchanged, for example `logout` or `verify --hand-over` ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+
+### Changed
+
+- `matrix-send-e2ee.py`, `matrix-read-e2ee.py`, `matrix-edit-e2ee.py`, `matrix-download-e2ee.py`, `matrix-fetch-keys.py`, `matrix-e2ee-verify.py`, `matrix-e2ee-setup.py`, `matrix-key-backup.py`, `matrix-react.py`, `matrix-redact.py`, `matrix-watchd.py` and `matrix-watch.py` are stdlib wrappers that keep their names and the flags matrix-e2ee-cli can serve (the others are refused, see Removed) and run the matching matrix-e2ee-cli command. `--debug` is accepted and ignored. A secret given with `--allow-secret-argument` reaches the CLI in its environment, not on its command line. Output, including `Event ID: …` and the `--json` array of `matrix-read-e2ee.py` (its messages now also carry `decrypted`, `sender_verified` and `room_encrypted`), is the CLI's; a failed `--json` send, edit, react or redact still prints `{"error": …}` on stdout, and react adds, as version 4 did, the keys it set before the failure as `applied` and, for a removal that failed, `event_id` and `removed`; a part of the report that does not match the keys given is passed on whole in `unparsed` instead of being guessed ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- `matrix-doctor.py` checks the matrix-e2ee-cli binary (`--install` downloads it) and the CLI's `session.json` instead of matrix-nio, libolm and `credentials.json` ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- `matrix-e2ee-setup.py` with a session in place (also right after the takeover) shows its state instead of logging in again; `--force` replaces a dead or foreign device (`matrix-e2ee-cli login --force`). `matrix-doctor.py` and the references name `--force` where a replacement is meant ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- A failed takeover reuses the newest `store.backup-<time>` while the store's files are unchanged, and its error names every backup copy ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- A new device is named "Matrix Skill E2EE (Rust)" ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- A short room name (`ops`, or `#ops` without the server) is looked up before the CLI runs, in the order the E2EE scripts of version 4 used (alias without server, then a single exact display name, then a single partial match; `matrix-react.py` and `matrix-redact.py` follow it too and no longer refuse an exact name that another room's name contains), and only the room ID reaches matrix-e2ee-cli, whose own lookup takes the display name alone. Several matches or none stop the command, and so does a partial-only match for send, edit, react and redact, which write and therefore need an exact alias or name; room IDs and full aliases are passed on unchanged ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- `matrix-key-backup.py --status --import-keys` shows the status and imports nothing, as before ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- `matrix-watch.py`, and `matrix-watchd.py --status` and `--stop`, do not take a matrix-nio device over: they do not open the store. `matrix-watch.py` ends with exit code 0 on Ctrl-C while following, as before ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- `matrix-e2ee-cli.py migrate-nio` copies the store first, like the automatic takeover (a copy that fails stops it with an error, and a run that created the session is recorded even when it exits non-zero, as `--check-online` can), which now runs under `matrix-skill/takeover.lock` so that commands started together take the device over once ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+
+### Removed
+
+- The matrix-nio and libolm dependency, and the `_lib` modules only the matrix-nio scripts used: `deps.py`, `e2ee.py`, `trust.py`, `roomlog.py`, `downloads.py`, `backup_mac.py`, `secret_input.py`, and `reactions.py`, which only the old `matrix-react.py` used ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+- Flags matrix-e2ee-cli has no equivalent for are refused with a message: `matrix-download-e2ee.py --overwrite`, `matrix-e2ee-verify.py --accept-from` and `matrix-e2ee-verify.py` without `--request`, `--listen` or `--list`, `matrix-e2ee-setup.py --logout` and `--purge-all` (`matrix-e2ee-cli.py logout` also ends the device on the server), `matrix-e2ee-setup.py --json` without `--status`, and `matrix-key-backup.py` without `--import-keys` or `--status`. `matrix-key-backup.py --import-keys` needs the recovery key or passphrase on every run, from `MATRIX_RECOVERY_KEY` or `MATRIX_RECOVERY_PASSPHRASE` for unattended runs, else from a prompt; the stored backup key of version 4 is not reused ([#233](https://github.com/netresearch/matrix-skill/pull/233))
+
 ## [4.4.2] - 2026-11-21
 
 ### Fixed
@@ -482,7 +514,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v4.4.2...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v5.0.0...HEAD
+[5.0.0]: https://github.com/netresearch/matrix-skill/compare/v4.4.2...v5.0.0
 [4.4.2]: https://github.com/netresearch/matrix-skill/compare/v4.4.1...v4.4.2
 [4.4.1]: https://github.com/netresearch/matrix-skill/compare/v4.4.0...v4.4.1
 [4.4.0]: https://github.com/netresearch/matrix-skill/compare/v4.3.1...v4.4.0
