@@ -13,8 +13,8 @@ everywhere below. A room without a name — a direct chat, usually — goes by
 the name Element shows for it: the other person's display name, or their
 user ID (`@jane:server`). A short name, also `#name` without the server, is
 looked up with the skill's device token in the order version 4 used: alias
-without server, then display name, then a single partial match. That costs a
-few requests per joined room; a name that matches several rooms, or none,
+without server, then display name, then a single partial match. That costs two
+requests per joined room (three for a room without name and alias); a name that matches several rooms, or none,
 stops the command before anything is sent. A room ID or full alias goes to
 matrix-e2ee-cli unchanged, without the lookup.
 

@@ -2,4 +2,4 @@
 - `matrix-e2ee-verify.py --request` and `--listen` ask on the terminal whether the emoji match; without a terminal (an agent) use `matrix-e2ee-cli.py verify --listen --hand-over` and `verify --confirm TOKEN` after the person compared the emoji (`references/e2ee-guide.md`)
 - `matrix-react.py` and `matrix-redact.py` run matrix-e2ee-cli's `react` and `redact` with the skill's E2EE device; an `access_token` in the config alone no longer carries them, so set up the device with `matrix-e2ee-setup.py` first. Flags and output (`Event ID: …`, `--list`, `--json`, `--quiet`) stay
 - `matrix-watch.py` follows the logs of the new daemon, so restart `matrix-watchd.py` after the upgrade; its ROOM is a room ID or the alias or name as written in `watch_rooms`
-- A room given by short name may need its ID or full alias now: when the name matches several rooms the command stops instead of picking one
+- A room given by short name may need its ID or full alias now: when the name matches several rooms the command stops instead of picking one. The lookup reads every joined room (two or three requests each) before the command runs, so on an account in many rooms pass the room ID

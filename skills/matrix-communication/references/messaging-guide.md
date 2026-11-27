@@ -130,7 +130,8 @@ uv run $R ROOM '$eventId' --list                      # what this account has se
 
 Pass the room ID (`!…:server`) when you have it. A room name is resolved by
 reading every joined room: on an account in many rooms that took 40 s per
-call, against 0.7 s with the room ID (measured 2026-11-04).
+call, against 0.7 s with the room ID (measured 2026-11-04). The same lookup
+now runs for a short name in send, read, edit, download and fetch-keys too.
 
 Finding the notification: each room can have its own webhook sender, so a
 filter on one sender name misses the other rooms. Filter on the user-ID prefix
