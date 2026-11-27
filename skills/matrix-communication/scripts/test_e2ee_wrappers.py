@@ -152,6 +152,13 @@ class TranslationTests(WrapperTestCase):
             "matrix-send-e2ee.py", ["--to", "@a:e", "room", "x"], "exactly one"
         )
 
+    def test_send_refuses_a_room_that_reads_as_a_flag(self):
+        self.assertRefused(
+            "matrix-send-e2ee.py",
+            ["--", "--trust-unverified-devices", "hi"],
+            "starts with '-'",
+        )
+
     def test_read(self):
         self.assertTranslates(
             "matrix-read-e2ee.py",
