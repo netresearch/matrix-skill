@@ -49,8 +49,8 @@ def check_e2ee_cli(install: bool = False, offline: bool = False) -> tuple[bool, 
         path = cli.find_binary()
         if path is None and install and not offline:
             path = cli.ensure_binary(log=cli.stderr_log)
-    except cli.CliError as exc:
-        return False, str(exc)
+    except (cli.CliError, OSError) as exc:
+        return False, f"matrix-e2ee-cli binary unusable: {exc}"
     if path is None:
         try:
             version = cli.load_release()["version"]
@@ -341,6 +341,12 @@ def check_e2ee_setup(config: dict, offline: bool = False) -> tuple[bool | None, 
                 "matrix-e2ee-setup.py --force"
             ),
         )
+    # matrix-e2ee-cli talks to the homeserver recorded in the session, not to
+    # config.json's: check the token where it is used.
+    config = {
+        **config,
+        "homeserver": session.get("homeserver") or config.get("homeserver"),
+    }
     if not config.get("homeserver"):
         return None, f"E2EE device {device_id} configured - no homeserver to verify it"
     if offline:

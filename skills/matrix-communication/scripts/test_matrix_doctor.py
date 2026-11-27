@@ -257,6 +257,21 @@ class CheckE2eeSetupTests(CredentialTestCase):
         state, _ = doctor.check_e2ee_setup(CONFIG)
         self.assertIsNone(state)
 
+    def test_the_token_is_checked_where_matrix_e2ee_cli_uses_it(self):
+        self._write_session(homeserver="https://device.example.net")
+        seen = []
+        real = self._fake_request
+
+        def record(config, method, endpoint, data=None):
+            seen.append(config["homeserver"])
+            return real(config, method, endpoint, data)
+
+        doctor.http.matrix_request = record
+        self.responses = [OK]
+        state, _ = doctor.check_e2ee_setup(CONFIG)
+        self.assertIs(state, True)
+        self.assertEqual(seen, ["https://device.example.net"])
+
 
 class CheckConfigTokenSourceTests(unittest.TestCase):
     """check_config resolves tokens the way the scripts do.
@@ -365,6 +380,18 @@ class CheckE2eeCliTests(unittest.TestCase):
         self.assertIs(ok, False)
         ensure.assert_not_called()
 
+    def test_a_filesystem_error_is_a_failed_row_not_a_crash(self):
+        with mock.patch.object(
+            doctor.cli, "find_binary", side_effect=PermissionError("denied")
+        ):
+            try:
+                ok, message = doctor.check_e2ee_cli()
+            except OSError:
+                self.fail("check_e2ee_cli raised instead of failing the row")
+        self.assertIs(ok, False)
+        self.assertIn("unusable", message)
+        self.assertIn("denied", message)
+
 
 class QuickFixTests(unittest.TestCase):
     """The quick fix main() prints for a rejected config token.
@@ -429,6 +456,49 @@ class QuickFixTests(unittest.TestCase):
         text = self.quick_fix()
         self.assertIn("Token rejected: mint a new one for the skill", text)
         self.assertIn("matrix-e2ee-setup.py --force", text)
+
+
+class StaleTokenRowTests(CredentialTestCase):
+    """What a user with a valid config and a stale config token sees.
+
+    The config check passes, so there is no Quick fix footer: the advice is
+    in the token row itself, and the real check_token produces it from a
+    homeserver rejection.
+    """
+
+    def setUp(self):
+        super().setUp()
+        config = {**CONFIG, "access_token": "syt_dead"}
+        patches = {
+            "check_e2ee_cli": lambda install=False, offline=False: (True, "cli"),
+            "check_config": lambda: (True, "Config OK", dict(config)),
+            "check_e2ee_setup": lambda config, offline=False: (
+                True,
+                "E2EE device confirmed by the homeserver: DEVICEAAAA",
+            ),
+        }
+        for name, value in patches.items():
+            patcher = mock.patch.object(doctor, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_the_token_row_advises_repair_without_force(self):
+        self.responses = [REJECTED]
+        out = io.StringIO()
+        with (
+            mock.patch.object(sys, "argv", ["matrix-doctor.py"]),
+            contextlib.redirect_stdout(out),
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            doctor.main()
+        self.assertEqual(ctx.exception.code, 0)
+        text = out.getvalue()
+        self.assertNotIn("Quick fix:", text)
+        row = text.split("[FAIL] token", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("stale token", row)
+        self.assertIn("do not mint a new token", row)
+        self.assertNotIn("--force", text)
+        self.assertEqual(self.requests, [("syt_dead", "GET", "/account/whoami")])
 
 
 if __name__ == "__main__":
