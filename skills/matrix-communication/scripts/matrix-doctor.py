@@ -255,6 +255,32 @@ def setup_command() -> str:
     return "matrix-e2ee-setup.py --force" if exists else "matrix-e2ee-setup.py"
 
 
+def token_remedy(e2ee_check: dict) -> str:
+    """The quick fix for a rejected config token, decided by the E2EE verdict.
+
+    A working E2EE device makes a dead config token a stale copy to repair;
+    --force there would replace a working, verified device. Only a device
+    the homeserver rejected (or none at all) is a reason to mint one.
+    """
+    if e2ee_check.get("ok"):
+        return (
+            "  - Token rejected: the skill's E2EE device works, so this is a stale "
+            "config token - repair or remove it where it is set (MATRIX_ACCESS_TOKEN, "
+            "access_token_file, config.json), e.g. with the device's own token "
+            "(setup-guide.md, step 6); do not mint a new device"
+        )
+    if e2ee_check.get("unknown"):
+        return (
+            "  - Token rejected: the E2EE device could not be checked (see e2ee_setup); "
+            "check it before replacing anything - a working device only needs the "
+            "config token repaired"
+        )
+    return (
+        "  - Token rejected: mint a new one for the skill "
+        f"({setup_command()}), never copy one out of a client you use"
+    )
+
+
 def nio_pending() -> bool:
     """A matrix-nio device of an older version still waits for its takeover."""
     return cutover.pending()
@@ -463,10 +489,7 @@ def main():
         ):
             print(f"  - Run: {setup_command()}")
         if not checks["token"]["ok"] and not checks["token"].get("unknown"):
-            print(
-                "  - Token rejected: mint a new one for the skill "
-                f"({setup_command()}), never copy one out of a client you use"
-            )
+            print(token_remedy(checks["e2ee_setup"]))
 
     sys.exit(0 if critical_ok else 1)
 

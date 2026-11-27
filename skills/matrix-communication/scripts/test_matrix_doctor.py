@@ -15,9 +15,12 @@ queue of canned responses, so a test that forgets to stub fails loudly rather
 than reaching the network.
 """
 
+import contextlib
 import importlib.util
+import io
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -361,6 +364,68 @@ class CheckE2eeCliTests(unittest.TestCase):
             ok, _ = doctor.check_e2ee_cli(install=True, offline=True)
         self.assertIs(ok, False)
         ensure.assert_not_called()
+
+
+class QuickFixTests(unittest.TestCase):
+    """The quick fix main() prints for a rejected config token.
+
+    Reproduces the review case: the E2EE device works, the config token is
+    stale and the config check fails, so the quick fix is printed. A session
+    file exists, so any setup advice would carry --force.
+    """
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        session = Path(tmp.name) / "session.json"
+        session.write_text("{}")
+        self.e2ee = (True, "E2EE device confirmed by the homeserver: DEVICEAAAA")
+        patches = {
+            "get_session_path": lambda: session,
+            "check_e2ee_cli": lambda install=False, offline=False: (True, "cli"),
+            "check_config": lambda: (False, "Token source unusable", dict(CONFIG)),
+            "check_e2ee_setup": lambda config, offline=False: self.e2ee,
+            "check_token": lambda config, offline=False, store_ok=None: (
+                False,
+                "access_token rejected by the homeserver (M_UNKNOWN_TOKEN)",
+            ),
+        }
+        for name, value in patches.items():
+            patcher = mock.patch.object(doctor, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def quick_fix(self):
+        out = io.StringIO()
+        with (
+            mock.patch.object(sys, "argv", ["matrix-doctor.py"]),
+            contextlib.redirect_stdout(out),
+            self.assertRaises(SystemExit),
+        ):
+            doctor.main()
+        text = out.getvalue()
+        self.assertIn("Quick fix:", text)
+        return text.split("Quick fix:", 1)[1]
+
+    def test_a_working_device_with_a_stale_config_token_gets_no_force(self):
+        text = self.quick_fix()
+        self.assertNotIn("--force", text)
+        self.assertIn("stale config token", text)
+
+    def test_an_unverified_device_gets_no_force_either(self):
+        self.e2ee = (
+            None,
+            "E2EE device DEVICEAAAA configured - not verified (--offline)",
+        )
+        text = self.quick_fix()
+        self.assertNotIn("--force", text)
+        self.assertIn("could not be checked", text)
+
+    def test_a_rejected_device_gets_the_force_remedy(self):
+        self.e2ee = (False, "E2EE credential (DEVICEAAAA) rejected by the homeserver")
+        text = self.quick_fix()
+        self.assertIn("Token rejected: mint a new one for the skill", text)
+        self.assertIn("matrix-e2ee-setup.py --force", text)
 
 
 if __name__ == "__main__":
