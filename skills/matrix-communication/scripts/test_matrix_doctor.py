@@ -411,6 +411,9 @@ class QuickFixTests(unittest.TestCase):
         text = self.quick_fix()
         self.assertNotIn("--force", text)
         self.assertIn("stale config token", text)
+        # A rejected admin_token is repaired where it is set too.
+        self.assertIn("MATRIX_ADMIN_TOKEN", text)
+        self.assertIn("an admin_token needs a server-admin token", text)
 
     def test_an_unverified_device_gets_no_force_either(self):
         self.e2ee = (

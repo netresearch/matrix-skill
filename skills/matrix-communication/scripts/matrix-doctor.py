@@ -265,9 +265,10 @@ def token_remedy(e2ee_check: dict) -> str:
     if e2ee_check.get("ok"):
         return (
             "  - Token rejected: the skill's E2EE device works, so this is a stale "
-            "config token - repair or remove it where it is set (MATRIX_ACCESS_TOKEN, "
-            "access_token_file, config.json), e.g. with the device's own token "
-            "(setup-guide.md, step 6); do not mint a new device"
+            "config token - repair or remove it where it is set (MATRIX_ACCESS_TOKEN / "
+            "MATRIX_ADMIN_TOKEN, the *_token_file, or config.json): an access_token "
+            "can take the device's own token (setup-guide.md, step 6), an admin_token "
+            "needs a server-admin token; do not mint a new device"
         )
     if e2ee_check.get("unknown"):
         return (
