@@ -60,16 +60,14 @@ def is_explicit_migration(args) -> bool:
 def json_error(stderr: str) -> dict:
     """The old scripts' --json error object from the CLI's stderr.
 
-    The CLI ends a failure with one "error: ..." line; matrix-react.py's
-    "Applied before the error: KEY ..." line becomes "applied", as the old
-    script reported the keys it had set before the failure.
+    The CLI ends a failure with one "error: ..." line. matrix-react.py reads
+    its other lines itself (see its failure_json), because only it knows the
+    reaction keys and can tell where one ends.
     """
     payload = {"error": ""}
     for line in stderr.splitlines():
         if line.startswith("error: "):
             payload["error"] = line.removeprefix("error: ")
-        elif line.startswith("Applied before the error: "):
-            payload["applied"] = line.removeprefix("Applied before the error: ").split()
     if not payload["error"]:
         payload["error"] = (
             stderr.strip().splitlines()[-1] if stderr.strip() else "failed"
@@ -83,7 +81,8 @@ def run_cli(args, extra_env=None, env=None, choose=None, json_errors=False) -> i
     CHOOSE, when given, gets ARGS and the environment after the takeover and
     returns the arguments to run instead: what to run can depend on state the
     takeover creates (a session). With JSON_ERRORS, a failure that printed
-    nothing on stdout prints the old scripts' {"error": ...} object there.
+    nothing on stdout prints the old scripts' {"error": ...} object there;
+    JSON_ERRORS may be a function that builds that object from the stderr.
     """
     env = dict(os.environ if env is None else env)
     try:
@@ -101,7 +100,8 @@ def run_cli(args, extra_env=None, env=None, choose=None, json_errors=False) -> i
         sys.stdout.write(result.stdout)
         sys.stderr.write(result.stderr)
         if result.returncode != 0 and not result.stdout.strip():
-            print(json.dumps(json_error(result.stderr)))
+            build = json_errors if callable(json_errors) else json_error
+            print(json.dumps(build(result.stderr)))
         return result.returncode
     except Unsupported as exc:
         print(f"Error: {exc}", file=sys.stderr)

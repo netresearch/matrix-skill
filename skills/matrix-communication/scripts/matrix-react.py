@@ -28,13 +28,17 @@ Reactions are sent unencrypted, also in an encrypted room, so
 
 import argparse
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib.rooms import normalize_room_input
 from _lib.utils import clean_message
-from _lib.wrapper import Unsupported, exit_with, refuse, room_chooser
+from _lib.wrapper import Unsupported, exit_with, json_error, refuse, room_chooser
+
+APPLIED = "Applied before the error: "
+EVENT_ID = r"\$[^\s(),]+"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -95,6 +99,91 @@ def translate(args):
     return cli, None
 
 
+def _applied(line: str, keys: list):
+    """How many of KEYS the "Applied before the error" line lists, or None.
+
+    The CLI joins the keys with spaces, so a key with a space in it cannot be
+    split off the line; matching the line against the keys this script sent
+    tells where each one ends.
+    """
+    text = line.removeprefix(APPLIED)
+    matches = [n for n in range(1, len(keys) + 1) if " ".join(keys[:n]) == text]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _removal(error: str, current: str, dropped: list):
+    """(event_id, removed) from react.rs's "could not remove" error, or None.
+
+    The text is "could not remove KEY (ID)[ (already done: set KEY (ID),
+    removed KEY (ID), ...)]: CAUSE". Only keys this call could have set or
+    removed are matched, and only a parse that reproduces the text exactly
+    and is the same with the longest or the shortest key tried first counts.
+    """
+    if not error.startswith("could not remove ") or not dropped:
+        return None
+    parses = set()
+    for order in (False, True):
+        names = sorted(set(dropped), key=len, reverse=not order)
+        key = "|".join(re.escape(k) for k in names)
+        removed = rf"removed (?:{key}) \({EVENT_ID}\)"
+        listing = rf"{removed}(?:, {removed})*"
+        done = (
+            rf"set {re.escape(current)} \((?P<set>{EVENT_ID})\)(?:, (?P<after>{listing}))?"
+            rf"|(?P<only>{listing})"
+        )
+        pattern = (
+            rf"could not remove (?:{key}) \({EVENT_ID}\)"
+            rf"(?: \(already done: (?:{done})\))?: .+"
+        )
+        match = re.fullmatch(pattern, error, re.DOTALL)
+        if not match:
+            continue
+        event_id = match.group("set")
+        listed = match.group("after") or match.group("only") or ""
+        keys = tuple(
+            re.findall(rf"removed ({key}) \({EVENT_ID}\)", listed) if listed else ()
+        )
+        parses.add((event_id, keys))
+    if len(parses) != 1:
+        return None
+    event_id, keys = parses.pop()
+    return event_id, list(keys)
+
+
+def failure_json(stderr: str, keys: list, replace: list, remove: bool) -> dict:
+    """The old --json failure object from matrix-e2ee-cli react's stderr.
+
+    As version 4 printed it: "error", "applied" (the keys set before the
+    failing one) and, when a swap or removal failed while removing,
+    "event_id" (the failing key's own reaction, or null) and "removed". What
+    cannot be read without guessing is left out, and the stderr lines
+    involved are passed on whole in "unparsed".
+    """
+    payload = json_error(stderr)
+    unparsed = []
+    applied = 0
+    for line in stderr.splitlines():
+        if line.startswith(APPLIED):
+            count = _applied(line, keys)
+            if count is None:
+                unparsed.append(line)
+            else:
+                applied = count
+                payload["applied"] = keys[:count]
+    current = keys[applied] if applied < len(keys) else None
+    error = payload["error"]
+    if current is not None and error.startswith("could not remove "):
+        dropped = [current] if remove else [k for k in replace if k not in keys]
+        parsed = _removal(error, current, dropped)
+        if parsed is None:
+            unparsed.append(f"error: {error}")
+        else:
+            payload["event_id"], payload["removed"] = parsed
+    if unparsed:
+        payload["unparsed"] = unparsed
+    return payload
+
+
 def main(argv=None) -> None:
     args = build_parser().parse_args(argv)
     try:
@@ -105,7 +194,11 @@ def main(argv=None) -> None:
         cli_args,
         extra_env,
         choose=room_chooser(cli_args[cli_args.index("--") + 1], write=True),
-        json_errors=args.json,
+        json_errors=(
+            (lambda stderr: failure_json(stderr, args.emoji, args.replace, args.remove))
+            if args.json
+            else False
+        ),
     )
 
 

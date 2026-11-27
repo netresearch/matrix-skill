@@ -512,6 +512,63 @@ class JsonErrorTests(WrapperTestCase):
             json.loads(result.stdout), {"error": "rate limited", "applied": ["✅"]}
         )
 
+    def react_failure(self, args, stderr):
+        result = self.run_script(
+            "matrix-react.py",
+            "!r:e",
+            "$e",
+            *args,
+            "--json",
+            FAKE_CLI_RC="1",
+            FAKE_CLI_STDERR=stderr,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue(result.stdout.strip(), "no JSON on stdout")
+        return json.loads(result.stdout)
+
+    def test_a_failed_removal_in_a_swap_reports_what_was_done(self):
+        # react.rs v0.3.0 remove_reactions: the error names what already happened.
+        payload = self.react_failure(
+            ["🩹", "--replace", "▶️", "✅"],
+            "error: could not remove ✅ ($r2) (already done: set 🩹 ($s1), "
+            "removed ▶️ ($r1)): M_FORBIDDEN: denied\n",
+        )
+        self.assertEqual(payload.get("event_id"), "$s1")
+        self.assertEqual(payload.get("removed"), ["▶️"])
+        self.assertTrue(payload["error"].startswith("could not remove ✅ ($r2)"))
+        self.assertNotIn("unparsed", payload)
+
+    def test_keys_with_spaces_are_kept_whole(self):
+        payload = self.react_failure(
+            ["all good", "▶️"],
+            "Applied before the error: all good\n"
+            "error: sending the reaction failed: rate limited\n",
+        )
+        self.assertEqual(payload.get("applied"), ["all good"])
+        self.assertNotIn("unparsed", payload)
+        payload = self.react_failure(
+            ["done", "--replace", "in progress"],
+            "error: could not remove in progress ($r) (already done: set done ($s))"
+            ": boom\n",
+        )
+        self.assertEqual((payload.get("event_id"), payload.get("removed")), ("$s", []))
+
+    def test_a_report_that_does_not_fit_the_keys_is_passed_on_not_guessed(self):
+        payload = self.react_failure(
+            ["✅", "--replace", "▶️"],
+            "Applied before the error: something else\n"
+            "error: could not remove 🦆 ($r) (already done: set ✅ ($s)): boom\n",
+        )
+        self.assertNotIn("applied", payload)
+        self.assertNotIn("event_id", payload)
+        self.assertEqual(
+            payload.get("unparsed"),
+            [
+                "Applied before the error: something else",
+                "error: could not remove 🦆 ($r) (already done: set ✅ ($s)): boom",
+            ],
+        )
+
     def test_without_json_a_failure_prints_nothing_on_stdout(self):
         result = self.run_script(
             "matrix-send-e2ee.py",
