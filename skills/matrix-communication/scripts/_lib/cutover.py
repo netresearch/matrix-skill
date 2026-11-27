@@ -291,8 +291,10 @@ def _recording(env, store: Path, backup):
     the run is over, however it ended (an error, Ctrl-C), the marker is made
     final when a session exists and removed when none does. A kill in
     between leaves the "running" marker for settle() and pending() to read.
+    A takeover recorded before (a final marker, as after a logout) is left
+    exactly as it is: this run neither replaces nor removes it.
     """
-    if cli_session_path(env).exists():
+    if cli_session_path(env).exists() or _marker_state(env) == "done":
         yield
         return
     _write_marker(env, store, backup, running=True)

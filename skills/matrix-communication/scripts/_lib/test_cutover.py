@@ -475,5 +475,45 @@ class InterruptedTakeoverTests(CutoverTestCase):
         self.assertTrue(cutover.pending(self.env))
 
 
+class RecordedTakeoverTests(CutoverTestCase):
+    """A takeover recorded before is never undone by a later explicit run."""
+
+    def setUp(self):
+        super().setUp()
+        self.make_nio_store()
+        cutover._write_marker(self.env, self.store, Path("/backup/old"))
+        self.before = cutover.marker_path(self.env).read_text()
+
+    def explicit(self, run):
+        return cutover.explicit_migrate(
+            "/bin/cli", ["migrate-nio"], env=self.env, run=run, log=self.logged.append
+        )
+
+    def assert_unchanged(self):
+        self.assertTrue(cutover.marker_path(self.env).exists(), "record removed")
+        self.assertEqual(cutover.marker_path(self.env).read_text(), self.before)
+        self.assertFalse(cutover.pending(self.env))
+
+    def test_a_failed_explicit_run_after_logout_keeps_the_record(self):
+        self.assertEqual(self.explicit(lambda binary, args, env: 1), 1)
+        self.assert_unchanged()
+
+    def test_an_interrupted_explicit_run_after_logout_keeps_the_record(self):
+        def run(binary, args, env):
+            raise KeyboardInterrupt
+
+        with self.assertRaises(KeyboardInterrupt):
+            self.explicit(run)
+        self.assert_unchanged()
+
+    def test_the_automatic_path_does_not_run_over_a_record(self):
+        runner = FakeRunner()
+        self.assertIsNone(
+            cutover.migrate_if_pending("/bin/cli", env=self.env, runner=runner)
+        )
+        self.assertEqual(runner.calls, [])
+        self.assert_unchanged()
+
+
 if __name__ == "__main__":
     unittest.main()
