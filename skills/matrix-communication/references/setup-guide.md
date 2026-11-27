@@ -129,7 +129,9 @@ E2EE command takes the matrix-nio device over instead of creating a new one
 
 Run with a session already in place, `matrix-e2ee-setup.py` only shows its
 state. `--force` replaces a dead or foreign device with a new one; the old
-device stays on the server until you remove it in Element.
+device stays on the server until you remove it in Element. On a machine still
+on matrix-nio the takeover runs first, so `--force` then replaces the device
+just taken over: use it only when that device is dead or foreign too.
 
 **Why environment variable?** Avoids shell escaping issues with special characters (`!`, `$`, etc.).
 

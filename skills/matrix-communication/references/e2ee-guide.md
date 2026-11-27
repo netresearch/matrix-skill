@@ -310,7 +310,7 @@ Verify session).
 | `[Unable to decrypt]` | Missing session keys | Restore from backup with `--import-keys` |
 | `MAC verification failed` | Wrong recovery key or passphrase | Verify recovery key from Element settings |
 | Verification times out | No compatible device responding | Use Element Desktop, not Element X |
-| `signature verification failed` | Reusing Element's device | Use dedicated device via `matrix-e2ee-setup.py` |
+| `signature verification failed` | Reusing Element's device | Use dedicated device via `matrix-e2ee-setup.py --force` |
 
 ## Limitations
 

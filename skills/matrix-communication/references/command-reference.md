@@ -139,7 +139,9 @@ older takes that device over once (`e2ee-guide.md`, "Moving from matrix-nio").
 - `matrix-e2ee-verify.py` needs `--request`, `--listen` or `--list`, and a
   terminal for the first two; an agent uses `verify --hand-over` (e2ee-guide.md).
 - `matrix-e2ee-setup.py` keeps an existing session and shows its state;
-  `--force` replaces a dead or foreign device with a new one.
+  `--force` replaces a dead or foreign device with a new one. On a machine
+  still on matrix-nio the takeover runs first, so `--force` then replaces the
+  device just taken over.
 - `matrix-e2ee-setup.py --logout` is refused: `matrix-e2ee-cli.py logout` also
   ends the device on the server.
 
