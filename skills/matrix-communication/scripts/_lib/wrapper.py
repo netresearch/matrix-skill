@@ -89,8 +89,16 @@ def run_cli(args, extra_env=None, env=None, choose=None, json_errors=False) -> i
         binary = cli.ensure_binary(env=env, log=cli.stderr_log)
         if is_explicit_migration(args):
             return cutover.explicit_migrate(binary, list(args), env=env)
+        cutover.settle(env)
         if needs_takeover(args):
-            cutover.migrate_if_pending(binary, env=env)
+            try:
+                cutover.migrate_if_pending(binary, env=env)
+            except OSError as exc:
+                # A lock file, the backup or the marker could not be used:
+                # the command stays blocked, with a message instead of a trace.
+                raise cutover.CutoverError(
+                    f"the takeover of the matrix-nio device failed: {exc}"
+                ) from exc
         if choose is not None:
             args = choose(list(args), env)
         child_env = {**env, **extra_env} if extra_env else env

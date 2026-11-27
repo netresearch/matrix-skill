@@ -439,6 +439,30 @@ class TakeoverTests(WrapperTestCase):
         self.assertEqual(argvs[1:], [["status"]])
         self.assertIn("already set up", result.stdout)
 
+    def test_any_command_settles_a_takeover_that_was_killed(self):
+        # migrate-nio wrote the session, then the process was killed before
+        # the record was final; logout must not reopen the takeover.
+        marker = self.root / "data" / "matrix-skill" / "nio-migrated.json"
+        marker.write_text(json.dumps({"store": "s", "backup": None, "running": True}))
+        session = self.root / "data" / "matrix-e2ee-cli" / "session.json"
+        session.parent.mkdir(parents=True)
+        session.write_text("{}")
+        self.run_script("matrix-e2ee-cli.py", "logout")
+        self.assertNotIn("running", json.loads(marker.read_text()))
+
+    @unittest.skipIf(os.geteuid() == 0, "root opens a file of mode 000")
+    def test_a_takeover_that_cannot_open_the_store_lock_is_an_error_not_a_trace(self):
+        lock = self.root / "data" / "matrix-skill" / "store" / ".daemon.lock"
+        lock.write_text("")
+        lock.chmod(0)
+        self.addCleanup(lock.chmod, 0o600)
+        result = self.run_script("matrix-send-e2ee.py", "!r:e", "hi", "--json")
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertTrue(result.stdout.strip(), result.stderr)
+        self.assertIn("takeover", json.loads(result.stdout)["error"])
+        self.assertEqual(self.calls(), [])
+
     def test_a_failed_takeover_runs_no_command(self):
         result = self.run_script("matrix-e2ee-setup.py", FAKE_CLI_RC="1")
         self.assertEqual(result.returncode, 1)

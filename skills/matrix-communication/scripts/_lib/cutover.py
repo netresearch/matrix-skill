@@ -90,7 +90,7 @@ def pending(env=None) -> bool:
         store = nio_store_path(env)
         return (
             (store / CREDENTIALS).is_file()
-            and not marker_path(env).exists()
+            and not _recorded(env)
             and not cli_session_path(env).exists()
         )
     except CutoverError:
@@ -247,13 +247,73 @@ def _notice(store: Path, backup: Path) -> str:
     )
 
 
-def _write_marker(env, store: Path, backup) -> None:
+def _marker_state(env):
+    """None (no marker), "running" (a takeover may be under way) or "done"."""
+    path = marker_path(env)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "done"  # unreadable: never risk a second takeover
+    return "running" if isinstance(data, dict) and data.get("running") else "done"
+
+
+def _recorded(env) -> bool:
+    """A takeover is recorded: a marker that is not a takeover still running."""
+    return _marker_state(env) == "done"
+
+
+def settle(env=None) -> None:
+    """Finish the record of a takeover whose process was killed mid-way.
+
+    A "running" marker with a session beside it means migrate-nio created
+    the session and the process ended before it could record that. Run
+    before every command, so a later logout cannot reopen the takeover.
+    """
+    env = os.environ if env is None else env
+    try:
+        if _marker_state(env) == "running" and cli_session_path(env).exists():
+            data = json.loads(marker_path(env).read_text(encoding="utf-8"))
+            data.pop("running", None)
+            marker_path(env).write_text(
+                json.dumps(data, indent=2) + "\n", encoding="utf-8"
+            )
+    except (OSError, ValueError, CutoverError):
+        pass  # the next command tries again; pending() stays false while a session exists
+
+
+@contextlib.contextmanager
+def _recording(env, store: Path, backup):
+    """Record the takeover around a migrate-nio run, interruptions included.
+
+    Without a session before the run, a "running" marker goes in first. Once
+    the run is over, however it ended (an error, Ctrl-C), the marker is made
+    final when a session exists and removed when none does. A kill in
+    between leaves the "running" marker for settle() and pending() to read.
+    """
+    if cli_session_path(env).exists():
+        yield
+        return
+    _write_marker(env, store, backup, running=True)
+    try:
+        yield
+    finally:
+        if cli_session_path(env).exists():
+            _write_marker(env, store, backup)
+        else:
+            marker_path(env).unlink(missing_ok=True)
+
+
+def _write_marker(env, store: Path, backup, running=False) -> None:
+    marker_path(env).parent.mkdir(parents=True, exist_ok=True)
     marker_path(env).write_text(
         json.dumps(
             {
                 "migrated_at": datetime.now(UTC).isoformat(timespec="seconds"),
                 "store": str(store),
                 "backup": str(backup) if backup else None,
+                **({"running": True} if running else {}),
             },
             indent=2,
         )
@@ -285,14 +345,15 @@ def migrate(binary, env=None, runner=subprocess.run, log=None):
 
 def _run_migration(binary, env, runner, log, store, backup):
     # stdout goes to stderr: callers parse the command's stdout (JSON, "Event ID: ...").
-    result = runner(
-        [str(binary), "migrate-nio", "--yes", "--store", str(store)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        env=dict(env),
-        check=False,
-    )
+    with _recording(env, store, backup):
+        result = runner(
+            [str(binary), "migrate-nio", "--yes", "--store", str(store)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=dict(env),
+            check=False,
+        )
     if result.stdout:
         log(result.stdout.rstrip("\n"))
     if result.returncode != 0:
@@ -304,7 +365,7 @@ def _run_migration(binary, env, runner, log, store, backup):
             f"device instead, move {store} away; the next E2EE command then needs "
             "matrix-e2ee-setup.py (a new device)."
         )
-    _write_marker(env, store, backup)
+    _write_marker(env, store, backup)  # a success is the takeover, session or not
     log(_notice(store, backup))
     return backup
 
@@ -344,13 +405,10 @@ def explicit_migrate(binary, args, env=None, run=None, log=None) -> int:
         if (store / CREDENTIALS).is_file():
             backup = _locked_backup(store)
             log(f"matrix-communication: backup of {store} before migrate-nio: {backup}")
-        had_session = cli_session_path(env).exists()
-        code = run(binary, list(args), env=dict(env))
         # Whatever the exit code: --check-online can fail after the session was
         # written, and that session is the device taken over.
-        if not had_session and cli_session_path(env).exists():
-            _write_marker(env, store, backup)
-        return code
+        with _recording(env, store, backup):
+            return run(binary, list(args), env=dict(env))
 
 
 def migrate_if_pending(binary, env=None, runner=subprocess.run, log=None):
@@ -358,6 +416,7 @@ def migrate_if_pending(binary, env=None, runner=subprocess.run, log=None):
 
     pending() is asked again inside migrate(), under the takeover lock.
     """
+    settle(env)
     if not pending(env):
         return None
     return migrate(binary, env=env, runner=runner, log=log)

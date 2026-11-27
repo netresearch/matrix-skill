@@ -50,7 +50,10 @@ matrix-nio store (`matrix-skill/store/`). `_lib/cutover.py` runs before the
 first CLI command on a machine that has that store and no CLI session: it takes
 the store's lock without waiting, copies the store to an owner-only
 `store.backup-<time>`, runs `migrate-nio` (which only reads the store) and
-records the takeover in `matrix-skill/nio-migrated.json`. All of that runs
+records the takeover in `matrix-skill/nio-migrated.json`; that record is
+written as "running" before `migrate-nio` starts and made final once a session
+exists, also after Ctrl-C, and the next command finishes a record a kill left
+behind, so a later logout never reopens the takeover. All of that runs
 under `matrix-skill/takeover.lock`, and `pending()` is asked again once that
 lock is held, so concurrent first commands take over once; the store's own lock
 is free while `migrate-nio` runs, because `migrate-nio` takes it itself. An

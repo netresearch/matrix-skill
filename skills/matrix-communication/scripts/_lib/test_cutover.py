@@ -397,5 +397,83 @@ class ExplicitMigrateTests(CutoverTestCase):
         )
 
 
+class InterruptedTakeoverTests(CutoverTestCase):
+    """The record survives a takeover that is interrupted half-way."""
+
+    def setUp(self):
+        super().setUp()
+        self.make_nio_store()
+        self.session = cutover.cli_session_path(self.env)
+
+    def create_session(self):
+        self.session.parent.mkdir(parents=True, exist_ok=True)
+        self.session.write_text("{}")
+
+    def interrupted_runner(self, with_session=True):
+        def runner(argv, **kwargs):
+            if with_session:
+                self.create_session()
+            raise KeyboardInterrupt
+
+        return runner
+
+    def assert_recorded_for_good(self):
+        self.assertTrue(cutover.marker_path(self.env).exists(), "no record")
+        marker = json.loads(cutover.marker_path(self.env).read_text())
+        self.assertNotIn("running", marker)
+        self.session.unlink()  # a later logout
+        self.assertFalse(cutover.pending(self.env))
+
+    def test_ctrl_c_after_the_session_was_written_keeps_the_record(self):
+        with self.assertRaises(KeyboardInterrupt):
+            self.migrate(self.interrupted_runner())
+        self.assert_recorded_for_good()
+
+    def test_ctrl_c_in_an_explicit_migrate_nio_keeps_the_record(self):
+        def run(binary, args, env):
+            self.create_session()
+            raise KeyboardInterrupt
+
+        with self.assertRaises(KeyboardInterrupt):
+            cutover.explicit_migrate(
+                "/bin/cli",
+                ["migrate-nio"],
+                env=self.env,
+                run=run,
+                log=self.logged.append,
+            )
+        self.assert_recorded_for_good()
+
+    def test_ctrl_c_before_any_session_leaves_the_takeover_pending(self):
+        with self.assertRaises(KeyboardInterrupt):
+            self.migrate(self.interrupted_runner(with_session=False))
+        self.assertFalse(cutover.marker_path(self.env).exists())
+        self.assertTrue(cutover.pending(self.env))
+
+    def test_while_migrate_nio_runs_a_kill_would_leave_a_running_marker(self):
+        seen = []
+
+        def runner(argv, **kwargs):
+            seen.append(cutover._marker_state(self.env))
+            self.create_session()
+            return subprocess.CompletedProcess(argv, 0, stdout="")
+
+        self.migrate(runner)
+        self.assertEqual(seen, ["running"])
+
+    def test_a_kill_after_the_session_is_settled_by_the_next_command(self):
+        # Killed between the CLI writing session.json and the final record:
+        # only the "running" marker is left.
+        cutover._write_marker(self.env, self.store, None, running=True)
+        self.create_session()
+        cutover.settle(self.env)
+        self.assert_recorded_for_good()
+
+    def test_a_kill_before_the_session_leaves_the_takeover_pending(self):
+        cutover._write_marker(self.env, self.store, None, running=True)
+        cutover.settle(self.env)
+        self.assertTrue(cutover.pending(self.env))
+
+
 if __name__ == "__main__":
     unittest.main()
