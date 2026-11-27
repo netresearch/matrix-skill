@@ -23,9 +23,8 @@ import json
 import stat
 import subprocess
 import tempfile
-import unittest
+import unittest.mock
 from pathlib import Path
-from unittest import mock
 
 from _lib import cutover
 
@@ -52,7 +51,7 @@ class CutoverTestCase(unittest.TestCase):
         }
         # The process environment too: the lock refusal asks an old daemon's
         # socket for its pid, and that path comes from HOME / XDG_RUNTIME_DIR.
-        patcher = mock.patch.dict(
+        patcher = unittest.mock.patch.dict(
             os.environ, {**self.env, "XDG_RUNTIME_DIR": str(self.root / "run")}
         )
         patcher.start()
@@ -112,9 +111,10 @@ class PendingTests(CutoverTestCase):
             path = cutover.cli_session_path({"USERPROFILE": "/profile"})
         except cutover.CutoverError as exc:
             self.fail(f"USERPROFILE was not used: {exc}")
-        self.assertEqual(
-            path, Path("/profile/.local/share/matrix-e2ee-cli/session.json")
-        )
+        else:
+            self.assertEqual(
+                path, Path("/profile/.local/share/matrix-e2ee-cli/session.json")
+            )
 
 
 class MigrateTests(CutoverTestCase):
@@ -191,11 +191,12 @@ class MigrateTests(CutoverTestCase):
         self.assertEqual(cutover.tree_digest(backup), cutover.tree_digest(self.store))
 
     def test_a_held_store_lock_refuses_before_copying_or_migrating(self):
-        holder = os.open(self.store / ".daemon.lock", os.O_RDWR)
-        self.addCleanup(os.close, holder)
-        fcntl.flock(holder, fcntl.LOCK_EX)
         runner = FakeRunner()
-        with self.assertRaises(cutover.CutoverError) as ctx:
+        with (
+            open(self.store / ".daemon.lock", "r+b") as holder,
+            self.assertRaises(cutover.CutoverError) as ctx,
+        ):
+            fcntl.flock(holder, fcntl.LOCK_EX)
             self.migrate(runner)
         self.assertIn("in use", str(ctx.exception))
         self.assertEqual(runner.calls, [])
@@ -207,7 +208,8 @@ class MigrateTests(CutoverTestCase):
             second = cutover.backup_store(self.store)
         except FileExistsError:
             self.fail("the second backup collided with the first")
-        self.assertNotEqual(first, second)
+        else:
+            self.assertNotEqual(first, second)
 
     def test_nothing_happens_when_nothing_is_pending(self):
         cutover.marker_path(self.env).write_text("{}")
@@ -328,7 +330,8 @@ class ExplicitMigrateTests(CutoverTestCase):
             code = self.explicit(["migrate-nio"])
         except OSError as exc:
             self.fail(f"tried to copy a store that is not there: {exc}")
-        self.assertEqual(code, 0)
+        else:
+            self.assertEqual(code, 0)
         self.assertEqual(self.calls, [("/bin/cli", ["migrate-nio"])])
         self.assertFalse(
             self.store.parent.exists() and any(self.store.parent.glob("store.backup-*"))

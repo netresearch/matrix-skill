@@ -220,8 +220,9 @@ class CheckE2eeSetupTests(CredentialTestCase):
             state, message = doctor.check_e2ee_setup(CONFIG)
         except doctor.cutover.CutoverError:
             self.fail("check_e2ee_setup raised instead of failing the check")
-        self.assertIs(state, False)
-        self.assertIn("HOME", message)
+        else:
+            self.assertIs(state, False)
+            self.assertIn("HOME", message)
 
     def test_missing_session_file(self):
         state, message = doctor.check_e2ee_setup(CONFIG)
@@ -388,9 +389,10 @@ class CheckE2eeCliTests(unittest.TestCase):
                 ok, message = doctor.check_e2ee_cli()
             except OSError:
                 self.fail("check_e2ee_cli raised instead of failing the row")
-        self.assertIs(ok, False)
-        self.assertIn("unusable", message)
-        self.assertIn("denied", message)
+            else:
+                self.assertIs(ok, False)
+                self.assertIn("unusable", message)
+                self.assertIn("denied", message)
 
 
 class QuickFixTests(unittest.TestCase):
