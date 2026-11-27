@@ -554,6 +554,36 @@ class MarkerWriteTests(CutoverTestCase):
             sorted(p.name for p in path.parent.iterdir() if ".tmp" in p.name), []
         )
 
+    def test_a_short_write_is_completed_before_the_marker_is_replaced(self):
+        real_write = os.write
+
+        def one_byte(fd, data):
+            return real_write(fd, bytes(data[:1]))
+
+        with unittest.mock.patch.object(cutover.os, "write", side_effect=one_byte):
+            cutover._write_marker(self.env, self.store, None, running=True)
+        try:
+            data = json.loads(cutover.marker_path(self.env).read_text())
+        except ValueError:
+            self.fail("a short write published an incomplete marker")
+        else:
+            self.assertTrue(data.get("running"))
+        self.assertEqual(cutover._marker_state(self.env), "running")
+
+    def test_the_marker_and_its_directory_are_synced(self):
+        real_fsync = os.fsync
+        synced = []
+
+        def record(fd):
+            synced.append(stat.S_ISDIR(os.fstat(fd).st_mode))
+            return real_fsync(fd)
+
+        with unittest.mock.patch.object(cutover.os, "fsync", side_effect=record):
+            cutover._write_marker(self.env, self.store, None)
+        self.assertIn(False, synced, "the temporary file was not synced")
+        if os.name == "posix":
+            self.assertIn(True, synced, "the directory was not synced")
+
     def test_a_marker_is_owner_only(self):
         cutover._write_marker(self.env, self.store, None)
         self.assertEqual(

@@ -324,15 +324,33 @@ def _write_json(path: Path, data: dict) -> None:
     never an empty one, which would read as a final record."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    payload = memoryview((json.dumps(data, indent=2) + "\n").encode("utf-8"))
     try:
         try:
-            os.write(fd, (json.dumps(data, indent=2) + "\n").encode("utf-8"))
+            while payload:  # os.write may write less than it was given
+                written = os.write(fd, payload)
+                if written <= 0:
+                    raise OSError(f"no progress writing {temp}")
+                payload = payload[written:]
+            os.fsync(fd)  # the content is on disk before the name points at it
         finally:
             os.close(fd)
         os.replace(temp, path)
     except BaseException:
         Path(temp).unlink(missing_ok=True)
         raise
+    _fsync_dir(path.parent)
+
+
+def _fsync_dir(directory: Path) -> None:
+    """Persist a rename in DIRECTORY (POSIX; elsewhere a no-op)."""
+    if os.name != "posix":
+        return
+    fd = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def _write_marker(env, store: Path, backup, running=False) -> None:
