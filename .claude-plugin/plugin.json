@@ -22,7 +22,7 @@
     "encryption",
     "messaging",
     "notification",
-    "nio"
+    "matrix-sdk"
   ],
   "support": {
     "issues": "https://github.com/netresearch/matrix-skill/issues",

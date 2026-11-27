@@ -23,6 +23,6 @@
     "encryption",
     "messaging",
     "notification",
-    "nio"
+    "matrix-sdk"
   ]
 }

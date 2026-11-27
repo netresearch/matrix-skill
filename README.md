@@ -114,13 +114,11 @@ Requires [@netresearch/agent-skill-coordinator](https://github.com/netresearch/n
 
 ## Prerequisites
 
-**For E2EE support** (most Matrix rooms), install libolm:
-
-```bash
-sudo apt install libolm-dev    # Debian/Ubuntu
-sudo dnf install libolm-devel  # Fedora
-brew install libolm            # macOS
-```
+[`uv`](https://docs.astral.sh/uv/) runs the scripts. E2EE needs nothing else: the
+`*-e2ee.py` scripts run [matrix-e2ee-cli](https://github.com/netresearch/matrix-e2ee-cli)
+and download its release binary for Linux, macOS (x86_64 and arm64) or Windows
+(x86_64) on first use, checked against the SHA-256 pinned in the skill.
+`MATRIX_E2EE_CLI=/path/to/binary` uses a binary of your own.
 
 ## Usage
 
@@ -191,9 +189,11 @@ uv run $C/matrix-doctor.py           # verifies every credential against the hom
 
 ## E2EE Support
 
-`matrix-e2ee-setup.py` creates a dedicated "Matrix Skill E2EE" device that runs
-alongside your Element client. It logs in once with your password, which is used
-and not stored.
+`matrix-e2ee-setup.py` creates a dedicated "Matrix Skill E2EE (Rust)" device that
+runs alongside your Element client. It logs in once with your password, which is
+used and not stored. The E2EE scripts are wrappers around
+[matrix-e2ee-cli](https://github.com/netresearch/matrix-e2ee-cli) (matrix-sdk);
+`matrix-e2ee-cli.py` runs any of its other commands.
 
 | Script | Purpose |
 |--------|---------|
@@ -201,11 +201,12 @@ and not stored.
 | `matrix-read-e2ee.py` | Read and decrypt messages |
 | `matrix-edit-e2ee.py` | Edit a message you sent |
 | `matrix-download-e2ee.py` | Download and decrypt attachments |
-| `matrix-e2ee-setup.py` | Create or remove the agent's device |
+| `matrix-e2ee-setup.py` | Create the agent's device, or show its state |
 | `matrix-e2ee-verify.py` | SAS emoji verification |
 | `matrix-fetch-keys.py` | Request missing room keys from your other devices |
 | `matrix-key-backup.py` | Restore room keys from the server-side backup |
 | `matrix-watchd.py` | The daemon that owns the store and follows rooms |
+| `matrix-e2ee-cli.py` | Any other matrix-e2ee-cli command (`logout`, `verify --hand-over`, …) |
 
 First run takes ~2–5 s for the initial key sync; later runs are faster.
 
@@ -234,28 +235,21 @@ uv run $C/matrix-e2ee-verify.py --request DEVICE --timeout 300
 uv run $C/matrix-e2ee-verify.py --listen --timeout 300
 ```
 
-Without `--request` **and** without `--listen` the script picks a device itself,
-which is rarely the one you are sitting in front of.
+One of `--request`, `--listen` or `--list` is required; both verification modes
+ask on the terminal whether the emoji match. Without a terminal, use
+`matrix-e2ee-cli.py verify --hand-over` (see `references/e2ee-guide.md`).
 
 Use Element Desktop or Element Android. Element X has an incompatible
 verification flow.
 
-### The matrix-nio pin
+### Moving from matrix-nio
 
-The scripts pin `matrix-nio[e2e]<0.26`. 0.26 sends the SAS commitment in a
-format Element rejects, so no verification completes
-([matrix-nio#570](https://github.com/matrix-nio/matrix-nio/issues/570)), and the
-two releases write incompatible store formats — opening one with the other fails
-as `BAD_ACCOUNT_KEY`, which names a key that is not the problem.
-
-Moving the pin is a migration, not a version bump. The store cannot be
-converted:
-
-```bash
-uv run $C/matrix-e2ee-setup.py --logout && uv run $C/matrix-e2ee-setup.py
-uv run $C/matrix-key-backup.py --import-keys
-uv run $C/matrix-e2ee-verify.py --request DEVICE
-```
+Version 4 and older kept the device in a matrix-nio store
+(`~/.local/share/matrix-skill/store`). The first E2EE command on such a machine
+copies that store to an owner-only `store.backup-<time>` beside it and takes the
+device over with `matrix-e2ee-cli migrate-nio`, so it keeps its identity,
+verification and room keys. Then run `uv run $C/matrix-key-backup.py --import-keys`
+once. Details: `references/e2ee-guide.md`, "Moving from matrix-nio".
 
 ## matrix-administration — Features
 
@@ -319,11 +313,12 @@ matrix-skill/
 │   ├── matrix-communication/    # Client-Server API, E2EE chat
 │   │   ├── SKILL.md
 │   │   ├── scripts/
-│   │   │   ├── _lib/                    # stdlib-only shared helpers
+│   │   │   ├── _lib/                    # stdlib-only helpers, matrix-e2ee-cli bootstrap
 │   │   │   ├── matrix-create-room.py    # Create a room
 │   │   │   ├── matrix-doctor.py         # Health check
 │   │   │   ├── matrix-download-e2ee.py  # Download attachments (E2EE)
-│   │   │   ├── matrix-e2ee-setup.py     # Create or remove the agent device
+│   │   │   ├── matrix-e2ee-cli.py       # Any matrix-e2ee-cli command
+│   │   │   ├── matrix-e2ee-setup.py     # Create the agent device
 │   │   │   ├── matrix-e2ee-verify.py    # SAS emoji verification
 │   │   │   ├── matrix-edit-e2ee.py      # Edit (E2EE) — USE THIS
 │   │   │   ├── matrix-edit.py           # Edit (non-E2EE fallback)

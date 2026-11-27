@@ -215,9 +215,9 @@ GET /room_keys/keys?version={version}
 
 ### Reading history without the E2EE store
 
-`matrix-read-e2ee.py` opens the encryption store, so it refuses while `matrix-watchd.py`
-holds it (`Error: the E2EE store is held by pid …`) — the documented fallback to the
-direct path applies to sending, not to this. When the messages you are after are
+`matrix-read-e2ee.py` opens the encryption store, so it waits for the store's lock and
+then fails while `matrix-watchd.py` holds it (matrix-e2ee-cli's data-directory lock) —
+the documented fallback to the direct path applies to sending, not to this. When the messages you are after are
 *unencrypted* — everything a webhook, a bridge or an RSS feed posts is — the plain
 `/messages` endpoint answers with the config's own `access_token` and needs no store at
 all. It performs no `/sync` and touches no key endpoint, so it changes no device state —

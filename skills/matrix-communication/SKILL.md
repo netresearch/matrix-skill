@@ -4,7 +4,7 @@
 name: matrix-communication
 description: "Use when communicating via Matrix chat, notifying teams, or managing E2EE. Triggers on #room:server references, Matrix URLs, and chat requests."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
-compatibility: "Requires uv (runs the scripts on Python 3.11 or later). Matrix homeserver access."
+compatibility: "Requires uv (runs the scripts on Python 3.11 or later). Matrix homeserver access. E2EE downloads the pinned matrix-e2ee-cli binary on first use."
 metadata:
   author: Netresearch DTT GmbH
   version: "4.4.2"
@@ -65,10 +65,10 @@ levels, keys, config: `command-reference.md`.
 
 Each default below protects something; its flag turns it off for one command. Use a flag only when your principal decides so for that case.
 
-- **Room keys go to verified devices only.** An encrypted send or edit, or a reaction sent through the daemon, into a room with unverified devices is refused and lists them (a reaction without the daemon goes out unencrypted). Verify them (`matrix-e2ee-verify.py` for your own devices), or pass `--trust-unverified-devices` to share that one message's key with them; nothing is stored and no device is marked verified.
-- **Verification is answered for your own account's devices only.** `matrix-e2ee-verify.py --accept-from @user:server` also answers that user.
+- **Room keys go to verified devices only.** An encrypted send or edit into a room with unverified devices is refused and lists them (reactions go out unencrypted). Verify them (`matrix-e2ee-verify.py` for your own devices), or pass `--trust-unverified-devices` to share that one message's key with them; nothing is stored and no device is marked verified.
+- **Verification is answered for your own account's devices only.** Without a terminal, `matrix-e2ee-cli.py verify --hand-over` waits for `verify --confirm TOKEN`, which you run only after the person said the emoji match (`e2ee-guide.md`).
 - **Secrets never on the command line.** Password: `MATRIX_PASSWORD` or the prompt. Recovery key or passphrase: `--recovery-key` / `--passphrase` without a value (prompt) or `MATRIX_RECOVERY_KEY` / `MATRIX_RECOVERY_PASSPHRASE`. `--allow-secret-argument` accepts a value on argv.
-- **Downloads never replace a file.** `matrix-download-e2ee.py --overwrite` does.
+- **Downloads never replace a file.** Pass `--filename` or another `--output`.
 
 ## When something fails
 

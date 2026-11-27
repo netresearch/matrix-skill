@@ -22,10 +22,10 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 | `[Unable to decrypt]` | keys for those messages are not in this device's store | first `matrix-fetch-keys.py ROOM --sync-time 60` (asks other devices, no recovery key needed); only then `matrix-key-backup.py --recovery-key --import-keys` (prompts for the key) |
 | `signature failed` | running on a foreign device | dedicated device via `matrix-e2ee-setup.py` |
 | `Invalid password` | special characters eaten by the shell | `MATRIX_PASSWORD="pass" uv run …` |
-| `libolm not found` | missing native dependency | Linux: `apt install libolm-dev`; macOS 26+ is unsupported, see `setup-guide.md` |
-| `matrix-nio not found` | Python dependency missing | `uv run …/matrix-doctor.py --install` |
-| `The E2EE store cannot be opened by the installed matrix-nio (0.25.x)` | **backend mismatch, not a broken store**: the store was written by nio ≥ 0.26 (vodozemac format), the installed nio is < 0.26 (libolm). The error says so in its first lines — read them before claiming the store is defective | never open the store with nio ≥ 0.26, not even to test: it converts the store and the skill cannot read the result. Find and stop the script that wrote it, or the new store is converted again. Run `matrix-key-backup.py --status`: `--logout` deletes this device's store files, and keys that are in no server backup are lost with them. Then `matrix-e2ee-setup.py --logout`, `matrix-e2ee-setup.py`, and `matrix-key-backup.py --import-keys` (add `--recovery-key` when no stored backup key is found) |
-| `matrix-nio 0.26.x must not open the E2EE store` | the script runs with nio ≥ 0.26: an edited or unpinned copy, or a `--with matrix-nio` | run the installed script unchanged; the store is untouched, the script stopped before opening it |
+| `no matrix-e2ee-cli release for …` | no release binary for this platform | build matrix-e2ee-cli yourself and set `MATRIX_E2EE_CLI` to the binary |
+| `downloaded … has SHA-256 …, but the skill pins …` | the downloaded binary is not the pinned release; it was deleted and not run | do not work around it: retry, and report it if it persists |
+| `the matrix-nio store … is in use` | the first E2EE command wants to take the old matrix-nio device over (`e2ee-guide.md`, "Moving from matrix-nio"), and a `matrix-watchd.py` or E2EE script of an older version still holds that store | stop that process (the message names the pid when the old daemon answers), then run the command again |
+| `migrate-nio failed …` | the takeover of the old device failed; the command did not run, the old store is unchanged and a copy was made | read the `migrate-nio` output above the error. To give the old device up instead, move `~/.local/share/matrix-skill/store` away and run `matrix-e2ee-setup.py` (a new device) |
 
 Two of these look like the same error and are not: `M_UNKNOWN_TOKEN` says the
 token is dead, while `Room not found` on a room you are demonstrably in says the
@@ -92,12 +92,13 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py            # what the skill 
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py --status
 ```
 
-`matrix-doctor.py` reads the credentials the skill stores; a token rejected from
+`matrix-doctor.py` reads the credential the skill stores (matrix-e2ee-cli's
+`session.json`); a token rejected from
 `~/.config/matrix/config.json` while the store holds a working one is a stale
 config, not a lost credential — and the fix is a repair, not a new token. Say
 "I have not got access" only after the tool has said so too.
 
-**The token copies drift apart independently.** The store's `credentials.json`,
+**The token copies drift apart independently.** The E2EE `session.json`,
 `access_token` in `config.json` and `admin_token` in `config.json` each go stale
 on their own schedule, and which one is live changes over time. `whoami` each
 copy (the `curl` in `setup-guide.md`) before concluding anything about any of
@@ -114,14 +115,9 @@ access" before checking the other token against an admin endpoint.
 ## Mistakes that cost the most time
 
 **Calling the store "broken" from the tail of an error.** A session in 2026-08 read
-the last line of the store error, matched it against an old memory note and reported
-the E2EE store as defective — the message had named the real cause (nio 0.25 cannot
-read a vodozemac store) in its first two lines, and the user had already fixed exactly
-that once. Before any such claim, read the whole error. Do not try nio 0.26 on the store: it
-opens libolm stores too and rewrites them, so one read breaks every pinned script, and
-"0.26 opens it" does not show which side wrote it. The fix is the recovery in the table
-above.
-
+the last line of a store error, matched it against an old memory note and reported
+the E2EE store as defective — the message had named the real cause in its first two
+lines. Before any such claim, read the whole error.
 
 - **Reusing a running client's access token.** The one mistake here that damages
   something outside this skill — it hijacks that client's device and breaks
@@ -131,7 +127,9 @@ above.
 - **Using a non-E2EE script in an encrypted room.** Always `*-e2ee.py` unless the
   room is confirmed unencrypted.
 - **Forgetting `set +H`** when the message contains `!`.
-- **Restoring keys without `--import-keys`** — they are displayed, not stored.
+- **Running `matrix-e2ee-cli.py logout` to retire the old matrix-nio copy** — it
+  logs the migrated device out on the server. Delete the old store directory
+  instead.
 - **Verifying with Element X** — its flow is incompatible; use Element Desktop or
   Android.
 - **Passing a password as an argument** instead of `MATRIX_PASSWORD`.

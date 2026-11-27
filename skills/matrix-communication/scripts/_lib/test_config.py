@@ -11,7 +11,7 @@ importable as a package; run the file directly or use unittest discovery:
         -s skills/matrix-communication/scripts/_lib -p 'test_config.py'
 
 Stdlib only. `config` is imported directly rather than as `_lib.config`, for
-the reason given in test_e2ee.py: running this file puts its own directory on
+the reason given in test_http.py: running this file puts its own directory on
 sys.path, where `_lib/http.py` shadows the stdlib `http` package.
 
 Every case runs against a config directory of its own (XDG_CONFIG_HOME) with
