@@ -319,6 +319,19 @@ class ExplicitMigrateTests(CutoverTestCase):
         self.assertEqual(marker["backup"], str(backups[0]))
         self.assertFalse(cutover.pending(self.env))
 
+    def test_a_failed_record_write_is_a_cutover_error(self):
+        self.make_nio_store()
+        full = OSError(28, "No space left on device")
+        with unittest.mock.patch.object(cutover, "_write_json", side_effect=full):
+            try:
+                self.explicit(["migrate-nio"], session=True)
+            except cutover.CutoverError as exc:
+                self.assertIn("No space left", str(exc))
+            except Exception as exc:  # noqa: BLE001 - any other raise is the defect
+                self.fail(f"{exc!r} escaped instead of a CutoverError")
+            else:
+                self.fail("a failed record write went unreported")
+
     def test_no_session_before_and_none_after_records_nothing(self):
         self.make_nio_store()
         self.assertEqual(self.explicit(["migrate-nio"], rc=1), 1)

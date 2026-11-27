@@ -443,15 +443,20 @@ def explicit_migrate(binary, args, env=None, run=None, log=None) -> int:
         # No fcntl here; migrate-nio itself says it runs on Linux and macOS only.
         return run(binary, list(args), env=dict(env))
     store = _store_argument(args, env)
-    with takeover_lock(env):
-        backup = None
-        if (store / CREDENTIALS).is_file():
-            backup = _locked_backup(store)
-            log(f"matrix-communication: backup of {store} before migrate-nio: {backup}")
-        # Whatever the exit code: --check-online can fail after the session was
-        # written, and that session is the device taken over.
-        with _recording(env, store, backup):
-            return run(binary, list(args), env=dict(env))
+    try:
+        with takeover_lock(env):
+            backup = None
+            if (store / CREDENTIALS).is_file():
+                backup = _locked_backup(store)
+                log(
+                    f"matrix-communication: backup of {store} before migrate-nio: {backup}"
+                )
+            # Whatever the exit code: --check-online can fail after the session
+            # was written, and that session is the device taken over.
+            with _recording(env, store, backup):
+                return run(binary, list(args), env=dict(env))
+    except OSError as exc:  # writing the record (a full disk), as on the automatic path
+        raise CutoverError(f"the matrix-nio takeover record failed: {exc}") from exc
 
 
 def migrate_if_pending(binary, env=None, runner=subprocess.run, log=None):
