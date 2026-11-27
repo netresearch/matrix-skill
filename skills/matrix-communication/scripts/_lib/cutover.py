@@ -203,6 +203,23 @@ def existing_backups(store: Path) -> list:
     return sorted(p for p in store.parent.glob("store.backup-*") if p.is_dir())
 
 
+def _posix() -> bool:
+    """fcntl locks and migrate-nio exist on Linux and macOS only."""
+    return os.name == "posix"
+
+
+def _locked_backup(store: Path) -> Path:
+    """reuse_or_backup under the store's lock; a copy that fails stops here."""
+    with store_lock(store):
+        try:
+            return reuse_or_backup(store)
+        except OSError as exc:  # shutil.Error is an OSError too
+            raise CutoverError(
+                f"cannot back up the matrix-nio store {store}: {exc}; migrate-nio did "
+                "not run and the store is unchanged"
+            ) from exc
+
+
 def reuse_or_backup(store: Path) -> Path:
     """The newest backup when it still matches STORE's content, else a new one.
 
@@ -261,8 +278,7 @@ def migrate(binary, env=None, runner=subprocess.run, log=None):
             "matrix-communication: taking over the matrix-nio device in "
             f"{store} (one time)"
         )
-        with store_lock(store):
-            backup = reuse_or_backup(store)
+        backup = _locked_backup(store)
         log(f"  Backup: {backup}")
         return _run_migration(binary, env, runner, log, store, backup)
 
@@ -310,22 +326,29 @@ def explicit_migrate(binary, args, env=None, run=None, log=None) -> int:
 
     The arguments go to the CLI unchanged, so its question and --yes,
     --store and --check-online behave as documented. The store is copied
-    first, as for the automatic takeover, and a successful run records the
-    takeover. No copy, no migration: a failed backup stops here.
+    first, as for the automatic takeover, and a run that created the session
+    records the takeover, whatever its exit code. No copy, no migration: a
+    failed backup stops here. Off Linux and macOS the CLI runs unchanged and
+    refuses with its own message.
     """
     env = os.environ if env is None else env
     log = log or (lambda message: print(message, file=sys.stderr, flush=True))
     if run is None:
         from _lib.cli import run
+    if not _posix():
+        # No fcntl here; migrate-nio itself says it runs on Linux and macOS only.
+        return run(binary, list(args), env=dict(env))
     store = _store_argument(args, env)
     with takeover_lock(env):
         backup = None
         if (store / CREDENTIALS).is_file():
-            with store_lock(store):
-                backup = reuse_or_backup(store)
+            backup = _locked_backup(store)
             log(f"matrix-communication: backup of {store} before migrate-nio: {backup}")
+        had_session = cli_session_path(env).exists()
         code = run(binary, list(args), env=dict(env))
-        if code == 0 and cli_session_path(env).exists():
+        # Whatever the exit code: --check-online can fail after the session was
+        # written, and that session is the device taken over.
+        if not had_session and cli_session_path(env).exists():
             _write_marker(env, store, backup)
         return code
 

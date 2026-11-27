@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(_LIB))
 
 import fcntl
 import json
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -144,6 +145,21 @@ class MigrateTests(CutoverTestCase):
         self.assertIn("Migrated device DEV", text)
         self.assertIn(str(backup), text)
         self.assertNotIn("Event ID:", text)
+
+    def test_a_backup_that_fails_stops_the_takeover_with_a_cutover_error(self):
+        runner = FakeRunner()
+        with unittest.mock.patch.object(
+            cutover.shutil, "copytree", side_effect=PermissionError("denied")
+        ):
+            try:
+                self.migrate(runner)
+            except cutover.CutoverError as exc:
+                self.assertIn("denied", str(exc))
+            except OSError as exc:
+                self.fail(f"{exc!r} escaped as a traceback")
+            else:
+                self.fail("the takeover ran without a backup")
+        self.assertEqual(runner.calls, [])
 
     def test_the_backup_is_owner_only(self):
         backup = self.migrate(FakeRunner())
@@ -303,12 +319,55 @@ class ExplicitMigrateTests(CutoverTestCase):
         self.assertEqual(marker["backup"], str(backups[0]))
         self.assertFalse(cutover.pending(self.env))
 
-    def test_a_failed_migration_records_nothing(self):
+    def test_no_session_before_and_none_after_records_nothing(self):
         self.make_nio_store()
-        # As when migrate-nio refuses because a session already exists.
-        self.assertEqual(self.explicit(["migrate-nio"], rc=1, session=True), 1)
+        self.assertEqual(self.explicit(["migrate-nio"], rc=1), 1)
         self.assertFalse(cutover.marker_path(self.env).exists())
         self.assertEqual(len(cutover.existing_backups(self.store)), 1)
+
+    def test_a_failed_run_that_wrote_the_session_is_recorded(self):
+        # --check-online can exit 1 after the session was written: that
+        # session is the device taken over, and a later logout must not lead
+        # to a second takeover.
+        self.make_nio_store()
+        args = ["migrate-nio", "--check-online"]
+        self.assertEqual(self.explicit(args, rc=1, session=True), 1)
+        self.assertTrue(cutover.marker_path(self.env).exists())
+
+    def test_a_session_that_was_there_before_records_nothing(self):
+        self.make_nio_store()
+        session = cutover.cli_session_path(self.env)
+        session.parent.mkdir(parents=True)
+        session.write_text("{}")
+        self.assertEqual(self.explicit(["migrate-nio"], rc=1, session=True), 1)
+        self.assertFalse(cutover.marker_path(self.env).exists())
+
+    def test_a_backup_that_fails_is_a_cutover_error_and_nothing_runs(self):
+        self.make_nio_store()
+        with unittest.mock.patch.object(
+            cutover.shutil, "copytree", side_effect=shutil.Error([("a", "b", "no")])
+        ):
+            try:
+                self.explicit(["migrate-nio"])
+            except cutover.CutoverError as exc:
+                self.assertIn("cannot back up", str(exc))
+            except OSError as exc:
+                self.fail(f"{exc!r} escaped as a traceback")
+            else:
+                self.fail("migrate-nio ran without a backup")
+        self.assertEqual(self.calls, [])
+
+    def test_off_posix_the_cli_runs_unlocked_and_answers_itself(self):
+        self.make_nio_store()
+        with (
+            unittest.mock.patch.object(cutover, "_posix", return_value=False),
+            unittest.mock.patch.object(
+                cutover, "takeover_lock", side_effect=AssertionError("locked")
+            ),
+        ):
+            self.assertEqual(self.explicit(["migrate-nio"], rc=1), 1)
+        self.assertEqual(self.calls, [("/bin/cli", ["migrate-nio"])])
+        self.assertEqual(cutover.existing_backups(self.store), [])
 
     def test_a_store_given_with_store_is_the_one_copied(self):
         self.store = self.root / "elsewhere" / "nio"
