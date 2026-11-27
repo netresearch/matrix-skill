@@ -168,6 +168,8 @@ def backup_store(store: Path, now=None) -> Path:
     finally:
         os.umask(old_umask)
     for root, dirs, files in os.walk(target):
+        # Owner-only on purpose: the backup holds the nio credentials and keys.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         os.chmod(root, 0o700)
         for name in files:
             path = os.path.join(root, name)
