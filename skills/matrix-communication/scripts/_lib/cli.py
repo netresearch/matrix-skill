@@ -23,6 +23,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 import tempfile
@@ -80,6 +81,9 @@ def load_release(path: Path = RELEASE_FILE) -> dict:
     for key in ("repository", "version", "assets"):
         if key not in release:
             raise CliError(f"{path} has no {key!r}")
+    # The version names a directory and a download URL: X.Y.Z only.
+    if not re.fullmatch(r"\d+\.\d+\.\d+", str(release["version"])):
+        raise CliError(f"{path}: version {release['version']!r} is not X.Y.Z")
     return release
 
 

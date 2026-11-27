@@ -5,13 +5,15 @@
 """Pin a matrix-e2ee-cli release in the matrix-communication skill.
 
 Usage:
-    Build/Scripts/pin-cli-release.py SHA256SUMS VERSION [--output PATH]
+    Build/Scripts/pin-cli-release.py SHA256SUMS VERSION
 
 SHA256SUMS is the file of that release (gh release download vVERSION
 -R netresearch/matrix-e2ee-cli -p SHA256SUMS). Every asset the skill maps a
 platform to must be listed; the result is written to
 skills/matrix-communication/scripts/_lib/cli_release.json, the only place the
-skill takes the version and the hashes from.
+skill takes the version and the hashes from. VERSION must be X.Y.Z (a leading
+"v" is dropped): _lib/cli.py builds the download URL and the install
+directory from it. The output path is fixed.
 """
 
 import argparse
@@ -29,7 +31,7 @@ sys.path.insert(0, str(SCRIPTS))
 from _lib.cli import PLATFORM_ASSETS
 
 LINE = re.compile(r"^([0-9a-f]{64}) [ *](\S+)$")
-VERSION = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
+VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 
 
 def parse_sums(text: str) -> dict:
@@ -50,7 +52,7 @@ def parse_sums(text: str) -> dict:
 
 def build_pin(sums: dict, version: str) -> dict:
     version = version.removeprefix("v")
-    if not VERSION.match(version):
+    if not VERSION.fullmatch(version):
         raise ValueError(f"{version!r} is not a version (X.Y.Z)")
     wanted = sorted(set(PLATFORM_ASSETS.values()))
     missing = [name for name in wanted if name not in sums]
@@ -63,20 +65,19 @@ def build_pin(sums: dict, version: str) -> dict:
     }
 
 
-def main(argv=None) -> int:
+def main(argv=None, output: Path = DEFAULT_OUTPUT) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("sums", type=Path, help="the release's SHA256SUMS file")
     parser.add_argument("version", help="the release version, e.g. 0.3.0")
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args(argv)
     try:
         pin = build_pin(parse_sums(args.sums.read_text(encoding="utf-8")), args.version)
     except (OSError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
-    args.output.write_text(json.dumps(pin, indent=2) + "\n", encoding="utf-8")
+    output.write_text(json.dumps(pin, indent=2) + "\n", encoding="utf-8")
     print(
-        f"Pinned matrix-e2ee-cli {pin['version']} ({len(pin['assets'])} assets) in {args.output}"
+        f"Pinned matrix-e2ee-cli {pin['version']} ({len(pin['assets'])} assets) in {output}"
     )
     return 0
 

@@ -77,7 +77,8 @@ class AssetNameTests(unittest.TestCase):
                     got = cli.asset_name(system, machine)
                 except cli.CliError as exc:
                     self.fail(f"refused a supported platform: {exc}")
-                self.assertEqual(got, asset)
+                else:
+                    self.assertEqual(got, asset)
 
     def test_an_unsupported_platform_is_refused_with_the_override_named(self):
         for system, machine in (
@@ -258,6 +259,30 @@ class PinScriptTests(unittest.TestCase):
         else:
             self.fail("a SHA256SUMS without x86_64-apple-darwin was pinned")
 
+    def test_a_version_that_is_not_x_y_z_is_refused(self):
+        sums = pin.parse_sums(self.sums())
+        for version in ("0.3.0/../../x", "0.3.0-rc1", "0.3.0\n", "latest"):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                pin.build_pin(sums, version)
+
+    def test_the_output_path_cannot_be_chosen_on_the_command_line(self):
+        with (
+            contextlib.redirect_stderr(io.StringIO()),
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            pin.main(["SHA256SUMS", "0.3.0", "--output", "/tmp/elsewhere.json"])
+        self.assertEqual(ctx.exception.code, 2)
+
+    def test_a_pin_whose_version_is_not_x_y_z_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "pin.json"
+            path.write_text(
+                json.dumps({"repository": "r", "version": "../../x", "assets": {}})
+            )
+            with self.assertRaises(cli.CliError) as ctx:
+                cli.load_release(path)
+        self.assertIn("X.Y.Z", str(ctx.exception))
+
     def test_a_malformed_line_is_refused(self):
         with self.assertRaises(ValueError):
             pin.parse_sums("not-a-hash  matrix-e2ee-cli-x86_64-unknown-linux-musl\n")
@@ -269,9 +294,7 @@ class PinScriptTests(unittest.TestCase):
             out = Path(tmp) / "pin.json"
             printed = io.StringIO()
             with contextlib.redirect_stdout(printed):
-                self.assertEqual(
-                    pin.main([str(sums), "0.3.0", "--output", str(out)]), 0
-                )
+                self.assertEqual(pin.main([str(sums), "0.3.0"], output=out), 0)
             self.assertIn("Pinned matrix-e2ee-cli 0.3.0 (5 assets)", printed.getvalue())
             self.assertEqual(cli.load_release(out)["version"], "0.3.0")
 
