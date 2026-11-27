@@ -40,6 +40,8 @@ class Recorder(BaseHTTPRequestHandler):
     status = 200
     payload = None  # JSON to answer with instead of {"ok": true}
     truncate = False  # promise more bytes than are sent
+    raw = None  # bytes to answer with as they are
+    body_delay = 0  # seconds between the headers and the body
     hangup = False  # close the connection without answering
     seen: list
 
@@ -56,7 +58,9 @@ class Recorder(BaseHTTPRequestHandler):
             self.end_headers()
             return
         body = (
-            b"null"
+            self.raw
+            if self.raw is not None
+            else b"null"
             if self.payload == "__null__"
             else json.dumps(
                 {"ok": True} if self.payload is None else self.payload
@@ -69,6 +73,9 @@ class Recorder(BaseHTTPRequestHandler):
                 "Content-Length", str(len(body) + (50 if self.truncate else 0))
             )
             self.end_headers()
+            if self.body_delay:
+                self.wfile.flush()
+                time.sleep(self.body_delay)
             self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError):
             pass  # the client gave up (TimeoutTests)
@@ -268,6 +275,32 @@ class ErrorBodyTests(unittest.TestCase):
                     self.fail(f"{exc!r} escaped")
                 else:
                     self.assertEqual(result["errcode"], "500")
+
+    def test_an_error_body_that_is_not_utf8_is_read_with_replacements(self):
+        config = self.lenient(status=502, raw=b'{"error": "bad \xff gateway"}')
+        try:
+            result = matrix_http.matrix_request(config, "GET", "/joined_rooms")
+        except Exception as exc:  # noqa: BLE001  # the defect under test
+            self.fail(f"{exc!r} escaped")
+        else:
+            self.assertEqual(result["error"], "bad \ufffd gateway")
+
+    def test_a_timeout_while_reading_the_error_body_is_an_error_dict(self):
+        config = self.lenient(status=502, payload={"error": "bad"}, body_delay=1.0)
+        config["timeout"] = 0.3
+        try:
+            result = matrix_http.matrix_request(config, "GET", "/joined_rooms")
+        except Exception as exc:  # noqa: BLE001  # the defect under test
+            self.fail(f"{exc!r} escaped")
+        else:
+            self.assertEqual(result["errcode"], "502")
+            self.assertIn("broken body", result["error"])
+
+    def test_strict_still_raises_on_a_timeout_while_reading_the_error_body(self):
+        config = self.start(status=502, payload={"error": "bad"}, body_delay=1.0)
+        config["timeout"] = 0.3
+        with self.assertRaises(OSError):
+            matrix_http.matrix_request(config, "GET", "/joined_rooms")
 
     def test_a_state_event_not_set_with_a_list_body_is_not_mistaken(self):
         # Strict: a 404 whose body is not an object has no M_NOT_FOUND: fatal.

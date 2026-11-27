@@ -88,7 +88,7 @@ def _do_request(req: urllib.request.Request, timeout=None) -> dict:
 def _parse_http_error(e: urllib.error.HTTPError) -> dict:
     """Parse an HTTPError into a result dict."""
     try:
-        error_body = e.read().decode()
+        error_body = e.read().decode(errors="replace")
     finally:
         e.close()
     try:
@@ -104,10 +104,14 @@ def _parse_http_error(e: urllib.error.HTTPError) -> dict:
 
 
 def _lenient_http_error(e: urllib.error.HTTPError) -> dict:
-    """_parse_http_error, and an error dict too when the body is cut off."""
+    """_parse_http_error, and an error dict too when the body cannot be read.
+
+    A body cut off (IncompleteRead) or lost to a timeout or a reset while it
+    is read is still an error answer with a status.
+    """
     try:
         return _parse_http_error(e)
-    except http.client.HTTPException as broken:
+    except (http.client.HTTPException, OSError) as broken:
         return {
             "error": f"HTTP {e.code} with a broken body ({broken!r})",
             "errcode": str(e.code),
