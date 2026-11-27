@@ -77,7 +77,11 @@ class ResolveTests(unittest.TestCase):
     def test_ids_and_full_aliases_pass_without_a_request(self):
         for room in ("!b:e", "#ops:e"):
             with self.subTest(room=room):
-                self.assertEqual(self.resolve(room), room)
+                try:
+                    resolved = self.resolve(room)
+                except room_lookup.RoomLookupError as exc:
+                    self.fail(f"{room} was looked up: {exc}")
+                self.assertEqual(resolved, room)
         self.assertEqual(self.configs, [])
 
     def test_an_ambiguous_name_is_refused(self):
@@ -95,6 +99,13 @@ class ResolveTests(unittest.TestCase):
         with self.assertRaises(room_lookup.RoomLookupError) as ctx:
             self.resolve("ops")
         self.assertIn("cannot list the joined rooms", str(ctx.exception))
+
+    def test_a_session_without_a_token_is_refused_not_passed_on(self):
+        self.session.write_text(json.dumps({"homeserver": "https://m.e"}))
+        with self.assertRaises(room_lookup.RoomLookupError) as ctx:
+            self.resolve("ops")
+        self.assertIn("no homeserver or access token", str(ctx.exception))
+        self.assertEqual(self.configs, [])
 
     def test_without_a_session_the_room_passes_unchanged(self):
         self.session.unlink()

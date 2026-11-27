@@ -14,8 +14,8 @@ So a shorthand is resolved here, with the old precedence (``find_room_by_name``
 in rooms.py), to a room ID, and only the ID reaches the CLI. Room IDs and full
 aliases pass unchanged, without a request. The lookup reads the joined rooms
 over HTTP with the skill's own device token from matrix-e2ee-cli's
-session.json: one request per room, as before for matrix-react.py and
-matrix-redact.py. No match, several matches, or rooms that cannot be listed
+session.json: two requests per joined room (name and alias), one more for a
+room without either, as before for matrix-react.py and matrix-redact.py. No match, several matches, or rooms that cannot be listed
 stop the command: it never falls back to the CLI's own, different choice.
 """
 
@@ -54,7 +54,11 @@ def resolve(room: str, env, lister=list_joined_rooms) -> str:
         "user_id": session.get("user_id"),
     }
     if not config["homeserver"] or not config["access_token"]:
-        return room
+        # The CLI would pick by display name alone: refuse rather than guess.
+        raise RoomLookupError(
+            f"cannot look {room!r} up: the matrix-e2ee-cli session has no homeserver "
+            "or access token; pass the room ID (!…) or full alias (#name:server)"
+        )
     rooms = lister(config)
     if not rooms:
         raise RoomLookupError(
