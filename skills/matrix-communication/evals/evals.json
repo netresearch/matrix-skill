@@ -249,11 +249,13 @@
       "id": 21,
       "eval_name": "device-verification",
       "prompt": "I need to verify my Matrix E2EE device with Element Desktop.",
-      "expected_output": "Uses matrix-e2ee-verify.py with --timeout flag.",
+      "expected_output": "Uses matrix-e2ee-verify.py with --listen (or --request DEVICE after --list) and --timeout; without a terminal, matrix-e2ee-cli.py verify --hand-over and verify --confirm TOKEN only after the person said the emoji match.",
       "files": [],
       "assertions": [
         "Uses matrix-e2ee-verify.py script",
+        "Names a mode: --listen, or --request with a device id from --list (the device is not picked automatically)",
         "Uses --timeout flag with reasonable value",
+        "Confirms a hand-over (verify --confirm TOKEN) only after the person compared the emoji",
         "Mentions Element Desktop (not Element X)",
         "References e2ee-guide.md for details"
       ]
