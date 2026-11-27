@@ -36,6 +36,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 LOCK_NAME = ".daemon.lock"
+# Held for a whole takeover (backup, migrate-nio, marker), so a second process
+# waits for it and then finds the takeover done instead of starting another.
+TAKEOVER_LOCK = "takeover.lock"
 CREDENTIALS = "credentials.json"
 MARKER_NAME = "nio-migrated.json"
 
@@ -129,6 +132,25 @@ def store_lock(store: Path):
         os.close(fd)
 
 
+@contextlib.contextmanager
+def takeover_lock(env):
+    """Hold the skill's takeover lock; waits while another process holds it.
+
+    Not the nio store's own lock: migrate-nio takes that one itself and
+    refuses while anybody else holds it.
+    """
+    import fcntl
+
+    path = _data_home(env) / "matrix-skill" / TAKEOVER_LOCK
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
 def backup_store(store: Path, now=None) -> Path:
     """Copy STORE beside itself, owner-only; the copy's path."""
     now = now or datetime.now(UTC)
@@ -208,17 +230,44 @@ def _notice(store: Path, backup: Path) -> str:
     )
 
 
-def migrate(binary, env=None, runner=subprocess.run, log=None) -> Path:
-    """Back up the nio store and run migrate-nio; the backup's path."""
+def _write_marker(env, store: Path, backup) -> None:
+    marker_path(env).write_text(
+        json.dumps(
+            {
+                "migrated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+                "store": str(store),
+                "backup": str(backup) if backup else None,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def migrate(binary, env=None, runner=subprocess.run, log=None):
+    """Back up the nio store and run migrate-nio; the backup's path.
+
+    None when, once the takeover lock is held, nothing is pending any more:
+    another process finished the takeover while this one waited.
+    """
     env = os.environ if env is None else env
     log = log or (lambda message: print(message, file=sys.stderr, flush=True))
     store = nio_store_path(env)
-    log(
-        f"matrix-communication: taking over the matrix-nio device in {store} (one time)"
-    )
-    with store_lock(store):
-        backup = reuse_or_backup(store)
-    log(f"  Backup: {backup}")
+    with takeover_lock(env):
+        if not pending(env):
+            return None
+        log(
+            "matrix-communication: taking over the matrix-nio device in "
+            f"{store} (one time)"
+        )
+        with store_lock(store):
+            backup = reuse_or_backup(store)
+        log(f"  Backup: {backup}")
+        return _run_migration(binary, env, runner, log, store, backup)
+
+
+def _run_migration(binary, env, runner, log, store, backup):
     # stdout goes to stderr: callers parse the command's stdout (JSON, "Event ID: ...").
     result = runner(
         [str(binary), "migrate-nio", "--yes", "--store", str(store)],
@@ -239,25 +288,53 @@ def migrate(binary, env=None, runner=subprocess.run, log=None) -> Path:
             f"device instead, move {store} away; the next E2EE command then needs "
             "matrix-e2ee-setup.py (a new device)."
         )
-    marker = marker_path(env)
-    marker.write_text(
-        json.dumps(
-            {
-                "migrated_at": datetime.now(UTC).isoformat(timespec="seconds"),
-                "store": str(store),
-                "backup": str(backup),
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    _write_marker(env, store, backup)
     log(_notice(store, backup))
     return backup
 
 
+def _store_argument(args, env) -> Path:
+    """The store an explicit migrate-nio reads: its --store, else the default."""
+    for index, arg in enumerate(args):
+        if arg == "--":
+            break
+        if arg == "--store" and index + 1 < len(args):
+            return Path(args[index + 1])
+        if arg.startswith("--store="):
+            return Path(arg.split("=", 1)[1])
+    return nio_store_path(env)
+
+
+def explicit_migrate(binary, args, env=None, run=None, log=None) -> int:
+    """``matrix-e2ee-cli.py migrate-nio ...``: back up first, then run it as given.
+
+    The arguments go to the CLI unchanged, so its question and --yes,
+    --store and --check-online behave as documented. The store is copied
+    first, as for the automatic takeover, and a successful run records the
+    takeover. No copy, no migration: a failed backup stops here.
+    """
+    env = os.environ if env is None else env
+    log = log or (lambda message: print(message, file=sys.stderr, flush=True))
+    if run is None:
+        from _lib.cli import run
+    store = _store_argument(args, env)
+    with takeover_lock(env):
+        backup = None
+        if (store / CREDENTIALS).is_file():
+            with store_lock(store):
+                backup = reuse_or_backup(store)
+            log(f"matrix-communication: backup of {store} before migrate-nio: {backup}")
+        code = run(binary, list(args), env=dict(env))
+        if code == 0 and cli_session_path(env).exists():
+            _write_marker(env, store, backup)
+        return code
+
+
 def migrate_if_pending(binary, env=None, runner=subprocess.run, log=None):
-    """Run the takeover when one is pending; the backup path, or None."""
+    """Run the takeover when one is pending; the backup path, or None.
+
+    pending() is asked again inside migrate(), under the takeover lock.
+    """
     if not pending(env):
         return None
     return migrate(binary, env=env, runner=runner, log=log)

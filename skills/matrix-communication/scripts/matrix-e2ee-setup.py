@@ -37,7 +37,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib.cutover import CutoverError, cli_session_path
+from _lib.cutover import CutoverError, cli_session_path, nio_store_path
 from _lib.wrapper import Unsupported, exit_with, refuse, secret_env
 
 ALLOW_FLAG = "--allow-secret-argument"
@@ -74,11 +74,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 def translate(args):
     if args.logout or args.purge_all:
+        try:
+            store = str(nio_store_path(os.environ))
+        except CutoverError:
+            store = "the matrix-skill/store directory of your data directory"
         raise Unsupported(
             "--logout and --purge-all are not supported any more. The old flag deleted local "
             "files only; `matrix-e2ee-cli.py logout` also logs the device out on the server, "
-            "which ends it for good. Never run it to retire the copy an older version of this "
-            "skill left in ~/.local/share/matrix-skill/store: delete that directory yourself."
+            "which ends it for good. Do not use it for the copy an older version of this "
+            f"skill left in {store}. Keep that store until the takeover has succeeded (the "
+            "first E2EE command makes a backup and runs it) and the new device works; "
+            "only then remove it, if you want to."
         )
     if args.status and args.force:
         raise Unsupported("--force replaces the device; it does not go with --status")

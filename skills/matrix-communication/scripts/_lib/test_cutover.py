@@ -218,5 +218,122 @@ class MigrateTests(CutoverTestCase):
         self.assertEqual(runner.calls, [])
 
 
+class TakeoverLockTests(CutoverTestCase):
+    def setUp(self):
+        super().setUp()
+        self.make_nio_store()
+
+    def test_a_takeover_finished_while_waiting_is_not_run_again(self):
+        # pending() was true when the caller looked; by the time this process
+        # holds the takeover lock another one has recorded the takeover.
+        cutover.marker_path(self.env).write_text("{}")
+        runner = FakeRunner()
+        self.assertIsNone(self.migrate(runner))
+        self.assertEqual(runner.calls, [])
+        self.assertEqual(cutover.existing_backups(self.store), [])
+
+    def lock_state(self):
+        """(takeover lock held by someone, nio store lock free)."""
+        path = self.root / "data" / "matrix-skill" / cutover.TAKEOVER_LOCK
+        probe = os.open(path, os.O_RDWR)
+        try:
+            fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            held = False
+        except BlockingIOError:
+            held = True
+        finally:
+            os.close(probe)
+        store = os.open(self.store / ".daemon.lock", os.O_RDWR)
+        try:
+            fcntl.flock(store, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            free = True
+        except BlockingIOError:
+            free = False
+        finally:
+            os.close(store)
+        return held, free
+
+    def test_migrate_nio_runs_under_the_takeover_lock_with_the_store_lock_free(self):
+        seen = []
+
+        def runner(argv, **kwargs):
+            seen.append(self.lock_state())
+            return subprocess.CompletedProcess(argv, 0, stdout="")
+
+        self.migrate(runner)
+        self.assertEqual(seen, [(True, True)])
+
+
+class ExplicitMigrateTests(CutoverTestCase):
+    def setUp(self):
+        super().setUp()
+        self.calls = []
+
+    def run_cli(self, rc=0, session=False):
+        def run(binary, args, env):
+            self.calls.append((binary, args))
+            if session:
+                path = cutover.cli_session_path(self.env)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("{}")
+            return rc
+
+        return run
+
+    def explicit(self, args, **kwargs):
+        return cutover.explicit_migrate(
+            "/bin/cli",
+            args,
+            env=self.env,
+            run=self.run_cli(**kwargs),
+            log=self.logged.append,
+        )
+
+    def test_the_store_is_copied_before_the_cli_runs_with_the_arguments_unchanged(self):
+        self.make_nio_store()
+        args = ["migrate-nio", "--check-online"]
+        self.assertEqual(self.explicit(args, session=True), 0)
+        self.assertEqual(self.calls, [("/bin/cli", args)])
+        backups = cutover.existing_backups(self.store)
+        self.assertEqual(len(backups), 1)
+        self.assertTrue((backups[0] / "credentials.json").is_file())
+        marker = json.loads(cutover.marker_path(self.env).read_text())
+        self.assertEqual(marker["backup"], str(backups[0]))
+        self.assertFalse(cutover.pending(self.env))
+
+    def test_a_failed_migration_records_nothing(self):
+        self.make_nio_store()
+        # As when migrate-nio refuses because a session already exists.
+        self.assertEqual(self.explicit(["migrate-nio"], rc=1, session=True), 1)
+        self.assertFalse(cutover.marker_path(self.env).exists())
+        self.assertEqual(len(cutover.existing_backups(self.store)), 1)
+
+    def test_a_store_given_with_store_is_the_one_copied(self):
+        self.store = self.root / "elsewhere" / "nio"
+        self.make_nio_store()
+        for args in (
+            ["migrate-nio", "--store", str(self.store)],
+            ["migrate-nio", f"--store={self.store}"],
+        ):
+            with self.subTest(args=args):
+                before = len(cutover.existing_backups(self.store))
+                self.explicit(args)
+                self.assertEqual(len(cutover.existing_backups(self.store)), before + 1)
+                (self.store / "@u:example.org_DEV.db").write_bytes(
+                    f"changed {before}".encode()
+                )
+
+    def test_without_credentials_there_is_nothing_to_copy(self):
+        try:
+            code = self.explicit(["migrate-nio"])
+        except OSError as exc:
+            self.fail(f"tried to copy a store that is not there: {exc}")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.calls, [("/bin/cli", ["migrate-nio"])])
+        self.assertFalse(
+            self.store.parent.exists() and any(self.store.parent.glob("store.backup-*"))
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
