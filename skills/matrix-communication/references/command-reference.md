@@ -14,8 +14,11 @@ the name Element shows for it: the other person's display name, or their
 user ID (`@jane:server`). A short name, also `#name` without the server, is
 looked up with the skill's device token in the order version 4 used: alias
 without server, then display name, then a single partial match. That costs two
-requests per joined room (three for a room without name and alias); a name that matches several rooms, or none,
-stops the command before anything is sent. A room ID or full alias goes to
+requests per joined room (three for a room without name and alias). Send,
+edit, react and redact accept only an exact alias or exact name: anyone who
+can name a room you are in could otherwise steer a partial match. A name
+that matches several rooms, or none, stops the command before anything is
+sent. A room ID or full alias goes to
 matrix-e2ee-cli unchanged, without the lookup.
 
 **Prepend `set +H &&` whenever an argument contains `!`** — bash history

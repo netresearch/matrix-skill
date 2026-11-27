@@ -120,7 +120,7 @@ def main(argv=None) -> None:
         refuse(str(exc))
     choose = None
     if args.room is not None:
-        choose = room_chooser(cli_args[cli_args.index("--") - 1])
+        choose = room_chooser(cli_args[cli_args.index("--") - 1], write=True)
     exit_with(cli_args, extra_env, choose=choose, json_errors=args.json)
 
 

@@ -81,7 +81,8 @@ class ResolveTests(unittest.TestCase):
                     resolved = self.resolve(room)
                 except room_lookup.RoomLookupError as exc:
                     self.fail(f"{room} was looked up: {exc}")
-                self.assertEqual(resolved, room)
+                else:
+                    self.assertEqual(resolved, room)
         self.assertEqual(self.configs, [])
 
     def test_an_ambiguous_name_is_refused(self):
@@ -106,6 +107,52 @@ class ResolveTests(unittest.TestCase):
             self.resolve("ops")
         self.assertIn("no homeserver or access token", str(ctx.exception))
         self.assertEqual(self.configs, [])
+
+    def test_a_write_refuses_a_partial_only_match_and_names_it(self):
+        with self.assertRaises(room_lookup.RoomLookupError) as ctx:
+            room_lookup.resolve("Opera", self.env, lister=self.lister, write=True)
+        self.assertIn("Operations (#ops:e)", str(ctx.exception))
+        self.assertIn("exact name", str(ctx.exception))
+
+    def test_a_read_keeps_the_partial_match(self):
+        self.assertEqual(self.resolve("Opera"), "!a:e")
+
+    def test_a_write_takes_an_exact_alias_or_name(self):
+        for room, expected in (("ops", "!a:e"), ("#ops", "!a:e"), ("dev chat", "!c:e")):
+            with self.subTest(room=room):
+                try:
+                    resolved = room_lookup.resolve(
+                        room, self.env, lister=self.lister, write=True
+                    )
+                except room_lookup.RoomLookupError as exc:
+                    self.fail(f"{room} was refused for a write: {exc}")
+                else:
+                    self.assertEqual(resolved, expected)
+
+    def test_several_exact_names_are_refused(self):
+        self.rooms = [
+            {"room_id": "!x:e", "name": "standup", "alias": None},
+            {"room_id": "!y:e", "name": "Standup", "alias": None},
+        ]
+        for write in (False, True):
+            with (
+                self.subTest(write=write),
+                self.assertRaises(room_lookup.RoomLookupError) as ctx,
+            ):
+                room_lookup.resolve(
+                    "standup", self.env, lister=self.lister, write=write
+                )
+            self.assertIn("several rooms", str(ctx.exception))
+
+    def test_one_alias_name_on_two_servers_is_refused(self):
+        self.rooms = [
+            {"room_id": "!x:a", "name": "Ops A", "alias": "#ops:a"},
+            {"room_id": "!y:b", "name": "Ops B", "alias": "#ops:b"},
+        ]
+        with self.assertRaises(room_lookup.RoomLookupError) as ctx:
+            self.resolve("ops")
+        self.assertIn("#ops:a", str(ctx.exception))
+        self.assertIn("#ops:b", str(ctx.exception))
 
     def test_without_a_session_the_room_passes_unchanged(self):
         self.session.unlink()

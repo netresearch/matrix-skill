@@ -22,7 +22,7 @@ stop the command: it never falls back to the CLI's own, different choice.
 import json
 
 from _lib import cutover
-from _lib.rooms import find_room_by_name, list_joined_rooms
+from _lib.rooms import find_room_by_name, list_joined_rooms, room_matches
 
 
 class RoomLookupError(Exception):
@@ -34,11 +34,24 @@ def is_shorthand(room: str) -> bool:
     return not room.startswith("!") and not (room.startswith("#") and ":" in room)
 
 
-def resolve(room: str, env, lister=list_joined_rooms) -> str:
+def _alias_localpart(room: dict) -> str:
+    return (room.get("alias") or "").split(":")[0].lstrip("#").lower()
+
+
+def _listed(rooms) -> str:
+    return ", ".join(
+        f"{r.get('name')} ({r.get('alias') or r['room_id']})" for r in rooms
+    )
+
+
+def resolve(room: str, env, lister=list_joined_rooms, write=False) -> str:
     """The room ID the old scripts chose for ROOM; ROOM itself when it is exact.
 
     Without a session there is nothing to look up with, and the CLI, which
-    needs the session too, reports that itself.
+    needs the session too, reports that itself. With WRITE (send, edit,
+    react, redact) only an exact alias or an exact name counts: a room
+    name is chosen by whoever named the room, and a partial match would
+    let such a name decide where a message goes.
     """
     if not is_shorthand(room):
         return room
@@ -65,15 +78,32 @@ def resolve(room: str, env, lister=list_joined_rooms) -> str:
             f"cannot list the joined rooms to find {room!r}; pass its room ID (!…) "
             "or full alias (#name:server)"
         )
+    lowered = term.lower()
+    by_alias = [r for r in rooms if r.get("alias") and _alias_localpart(r) == lowered]
+    if len(by_alias) > 1:
+        # find_room_by_name would take the first: two servers, one localpart.
+        raise RoomLookupError(
+            f"{room!r} matches several rooms: {_listed(by_alias)}; pass the room ID "
+            "or full alias"
+        )
     room_id, matches = find_room_by_name(config, term, rooms=rooms)
+    if room_id and write:
+        chosen = [r for r in rooms if r["room_id"] == room_id]
+        exact = any(
+            _alias_localpart(r) == lowered or room_matches(r, lowered, exact=True)
+            for r in chosen
+        )
+        if not exact:
+            raise RoomLookupError(
+                f"{room!r} is only part of the name of {_listed(chosen)}; a command "
+                "that writes needs the exact name, the room ID or the full alias"
+            )
     if room_id:
         return room_id
     if matches:
-        listed = ", ".join(
-            f"{m.get('name')} ({m.get('alias') or m['room_id']})" for m in matches
-        )
         raise RoomLookupError(
-            f"{room!r} matches several rooms: {listed}; pass the room ID or full alias"
+            f"{room!r} matches several rooms: {_listed(matches)}; pass the room ID or "
+            "full alias"
         )
     raise RoomLookupError(
         f"no joined room matches {room!r}; matrix-rooms.py lists them"

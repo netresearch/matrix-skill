@@ -689,6 +689,20 @@ class RoomLookupTests(WrapperTestCase):
         self.log.unlink()
         self.assertTranslates("matrix-read-e2ee.py", ["!b:e"], ["read", "--", "!b:e"])
 
+    def test_writes_refuse_a_partial_name_that_reads_accept(self):
+        for script, args in (
+            ("matrix-send-e2ee.py", ["Opera", "hi"]),
+            ("matrix-edit-e2ee.py", ["Opera", "$e", "x"]),
+            ("matrix-react.py", ["Opera", "$e", "✅"]),
+            ("matrix-redact.py", ["Opera", "$e"]),
+        ):
+            with self.subTest(script=script):
+                result = self.run_script(script, *args)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("exact name", result.stderr)
+                self.assertEqual(self.calls(), [])
+        self.assertTranslates("matrix-read-e2ee.py", ["Opera"], ["read", "--", "!a:e"])
+
     def test_an_ambiguous_shorthand_is_refused_before_the_cli_runs(self):
         result = self.run_script("matrix-send-e2ee.py", "dev", "hi", "--json")
         self.assertEqual(result.returncode, 1)

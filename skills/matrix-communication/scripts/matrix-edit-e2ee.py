@@ -72,7 +72,7 @@ def main(argv=None) -> None:
     exit_with(
         cli_args,
         extra_env,
-        choose=room_chooser(cli_args[cli_args.index("--") + 1]),
+        choose=room_chooser(cli_args[cli_args.index("--") + 1], write=True),
         json_errors=args.json,
     )
 

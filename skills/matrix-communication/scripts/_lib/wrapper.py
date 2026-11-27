@@ -118,7 +118,7 @@ def exit_with(args, extra_env=None, choose=None, json_errors=False) -> None:
     sys.exit(run_cli(args, extra_env, choose=choose, json_errors=json_errors))
 
 
-def room_chooser(room: str):
+def room_chooser(room: str, write=False):
     """A CHOOSE for run_cli that puts the room the old scripts chose in place.
 
     ROOM stands right after "--", except for send, whose optional ROOM stands
@@ -126,7 +126,7 @@ def room_chooser(room: str):
     """
 
     def choose(args, env):
-        resolved = room_lookup.resolve(room, env)
+        resolved = room_lookup.resolve(room, env, write=write)
         if resolved != room:
             separator = args.index("--")
             index = separator - 1 if args[0] == "send" else separator + 1
