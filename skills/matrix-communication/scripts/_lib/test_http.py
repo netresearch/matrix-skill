@@ -159,7 +159,8 @@ class HangupTests(unittest.TestCase):
             result = matrix_http.matrix_request(self.config(), "GET", "/joined_rooms")
         except Exception as exc:  # noqa: BLE001 - the regression is any raise
             self.fail(f"a closed connection raised {exc!r}")
-        self.assertIn("error", result)
+        else:
+            self.assertIn("error", result)
 
     def test_with_strict_a_closed_connection_raises(self):
         with self.assertRaises(OSError):
@@ -208,7 +209,8 @@ class StrictTests(unittest.TestCase):
             )
         except matrix_http.RequestFailed as exc:
             self.fail(f"a state event that is not set raised: {exc}")
-        self.assertEqual(result["errcode"], "M_NOT_FOUND")
+        else:
+            self.assertEqual(result["errcode"], "M_NOT_FOUND")
         with self.assertRaises(matrix_http.RequestFailed):
             matrix_http.matrix_request(config, "GET", "/rooms/x/members")
 
