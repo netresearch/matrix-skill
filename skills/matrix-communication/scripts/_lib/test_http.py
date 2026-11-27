@@ -40,10 +40,14 @@ class Recorder(BaseHTTPRequestHandler):
     status = 200
     payload = None  # JSON to answer with instead of {"ok": true}
     truncate = False  # promise more bytes than are sent
+    hangup = False  # close the connection without answering
     seen: list
 
     def do_GET(self):
         self.seen.append((self.path, self.headers.get("Authorization")))
+        if self.hangup:
+            self.close_connection = True
+            return
         if self.delay:
             time.sleep(self.delay)
         if self.redirect_to and not self.path.startswith("/done"):
@@ -131,6 +135,33 @@ class TimeoutTests(unittest.TestCase):
             )
 
 
+class HangupTests(unittest.TestCase):
+    """A server that closes the connection without answering."""
+
+    def config(self, **extra):
+        server, handler = serve()
+        handler.hangup = True
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return {
+            "homeserver": f"http://127.0.0.1:{server.server_address[1]}",
+            "access_token": "t",
+            "timeout": 5,
+            **extra,
+        }
+
+    def test_without_strict_a_closed_connection_is_an_error_dict(self):
+        try:
+            result = matrix_http.matrix_request(self.config(), "GET", "/joined_rooms")
+        except Exception as exc:  # noqa: BLE001 - the regression is any raise
+            self.fail(f"a closed connection raised {exc!r}")
+        self.assertIn("error", result)
+
+    def test_with_strict_a_closed_connection_raises(self):
+        with self.assertRaises(OSError):
+            matrix_http.matrix_request(self.config(strict=True), "GET", "/joined_rooms")
+
+
 class StrictTests(unittest.TestCase):
     """With strict, no failed answer comes back looking like "not set"."""
 
@@ -146,6 +177,17 @@ class StrictTests(unittest.TestCase):
             "strict": True,
             "timeout": 5,
         }
+
+    def test_an_error_answer_with_a_cut_off_body_raises_request_failed(self):
+        config = self.start(status=502, payload={"error": "bad"}, truncate=True)
+        try:
+            matrix_http.matrix_request(config, "GET", "/rooms/x/state/m.room.name")
+        except matrix_http.RequestFailed as exc:
+            self.assertIn("502", str(exc))
+        except Exception as exc:  # noqa: BLE001 - any other raise is the defect
+            self.fail(f"a cut-off error body raised {exc!r}")
+        else:
+            self.fail("a cut-off error body did not raise")
 
     def test_an_error_status_on_a_state_request_raises(self):
         config = self.start(status=502, payload={"error": "bad gateway"})

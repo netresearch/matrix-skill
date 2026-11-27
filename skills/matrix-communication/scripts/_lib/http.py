@@ -113,7 +113,12 @@ def _strict_http_error(e: urllib.error.HTTPError, endpoint: str) -> dict:
     nothing about the room, and reading it as "no name" or "no alias" can
     pick another room.
     """
-    result = _parse_http_error(e)
+    try:
+        result = _parse_http_error(e)
+    except http.client.HTTPException as broken:
+        raise RequestFailed(
+            f"{endpoint} answered HTTP {e.code} with a broken body ({broken!r})"
+        ) from e
     if (
         e.code == 404
         and result.get("errcode") == "M_NOT_FOUND"
@@ -173,6 +178,8 @@ def matrix_request(
     except http.client.HTTPException as e:
         if strict:
             raise RequestFailed(f"{endpoint}: broken HTTP answer ({e!r})") from e
+        if isinstance(e, OSError):  # RemoteDisconnected: an answer-less close
+            return {"error": str(e)}
         raise
     except OSError as e:
         if e.errno not in (101, 113):  # ENETUNREACH, EHOSTUNREACH
@@ -193,6 +200,8 @@ def matrix_request(
         except http.client.HTTPException as e2:
             if strict:
                 raise RequestFailed(f"{endpoint}: broken HTTP answer ({e2!r})") from e2
+            if isinstance(e2, OSError):
+                return {"error": str(e2)}
             raise
         except OSError as e2:
             if strict:
