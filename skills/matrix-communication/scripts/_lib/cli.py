@@ -133,8 +133,11 @@ def download(
     only after the hash matched, so a partial or tampered download never sits
     at TARGET.
     """
-    target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    handle, tmp_name = tempfile.mkstemp(prefix=".download-", dir=target.parent)
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        handle, tmp_name = tempfile.mkstemp(prefix=".download-", dir=target.parent)
+    except OSError as exc:  # an unwritable data directory, like a failed download
+        raise CliError(f"cannot download {url} into {target.parent}: {exc}") from exc
     tmp = Path(tmp_name)
     try:
         digest = hashlib.sha256()
