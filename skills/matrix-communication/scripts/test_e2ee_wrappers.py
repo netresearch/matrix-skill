@@ -233,6 +233,91 @@ class TranslationTests(WrapperTestCase):
             ["watch", "--cursor", "me", "--no-summary", "--once", "--", "!r:e"],
         )
 
+    def test_react_status_swap_as_claiming_a_ticket_runs_it(self):
+        self.assertTranslates(
+            "matrix-react.py",
+            ["#it:netresearch.de", "$eventId", "🩹", "--replace", "▶️", "✅"],
+            [
+                "react",
+                "--replace",
+                "▶️",
+                "✅",
+                "--",
+                "#it:netresearch.de",
+                "$eventId",
+                "🩹",
+            ],
+        )
+
+    def test_react_every_flag_and_debug_dropped(self):
+        self.assertTranslates(
+            "matrix-react.py",
+            [
+                "https://matrix.to/#/%23it:e",
+                "$e",
+                "✅",
+                "🤖",
+                "--remove",
+                "--trust-unverified-devices",
+                "--json",
+                "-q",
+                "--debug",
+            ],
+            [
+                "react",
+                "--remove",
+                "--trust-unverified-devices",
+                "--json",
+                "--quiet",
+                "--",
+                "#it:e",
+                "$e",
+                "✅",
+                "🤖",
+            ],
+        )
+
+    def test_react_list(self):
+        self.assertTranslates(
+            "matrix-react.py",
+            ["!r:e", "$e", "--list"],
+            ["react", "--list", "--", "!r:e", "$e"],
+        )
+
+    def test_react_list_with_emoji_or_no_emoji_is_refused(self):
+        self.assertRefused(
+            "matrix-react.py", ["!r:e", "$e", "✅", "--list"], "--list takes no EMOJI"
+        )
+        self.assertRefused("matrix-react.py", ["!r:e", "$e"], "EMOJI is required")
+
+    def test_react_output_reaches_ticket_flows_parser(self):
+        result = self.run_script(
+            "matrix-react.py", "!r:e", "$e", "✅", "--trust-unverified-devices"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertRegex(result.stdout + result.stderr, r"Event ID: (\$\S+)")
+
+    def test_redact(self):
+        self.assertTranslates(
+            "matrix-redact.py",
+            ["!r:e", "$e", "--reason", "abgeschlossen", "--json", "-q", "--debug"],
+            [
+                "redact",
+                "--reason",
+                "abgeschlossen",
+                "--json",
+                "--quiet",
+                "--",
+                "!r:e",
+                "$e",
+            ],
+        )
+
+    def test_redact_without_reason(self):
+        self.assertTranslates(
+            "matrix-redact.py", ["#r:e", "$e"], ["redact", "--", "#r:e", "$e"]
+        )
+
     def test_passthrough(self):
         self.assertTranslates(
             "matrix-e2ee-cli.py",

@@ -19,9 +19,6 @@ Usage:
 # Config
 from _lib.config import get_config_path, load_config
 
-# The watch daemon's socket (a daemon of an older version of this skill)
-from _lib.daemon_client import daemon_request, running_daemon_pid, socket_path
-
 # Formatting
 from _lib.formatting import (
     add_bot_prefix,
@@ -35,9 +32,6 @@ from _lib.formatting import (
 
 # HTTP API
 from _lib.http import matrix_request, path_segment
-
-# The account's own reactions on an event
-from _lib.reactions import annotations, own_reactions
 
 # Room operations
 from _lib.rooms import (
@@ -59,10 +53,8 @@ from _lib.utils import (
 
 __all__ = [
     "add_bot_prefix",
-    "annotations",
     "build_mentions",
     "clean_message",
-    "daemon_request",
     "find_direct_room",
     "find_room_by_name",
     "format_timestamp",
@@ -75,13 +67,10 @@ __all__ = [
     "matrix_request",
     "mention_pill",
     "normalize_room_input",
-    "own_reactions",
     "path_segment",
     "resolve_room_alias",
     "resolve_room_cli",
     "rich_text_fields",
     "room_matches",
-    "running_daemon_pid",
     "shorten_service_urls",
-    "socket_path",
 ]
