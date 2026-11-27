@@ -212,6 +212,20 @@ class EnsureBinaryTests(unittest.TestCase):
         with self.assertRaises(cli.CliError):
             self.ensure(FakeOpener(PAYLOAD))
 
+    def test_a_relative_override_runs_the_file_it_names(self):
+        # A bare name would be looked up in PATH by run(); the file in the
+        # working directory is the one meant.
+        script = self.dir / "own-cli"
+        script.write_text("#!/bin/sh\nexit 7\n")
+        script.chmod(0o755)
+        cwd = os.getcwd()
+        os.chdir(self.dir)
+        self.addCleanup(os.chdir, cwd)
+        self.env[cli.ENV_OVERRIDE] = "own-cli"
+        path = cli.find_binary(self.env)
+        self.assertTrue(path.is_absolute(), path)
+        self.assertEqual(cli.run(path, [], env={"PATH": "/nonexistent"}), 7)
+
     def test_run_returns_the_exit_code(self):
         script = self.dir / "exit7"
         script.write_text("#!/bin/sh\nexit 7\n")

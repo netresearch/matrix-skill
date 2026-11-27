@@ -22,7 +22,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib.rooms import normalize_room_input
-from _lib.wrapper import Unsupported, exit_with, refuse
+from _lib.wrapper import Unsupported, refuse, run_cli
+
+# Ctrl-C: the runner's 130, or a child killed by SIGINT.
+INTERRUPTED = {130, -2}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
 def translate(args):
     cli = ["watch"]
     if args.cursor:
-        cli += ["--cursor", args.cursor]
+        cli.append(f"--cursor={args.cursor}")  # "=": a "-" start stays a value
     if args.no_summary:
         cli.append("--no-summary")
     if args.once:
@@ -58,7 +61,11 @@ def main(argv=None) -> None:
         cli_args, extra_env = translate(args)
     except Unsupported as exc:
         refuse(str(exc))
-    exit_with(cli_args, extra_env)
+    sys.stdout.flush()
+    code = run_cli(cli_args, extra_env)
+    if not args.once and code in INTERRUPTED:
+        code = 0  # Ctrl-C is how following ends, as before
+    sys.exit(code)
 
 
 if __name__ == "__main__":

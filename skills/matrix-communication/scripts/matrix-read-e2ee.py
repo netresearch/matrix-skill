@@ -7,7 +7,9 @@
 # ///
 """Read the last messages of a Matrix room, decrypted.
 
-Runs `matrix-e2ee-cli read`; --json prints the same JSON array as before.
+Runs `matrix-e2ee-cli read`. --json prints the same JSON array as before;
+each message also carries `decrypted`, `sender_verified` and `room_encrypted`
+(matrix-e2ee-cli 0.3.0), which callers that read known keys can ignore.
 
 Usage:
     matrix-read-e2ee.py ROOM [--limit N] [--json] [--request-keys]
@@ -23,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib.rooms import normalize_room_input
 from _lib.utils import clean_message
-from _lib.wrapper import Unsupported, exit_with, refuse
+from _lib.wrapper import Unsupported, exit_with, refuse, room_chooser
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -63,7 +65,11 @@ def main(argv=None) -> None:
         cli_args, extra_env = translate(args)
     except Unsupported as exc:
         refuse(str(exc))
-    exit_with(cli_args, extra_env)
+    exit_with(
+        cli_args,
+        extra_env,
+        choose=room_chooser(cli_args[cli_args.index("--") + 1]),
+    )
 
 
 if __name__ == "__main__":

@@ -11,10 +11,11 @@ verification emoji reach the terminal. Secrets travel in the environment of the
 child, never on its command line.
 """
 
+import json
 import os
 import sys
 
-from _lib import cli, cutover
+from _lib import cli, cutover, room_lookup
 
 # Commands, and flags before "--", that must not trigger the takeover of the
 # nio device. Only the command (the first argument) and the flags count: a
@@ -29,6 +30,10 @@ NO_TAKEOVER_COMMANDS = {
     "-V",
 }
 HELP_FLAGS = {"--help", "-h", "--version", "-V"}
+# Commands that never open the store: watch reads the daemon's logs, and a
+# daemon control request only talks to the socket.
+NO_STORE = {"watch"}
+NO_STORE_DAEMON_FLAGS = {"--status", "--stop"}
 
 
 class Unsupported(Exception):
@@ -36,36 +41,99 @@ class Unsupported(Exception):
 
 
 def needs_takeover(args) -> bool:
-    if not args or args[0] in NO_TAKEOVER_COMMANDS:
+    if not args or args[0] in NO_TAKEOVER_COMMANDS or args[0] in NO_STORE:
+        return False
+    if args[0] == "watch-daemon" and NO_STORE_DAEMON_FLAGS & set(args[1:]):
         return False
     flags = args[: args.index("--")] if "--" in args else args
     return not any(arg in HELP_FLAGS for arg in flags)
 
 
-def run_cli(args, extra_env=None, env=None, choose=None) -> int:
+def is_explicit_migration(args) -> bool:
+    """``migrate-nio`` itself, not its help."""
+    if not args or args[0] != "migrate-nio":
+        return False
+    flags = args[: args.index("--")] if "--" in args else args
+    return not any(arg in HELP_FLAGS for arg in flags)
+
+
+def json_error(stderr: str) -> dict:
+    """The old scripts' --json error object from the CLI's stderr.
+
+    The CLI ends a failure with one "error: ..." line; matrix-react.py's
+    "Applied before the error: KEY ..." line becomes "applied", as the old
+    script reported the keys it had set before the failure.
+    """
+    payload = {"error": ""}
+    for line in stderr.splitlines():
+        if line.startswith("error: "):
+            payload["error"] = line.removeprefix("error: ")
+        elif line.startswith("Applied before the error: "):
+            payload["applied"] = line.removeprefix("Applied before the error: ").split()
+    if not payload["error"]:
+        payload["error"] = (
+            stderr.strip().splitlines()[-1] if stderr.strip() else "failed"
+        )
+    return payload
+
+
+def run_cli(args, extra_env=None, env=None, choose=None, json_errors=False) -> int:
     """Run matrix-e2ee-cli ARGS; its exit code (1 when it could not start).
 
     CHOOSE, when given, gets ARGS and the environment after the takeover and
     returns the arguments to run instead: what to run can depend on state the
-    takeover creates (a session).
+    takeover creates (a session). With JSON_ERRORS, a failure that printed
+    nothing on stdout prints the old scripts' {"error": ...} object there.
     """
     env = dict(os.environ if env is None else env)
     try:
         binary = cli.ensure_binary(env=env, log=cli.stderr_log)
+        if is_explicit_migration(args):
+            return cutover.explicit_migrate(binary, list(args), env=env)
         if needs_takeover(args):
             cutover.migrate_if_pending(binary, env=env)
         if choose is not None:
             args = choose(list(args), env)
         child_env = {**env, **extra_env} if extra_env else env
-        return cli.run(binary, list(args), env=child_env)
-    except (cli.CliError, cutover.CutoverError) as exc:
+        if not json_errors:
+            return cli.run(binary, list(args), env=child_env)
+        result = cli.run_captured(binary, list(args), env=child_env)
+        sys.stdout.write(result.stdout)
+        sys.stderr.write(result.stderr)
+        if result.returncode != 0 and not result.stdout.strip():
+            print(json.dumps(json_error(result.stderr)))
+        return result.returncode
+    except Unsupported as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    except (cli.CliError, cutover.CutoverError, room_lookup.RoomLookupError) as exc:
+        if json_errors:
+            print(json.dumps({"error": str(exc)}))
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
 
-def exit_with(args, extra_env=None, choose=None) -> None:
+def exit_with(args, extra_env=None, choose=None, json_errors=False) -> None:
     sys.stdout.flush()
-    sys.exit(run_cli(args, extra_env, choose=choose))
+    sys.exit(run_cli(args, extra_env, choose=choose, json_errors=json_errors))
+
+
+def room_chooser(room: str):
+    """A CHOOSE for run_cli that puts the room the old scripts chose in place.
+
+    ROOM stands right after "--", except for send, whose optional ROOM stands
+    right before it.
+    """
+
+    def choose(args, env):
+        resolved = room_lookup.resolve(room, env)
+        if resolved != room:
+            separator = args.index("--")
+            index = separator - 1 if args[0] == "send" else separator + 1
+            args[index] = resolved
+        return args
+
+    return choose
 
 
 def refuse(message: str) -> None:

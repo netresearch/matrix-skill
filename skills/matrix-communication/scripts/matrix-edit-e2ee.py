@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib.rooms import normalize_room_input
 from _lib.utils import clean_message
-from _lib.wrapper import Unsupported, exit_with, refuse
+from _lib.wrapper import Unsupported, exit_with, refuse, room_chooser
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -69,7 +69,12 @@ def main(argv=None) -> None:
         cli_args, extra_env = translate(args)
     except Unsupported as exc:
         refuse(str(exc))
-    exit_with(cli_args, extra_env)
+    exit_with(
+        cli_args,
+        extra_env,
+        choose=room_chooser(cli_args[cli_args.index("--") + 1]),
+        json_errors=args.json,
+    )
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib.rooms import normalize_room_input
-from _lib.wrapper import Unsupported, exit_with, refuse
+from _lib.wrapper import Unsupported, exit_with, refuse, room_chooser
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,10 +46,11 @@ def translate(args):
             "Remove the old file first, or pick another --filename or --output"
         )
     cli = ["download"]
+    # Attached with "=", so a value that starts with "-" stays a value.
     if args.output:
-        cli += ["--output", args.output]
+        cli.append(f"--output={args.output}")
     if args.filename:
-        cli += ["--filename", args.filename]
+        cli.append(f"--filename={args.filename}")
     cli += ["--", normalize_room_input(args.room), args.event_id]
     return cli, None
 
@@ -60,7 +61,11 @@ def main(argv=None) -> None:
         cli_args, extra_env = translate(args)
     except Unsupported as exc:
         refuse(str(exc))
-    exit_with(cli_args, extra_env)
+    exit_with(
+        cli_args,
+        extra_env,
+        choose=room_chooser(cli_args[cli_args.index("--") + 1]),
+    )
 
 
 if __name__ == "__main__":

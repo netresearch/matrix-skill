@@ -20,7 +20,9 @@ The key comes from MATRIX_RECOVERY_KEY, MATRIX_RECOVERY_PASSPHRASE or the
 prompt; a value on the command line only with --allow-secret-argument, and it
 is passed on in the environment. Every run needs the key: the CLI keeps no
 backup key of the old kind. Without --import-keys or --status nothing is
-done: the CLI has no display-only mode.
+done: the CLI has no display-only mode; with both, --status wins and nothing
+is imported. The room keys come for the rooms the account is joined to only;
+after rejoining a room, run --import-keys again for its history.
 """
 
 import argparse
@@ -76,10 +78,12 @@ def translate(args):
             ALLOW_FLAG,
         )
     )
+    if args.status:
+        # Read-only, as before: with --import-keys too, the old script only
+        # reported the backup state.
+        return ["status"], None
     if args.import_keys:
         return ["backup-restore"], extra or None
-    if args.status:
-        return ["status"], None
     raise Unsupported(
         "give --import-keys (restore the room keys) or --status; matrix-e2ee-cli has no "
         "mode that only displays the keys"

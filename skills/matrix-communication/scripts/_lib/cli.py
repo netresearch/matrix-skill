@@ -164,7 +164,8 @@ def find_binary(env=None, release_path: Path = RELEASE_FILE, system=None, machin
     env = os.environ if env is None else env
     override = env.get(ENV_OVERRIDE)
     if override:
-        path = Path(override)
+        # Absolute: run() would look a bare "matrix-e2ee-cli" up in PATH.
+        path = Path(os.path.abspath(override))
         if not path.is_file():
             raise CliError(f"{ENV_OVERRIDE}={override} is not a file")
         return path
@@ -211,6 +212,18 @@ def run(binary: Path, args: list, env=None) -> int:
         return subprocess.run([str(binary), *args], env=env, check=False).returncode
     except KeyboardInterrupt:
         return 130
+    except OSError as exc:
+        raise CliError(f"cannot run {binary}: {exc}") from exc
+
+
+def run_captured(binary: Path, args: list, env=None) -> subprocess.CompletedProcess:
+    """Run the binary with stdout and stderr captured (stdin inherited)."""
+    try:
+        return subprocess.run(
+            [str(binary), *args], env=env, capture_output=True, text=True, check=False
+        )
+    except KeyboardInterrupt:
+        return subprocess.CompletedProcess(args, 130, "", "")
     except OSError as exc:
         raise CliError(f"cannot run {binary}: {exc}") from exc
 

@@ -13,13 +13,16 @@ XDG_DATA_HOME and XDG_CONFIG_HOME point at a temporary directory, so no real
 store is read and nothing is downloaded or contacted.
 """
 
+import http.server
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 HERE = Path(__file__).resolve().parent
 
@@ -36,7 +39,10 @@ if sys.argv[1:2] == ["migrate-nio"] and os.environ.get("FAKE_MIGRATE_SESSION"):
     os.makedirs(os.path.dirname(session), exist_ok=True)
     with open(session, "w") as handle:
         handle.write("{{}}")
-print("Event ID: $fake:example.org" if sys.argv[1:2] != ["migrate-nio"] else "Migrated device DEV")
+if os.environ.get("FAKE_CLI_STDERR"):
+    sys.stderr.write(os.environ["FAKE_CLI_STDERR"])
+else:
+    print("Event ID: $fake:example.org" if sys.argv[1:2] != ["migrate-nio"] else "Migrated device DEV")
 sys.exit(int(os.environ.get("FAKE_CLI_RC", "0")))
 """
 
@@ -177,7 +183,7 @@ class TranslationTests(WrapperTestCase):
         self.assertTranslates(
             "matrix-download-e2ee.py",
             ["ops", "$e", "--output", "d", "--filename", "f", "--debug"],
-            ["download", "--output", "d", "--filename", "f", "--", "ops", "$e"],
+            ["download", "--output=d", "--filename=f", "--", "ops", "$e"],
         )
 
     def test_download_overwrite_is_refused(self):
@@ -260,7 +266,7 @@ class TranslationTests(WrapperTestCase):
         self.assertTranslates(
             "matrix-watch.py",
             ["!r:e", "--cursor", "me", "--no-summary", "--once"],
-            ["watch", "--cursor", "me", "--no-summary", "--once", "--", "!r:e"],
+            ["watch", "--cursor=me", "--no-summary", "--once", "--", "!r:e"],
         )
 
     def test_react_status_swap_as_claiming_a_ticket_runs_it(self):
@@ -333,8 +339,7 @@ class TranslationTests(WrapperTestCase):
             ["!r:e", "$e", "--reason", "abgeschlossen", "--json", "-q", "--debug"],
             [
                 "redact",
-                "--reason",
-                "abgeschlossen",
+                "--reason=abgeschlossen",
                 "--json",
                 "--quiet",
                 "--",
@@ -449,6 +454,247 @@ class TakeoverTests(WrapperTestCase):
         self.run_script("matrix-e2ee-cli.py", "logout")
         self.run_script("matrix-e2ee-cli.py", "send", "--help")
         self.assertEqual([c["argv"][0] for c in self.calls()], ["logout", "send"])
+
+
+class FlagValueTests(WrapperTestCase):
+    def test_a_filename_starting_with_a_dash_stays_a_value(self):
+        self.assertTranslates(
+            "matrix-download-e2ee.py",
+            ["ops", "$e", "--filename=--draft.pdf"],
+            ["download", "--filename=--draft.pdf", "--", "ops", "$e"],
+        )
+
+    def test_status_wins_over_import_keys(self):
+        # Read-only first: the old script printed the status in that case.
+        self.assertTranslates(
+            "matrix-key-backup.py", ["--status", "--import-keys"], ["status"]
+        )
+
+    def test_logout_names_the_resolved_store_and_says_to_keep_it(self):
+        result = self.run_script("matrix-e2ee-setup.py", "--logout")
+        self.assertEqual(result.returncode, 2)
+        store = str(self.root / "data" / "matrix-skill" / "store")
+        self.assertIn(store, result.stderr)
+        self.assertIn("Keep that store until the takeover has succeeded", result.stderr)
+        self.assertNotIn("~/.local/share", result.stderr)
+
+
+class JsonErrorTests(WrapperTestCase):
+    def test_a_failure_prints_the_old_error_object_on_stdout(self):
+        for script, args in (
+            ("matrix-send-e2ee.py", ["ops", "hi", "--json"]),
+            ("matrix-edit-e2ee.py", ["!r:e", "$e", "new", "--json"]),
+            ("matrix-redact.py", ["!r:e", "$e", "--json"]),
+        ):
+            with self.subTest(script=script):
+                result = self.run_script(
+                    script, *args, FAKE_CLI_RC="1", FAKE_CLI_STDERR="error: no room\n"
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertTrue(result.stdout.strip(), "no JSON on stdout")
+                self.assertEqual(json.loads(result.stdout), {"error": "no room"})
+                self.assertIn("error: no room", result.stderr)
+
+    def test_react_reports_the_keys_it_applied_before_the_error(self):
+        result = self.run_script(
+            "matrix-react.py",
+            "!r:e",
+            "$e",
+            "✅",
+            "🤖",
+            "--json",
+            FAKE_CLI_RC="1",
+            FAKE_CLI_STDERR="Applied before the error: ✅\nerror: rate limited\n",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue(result.stdout.strip(), "no JSON on stdout")
+        self.assertEqual(
+            json.loads(result.stdout), {"error": "rate limited", "applied": ["✅"]}
+        )
+
+    def test_without_json_a_failure_prints_nothing_on_stdout(self):
+        result = self.run_script(
+            "matrix-send-e2ee.py",
+            "ops",
+            "hi",
+            FAKE_CLI_RC="1",
+            FAKE_CLI_STDERR="error: no room\n",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+
+    def test_success_output_is_not_wrapped(self):
+        result = self.run_script("matrix-send-e2ee.py", "ops", "hi", "--json")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "Event ID: $fake:example.org\n")
+
+
+class WatchInterruptTests(WrapperTestCase):
+    def test_ctrl_c_ends_a_following_watch_with_success(self):
+        result = self.run_script("matrix-watch.py", "!r:e", FAKE_CLI_RC="130")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_once_keeps_the_interrupted_exit_code(self):
+        result = self.run_script("matrix-watch.py", "!r:e", "--once", FAKE_CLI_RC="130")
+        self.assertEqual(result.returncode, 130)
+
+
+class NoTakeoverTests(WrapperTestCase):
+    def setUp(self):
+        super().setUp()
+        self.store = self.root / "data" / "matrix-skill" / "store"
+        self.store.mkdir(parents=True)
+        (self.store / "credentials.json").write_text(
+            json.dumps({"user_id": "@u:e", "device_id": "DEV", "access_token": "syt_x"})
+        )
+
+    def first_commands(self, script, *args):
+        self.run_script(script, *args)
+        commands = [c["argv"][0] for c in self.calls()]
+        self.log.unlink(missing_ok=True)
+        return commands
+
+    def test_watch_reads_the_log_and_takes_nothing_over(self):
+        self.assertEqual(
+            self.first_commands("matrix-watch.py", "!r:e", "--once"), ["watch"]
+        )
+
+    def test_daemon_status_and_stop_take_nothing_over(self):
+        for flag in ("--status", "--stop"):
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    self.first_commands("matrix-watchd.py", flag), ["watch-daemon"]
+                )
+
+    def test_daemon_start_takes_over_first(self):
+        self.assertEqual(
+            self.first_commands("matrix-watchd.py", "--start"),
+            ["migrate-nio", "watch-daemon"],
+        )
+
+    def test_an_explicit_migrate_nio_is_backed_up_and_recorded(self):
+        session = self.root / "data" / "matrix-e2ee-cli" / "session.json"
+        result = self.run_script(
+            "matrix-e2ee-cli.py",
+            "migrate-nio",
+            "--yes",
+            FAKE_MIGRATE_SESSION=str(session),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([c["argv"] for c in self.calls()], [["migrate-nio", "--yes"]])
+        backups = sorted(self.store.parent.glob("store.backup-*"))
+        self.assertEqual(len(backups), 1)
+        self.assertTrue((backups[0] / "credentials.json").is_file())
+        self.assertTrue(
+            (self.root / "data" / "matrix-skill" / "nio-migrated.json").exists()
+        )
+
+    def test_migrate_nio_help_copies_nothing(self):
+        result = self.run_script("matrix-e2ee-cli.py", "migrate-nio", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([c["argv"] for c in self.calls()], [["migrate-nio", "--help"]])
+        self.assertEqual(list(self.store.parent.glob("store.backup-*")), [])
+
+
+class StubHomeserver(http.server.BaseHTTPRequestHandler):
+    """Joined rooms: !a:e (alias #ops:e, name Operations), !b:e (named ops),
+    !c:e and !d:e (dev chat, dev talk)."""
+
+    STATE: ClassVar[dict] = {
+        "!a:e": {
+            "m.room.name": {"name": "Operations"},
+            "m.room.canonical_alias": {"alias": "#ops:e"},
+        },
+        "!b:e": {"m.room.name": {"name": "ops"}},
+        "!c:e": {"m.room.name": {"name": "dev chat"}},
+        "!d:e": {"m.room.name": {"name": "dev talk"}},
+    }
+
+    def do_GET(self):
+        from urllib.parse import unquote
+
+        path = unquote(self.path.split("?", 1)[0])
+        body, status = {"errcode": "M_NOT_FOUND", "error": "not found"}, 404
+        if self.headers.get("Authorization") != "Bearer syt_device":
+            body, status = {"errcode": "M_UNKNOWN_TOKEN", "error": "token"}, 401
+        elif path.endswith("/joined_rooms"):
+            body, status = {"joined_rooms": list(self.STATE)}, 200
+        elif "/rooms/" in path and "/state/" in path:
+            room = path.split("/rooms/", 1)[1].split("/state/", 1)[0]
+            event = path.split("/state/", 1)[1]
+            if event in self.STATE.get(room, {}):
+                body, status = self.STATE[room][event], 200
+        data = json.dumps(body).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def log_message(self, *args):
+        pass
+
+
+class RoomLookupTests(WrapperTestCase):
+    def setUp(self):
+        super().setUp()
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), StubHomeserver)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        session = self.root / "data" / "matrix-e2ee-cli" / "session.json"
+        session.parent.mkdir(parents=True)
+        session.write_text(
+            json.dumps(
+                {
+                    "homeserver": f"http://127.0.0.1:{server.server_port}",
+                    "user_id": "@u:e",
+                    "access_token": "syt_device",
+                }
+            )
+        )
+
+    def test_a_shorthand_reaches_the_room_the_old_scripts_chose(self):
+        cases = (
+            ("matrix-send-e2ee.py", ["ops", "hi"], ["send", "!a:e", "--", "hi"]),
+            ("matrix-send-e2ee.py", ["#ops", "hi"], ["send", "!a:e", "--", "hi"]),
+            ("matrix-read-e2ee.py", ["ops"], ["read", "--", "!a:e"]),
+            (
+                "matrix-edit-e2ee.py",
+                ["ops", "$e", "x"],
+                ["edit", "--", "!a:e", "$e", "x"],
+            ),
+            (
+                "matrix-react.py",
+                ["#ops", "$e", "✅"],
+                ["react", "--", "!a:e", "$e", "✅"],
+            ),
+            ("matrix-redact.py", ["ops", "$e"], ["redact", "--", "!a:e", "$e"]),
+            (
+                "matrix-download-e2ee.py",
+                ["ops", "$e"],
+                ["download", "--", "!a:e", "$e"],
+            ),
+            ("matrix-fetch-keys.py", ["ops"], ["fetch-keys", "--", "!a:e"]),
+        )
+        for script, args, expected in cases:
+            with self.subTest(script=script, room=args[0]):
+                self.log.unlink(missing_ok=True)
+                self.assertTranslates(script, args, expected)
+
+    def test_ids_and_full_aliases_reach_the_cli_unchanged(self):
+        self.assertTranslates(
+            "matrix-read-e2ee.py", ["#ops:e"], ["read", "--", "#ops:e"]
+        )
+        self.log.unlink()
+        self.assertTranslates("matrix-read-e2ee.py", ["!b:e"], ["read", "--", "!b:e"])
+
+    def test_an_ambiguous_shorthand_is_refused_before_the_cli_runs(self):
+        result = self.run_script("matrix-send-e2ee.py", "dev", "hi", "--json")
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue(result.stdout.strip(), "no JSON on stdout")
+        self.assertIn("several rooms", json.loads(result.stdout)["error"])
+        self.assertEqual(self.calls(), [])
 
 
 if __name__ == "__main__":
