@@ -168,12 +168,11 @@ from slug to room is readable rather than an internal detail.
 `matrix-watch.py` reads a file and never opens the store, so any number can run
 at once and none of them can disturb a send.
 
-**Send, edit and the CLI's react and redact need no new flags.** They try the
+**Send, edit, react and redact need no new flags.** They try the
 daemon's socket and fall back to the direct path when nothing answers. The
 signal is a socket that answers, never the store lock: a direct send holds that
 lock too for a couple of seconds, and deciding on it would route a command into
-a socket nobody serves. `matrix-react.py` and `matrix-redact.py` are plain HTTP
-scripts with the `access_token` of the config; they never reach this daemon.
+a socket nobody serves.
 
 Two things worth knowing before relying on it:
 

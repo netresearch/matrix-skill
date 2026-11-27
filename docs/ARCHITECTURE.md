@@ -79,8 +79,8 @@ that device.
 The daemon and its logs are matrix-e2ee-cli's (`watch-daemon`, `watch`, in
 `matrix-e2ee-cli/rooms/`); the two scripts run them. The CLI's commands decide
 between the socket and the direct path by **connecting to the socket**, never
-by testing the lock. `matrix-react.py` and `matrix-redact.py` are plain HTTP
-scripts and never use the daemon. A direct send holds that lock too for its
+by testing the lock; `matrix-react.py` and `matrix-redact.py` run the CLI's
+`react` and `redact` and so go through the daemon as well. A direct send holds that lock too for its
 couple of seconds; deciding on it would aim a command at a socket nobody serves.
 
 Design and implementation plan: [`docs/specs/`](specs/) and

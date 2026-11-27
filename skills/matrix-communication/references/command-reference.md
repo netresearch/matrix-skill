@@ -48,7 +48,10 @@ set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py --to '@user:ser
   or pass `--trust-unverified-devices` to share this one message's key with
   them anyway; the flag is not remembered and marks no device verified. The
   same flag exists on `matrix-edit-e2ee.py`. Reactions are sent unencrypted,
-  so `matrix-react.py` shares no room key.
+  so `matrix-react.py` shares no room key and accepts the flag without effect.
+- `matrix-react.py` and `matrix-redact.py` run matrix-e2ee-cli's `react` and
+  `redact` with the skill's E2EE device, like the `*-e2ee.py` scripts; an
+  `access_token` in the config is not enough for them.
 
 ## Read, download, edit, delete, react
 
@@ -159,8 +162,8 @@ rather than OK.
 | Read | `matrix-read-e2ee.py` | `matrix-read.py` |
 | Edit | `matrix-edit-e2ee.py` | `matrix-edit.py` |
 | Download | `matrix-download-e2ee.py` | — |
-| React | `matrix-react.py` | (same) |
-| Delete | `matrix-redact.py` | (same) |
+| React | `matrix-react.py` | — |
+| Delete | `matrix-redact.py` | — |
 
 Fall back to the non-E2EE scripts only for a room confirmed to be unencrypted. The one exception is a bot command to a bridge that does not decrypt (see [hookshot-integration.md](hookshot-integration.md)), and only for content you are fine to disclose to the homeserver.
 
