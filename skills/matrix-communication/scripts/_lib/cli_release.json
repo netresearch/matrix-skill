@@ -1,0 +1,11 @@
+{
+  "repository": "netresearch/matrix-e2ee-cli",
+  "version": "0.2.0",
+  "assets": {
+    "matrix-e2ee-cli-aarch64-apple-darwin": "1715ad0591cfa1ec3aa40466b89519000a25d87ec55315128026d634f818751f",
+    "matrix-e2ee-cli-aarch64-unknown-linux-musl": "9179f9ba9d1106a765369e9dea5e506fbf9a4667585df8340ff44e6d003edfd7",
+    "matrix-e2ee-cli-x86_64-apple-darwin": "ab1c143480df08735a2630148709a6a58d25e8925c96f94f1818043aa0f95ed5",
+    "matrix-e2ee-cli-x86_64-pc-windows-msvc.exe": "f5f46a25701b31417104a9e1e07fc8eed86320a161bdd5a7c55d391e5e906be8",
+    "matrix-e2ee-cli-x86_64-unknown-linux-musl": "78006a623a92b81438b3ba21ec601d97043f0a5ee553b8c28363f22a030d9e5e"
+  }
+}
