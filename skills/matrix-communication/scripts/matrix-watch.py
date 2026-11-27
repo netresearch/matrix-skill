@@ -5,174 +5,61 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Follow a room's event log.
+"""Follow a watched room's log: what is new since the cursor, then live.
 
-Prints one line per event on stdout, which is the shape a monitoring mechanism
-consumes. It reads a file the daemon writes and never opens the E2EE store, so
-any number of these can run at once and none of them can disturb a send.
+Runs `matrix-e2ee-cli watch`; needs `matrix-watchd.py` and the room in
+"watch_rooms". ROOM is a room ID, or the alias or name as written in
+"watch_rooms".
 
 Usage:
     matrix-watch.py ROOM [--cursor NAME] [--no-summary] [--once]
-
-Requires matrix-watchd.py to be running and watching the room.
 """
 
 import argparse
-import json
 import os
 import sys
-import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import (
-    cursor_path,
-    daemon_request,
-    load_config,
-    log_path,
-    read_cursor,
-    read_records,
-    resolve_room_cli,
-    rooms_dir,
-    summarize_since,
-    write_cursor,
-)
-
-sys.stdout.reconfigure(line_buffering=True)
-
-POLL_SECONDS = 0.5
+from _lib.rooms import normalize_room_input
+from _lib.wrapper import Unsupported, exit_with, refuse
 
 
-def print_summary(log, seen: int) -> None:
-    """One line about what was missed, or nothing when nothing was."""
-    summary = summarize_since(log, seen)
-    if not summary["total"]:
-        return
-    about = "at least " if summary["truncated"] else ""
-    print(
-        f"since last: {about}{summary['total']} messages, "
-        f"{summary['mentions']} mentioning you"
-    )
-
-
-def drain(log, cursor, seen: int) -> int:
-    """Print records newer than `seen`, return the new position."""
-    for record in read_records(log):
-        if record.get("seq", 0) > seen:
-            print(record["text"])
-            seen = record["seq"]
-    write_cursor(cursor, seen)
-    return seen
-
-
-def _follow_open_file(handle, log, cursor, seen: int) -> int:
-    """Read one open log until it is replaced. Returns the position reached.
-
-    Returning on rotation rather than reopening in place keeps the file handle
-    inside a single `with`, so there is no path where an exception leaves it
-    open.
-    """
-    handle.seek(0, os.SEEK_END)
-    inode = os.fstat(handle.fileno()).st_ino
-
-    while True:
-        line = handle.readline()
-        if line:
-            try:
-                record = json.loads(line)
-            except ValueError:
-                # A record still being written. It will be complete on the next
-                # pass; abandoning the log over it would not.
-                continue
-            print(record["text"])
-            seen = max(seen, record.get("seq", 0))
-            write_cursor(cursor, seen)
-            continue
-
-        time.sleep(POLL_SECONDS)
-        try:
-            if os.stat(log).st_ino != inode:
-                return seen
-        except FileNotFoundError:
-            # Rotation, between the replace and the create. Keep reading this
-            # handle and look again next pass.
-            continue
-
-
-def follow(log, cursor, seen: int) -> None:
-    """Tail the log, following the path across rotation the way tail -F does."""
-    while True:
-        with open(log, encoding="utf-8") as handle:
-            seen = _follow_open_file(handle, log, cursor, seen)
-
-
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Follow a room's event log")
-    parser.add_argument("room", help="Room name, alias or ID")
+    parser.add_argument("room", help='Room ID, or alias or name as in "watch_rooms"')
     parser.add_argument(
-        "--cursor",
-        default="default",
-        help="Name this reader's position, so several sessions can follow one room",
+        "--cursor", help="Name this reader's position (default: default)"
     )
     parser.add_argument(
-        "--no-summary",
-        action="store_true",
-        help="Skip the 'since last' line and start straight from the backlog",
+        "--no-summary", action="store_true", help="Skip the 'since last' line"
     )
     parser.add_argument(
-        "--once",
-        action="store_true",
-        help="Print what is new and exit instead of following",
+        "--once", action="store_true", help="Print what is new and exit"
     )
-    args = parser.parse_args()
+    return parser
 
-    config = load_config()
-    room_id = resolve_room_cli(config, args.room)
-    directory = rooms_dir()
-    log = log_path(directory, room_id)
-    cursor = cursor_path(directory, room_id, args.cursor)
 
-    if not log.exists():
-        # A missing log has two very different causes, and saying the wrong one
-        # sends people to restart a daemon that is already running.
-        status = daemon_request({"op": "status"})
-        if status and status.get("ok") and room_id in status.get("rooms", []):
-            print(
-                f"Watching {room_id}, nothing logged yet.\n"
-                "The log starts at the first event after the daemon began "
-                "watching; a sync does not replay history.",
-                file=sys.stderr,
-            )
-            return 0
-        if status and status.get("ok"):
-            print(
-                f"The daemon is running but not watching {room_id}.\n"
-                'Add it to "watch_rooms" in ~/.config/matrix/config.json and '
-                "restart it.",
-                file=sys.stderr,
-            )
-            return 1
-        print(
-            f"No log for {room_id}, and no daemon is running.\n"
-            "  matrix-watchd.py --start",
-            file=sys.stderr,
-        )
-        return 1
-
-    seen = read_cursor(cursor)
-    if not args.no_summary:
-        print_summary(log, seen)
-
-    seen = drain(log, cursor, seen)
+def translate(args):
+    cli = ["watch"]
+    if args.cursor:
+        cli += ["--cursor", args.cursor]
+    if args.no_summary:
+        cli.append("--no-summary")
     if args.once:
-        return 0
+        cli.append("--once")
+    cli += ["--", normalize_room_input(args.room)]
+    return cli, None
 
+
+def main(argv=None) -> None:
+    args = build_parser().parse_args(argv)
     try:
-        follow(log, cursor, seen)
-    except KeyboardInterrupt:
-        pass  # Ctrl-C is the normal way to stop following; exit cleanly
-    return 0
+        cli_args, extra_env = translate(args)
+    except Unsupported as exc:
+        refuse(str(exc))
+    exit_with(cli_args, extra_env)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

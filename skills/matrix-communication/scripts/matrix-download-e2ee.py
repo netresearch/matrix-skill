@@ -3,243 +3,64 @@
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["matrix-nio[e2e]<0.26"]
+# dependencies = []
 # ///
-"""Download media from a Matrix room message.
+"""Download the attachment of a file, image, video or audio message.
+
+Runs `matrix-e2ee-cli download`. An existing file is never replaced.
 
 Usage:
     matrix-download-e2ee.py ROOM EVENT_ID [--output DIR] [--filename NAME]
-    matrix-download-e2ee.py --help
 
-Arguments:
-    ROOM        Room alias (#room:server), room ID (!id:server), or room name
-    EVENT_ID    Event ID of the media message ($xxx:server)
-
-Options:
-    --output DIR     Output directory [default: .]
-    --filename NAME  Override filename (default: from message body)
-    --overwrite      Replace an existing file of that name (default: refuse)
-    --debug          Show debug information
-    --help           Show this help
+--overwrite is refused: the CLI has no way to replace a file. --debug is
+accepted and ignored.
 """
 
 import argparse
-import asyncio
 import os
 import sys
-from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import (
-    check_e2ee_dependencies,
-    find_room_in_nio_client,
-    get_store_path,
-    load_config,
-    load_credentials,
-    normalize_room_input,
-    prefer_ipv4,
-    restore_login_checked,
-    suppress_nio_logging,
-)
-from _lib.downloads import download_target, write_download
-
-check_e2ee_dependencies()
-
-from nio import (
-    AsyncClient,
-    AsyncClientConfig,
-    DownloadError,
-    MemoryDownloadResponse,
-    RoomGetEventError,
-    RoomResolveAliasResponse,
-)
+from _lib.rooms import normalize_room_input
+from _lib.wrapper import Unsupported, exit_with, refuse
 
 
-async def download_media(
-    config: dict,
-    room: str,
-    event_id: str,
-    output_dir: str = ".",
-    filename: str | None = None,
-    debug: bool = False,
-    overwrite: bool = False,
-) -> str:
-    """Download media from a Matrix message event."""
-    store_path = get_store_path()
-    stored_creds = load_credentials()
-
-    if stored_creds and stored_creds.get("user_id") == config["user_id"]:
-        device_id = stored_creds["device_id"]
-        access_token = stored_creds["access_token"]
-    elif "access_token" in config:
-        access_token = config["access_token"]
-        from nio import WhoamiResponse
-
-        temp_client = AsyncClient(config["homeserver"], config["user_id"])
-        temp_client.access_token = access_token
-        whoami = await temp_client.whoami()
-        await temp_client.close()
-        if isinstance(whoami, WhoamiResponse):
-            device_id = whoami.device_id
-        else:
-            raise RuntimeError(f"Failed to get device info: {whoami}")
-    else:
-        raise RuntimeError("No credentials found. Run matrix-e2ee-setup.py first.")
-
-    client_config = AsyncClientConfig(store_sync_tokens=True, encryption_enabled=True)
-    client = AsyncClient(
-        homeserver=config["homeserver"],
-        user=config["user_id"],
-        device_id=device_id,
-        store_path=str(store_path),
-        config=client_config,
-    )
-
-    try:
-        restore_login_checked(client, config["user_id"], device_id, access_token)
-
-        if client.store:
-            client.load_store()
-
-        if client.should_upload_keys:
-            await client.keys_upload()
-
-        # Sync to get room keys
-        if debug:
-            print("Syncing...", file=sys.stderr)
-        await client.sync(timeout=0, full_state=True)
-
-        # Resolve room
-        room_id = room
-        if room.startswith("#"):
-            response = await client.room_resolve_alias(room)
-            if isinstance(response, RoomResolveAliasResponse):
-                room_id = response.room_id
-            else:
-                raise RuntimeError(f"Could not resolve room alias: {response}")
-        elif not room.startswith("!"):
-            found = find_room_in_nio_client(client.rooms, room)
-            if found:
-                room_id = found
-            else:
-                raise RuntimeError(
-                    f"Could not find room '{room}'. Use 'matrix-rooms.py' to list rooms."
-                )
-
-        # Fetch the event
-        if debug:
-            print(f"Fetching event {event_id}...", file=sys.stderr)
-
-        resp = await client.room_get_event(room_id, event_id)
-        if isinstance(resp, RoomGetEventError):
-            raise RuntimeError(f"Failed to get event: {resp.message}")  # noqa: TRY004  # preserve RuntimeError contract expected by callers
-
-        event = resp.event
-        source = event.source if hasattr(event, "source") else {}
-        content = source.get("content", {})
-        msgtype = content.get("msgtype", "")
-
-        if msgtype not in ("m.image", "m.file", "m.video", "m.audio"):
-            raise RuntimeError(f"Event is not a media message (msgtype: {msgtype})")
-
-        # Get mxc URL
-        if "file" in content:
-            mxc_url = content["file"]["url"]
-        elif "url" in content:
-            mxc_url = content["url"]
-        else:
-            raise RuntimeError("No media URL found in event")
-
-        if debug:
-            print(f"Downloading {mxc_url}...", file=sys.stderr)
-
-        # The name comes from the message unless --filename is given; only its
-        # last component is used. An existing file is kept unless --overwrite.
-        out_path = download_target(output_dir, filename or content.get("body"))
-        if out_path.exists() and not overwrite:
-            raise RuntimeError(
-                f"{out_path} exists; pass --overwrite to replace it or "
-                "--filename to choose another name"
-            )
-
-        # Download media into memory (don't pass filename to avoid unnecessary disk write)
-        resp = await client.download(mxc=mxc_url)
-
-        if isinstance(resp, DownloadError):
-            raise RuntimeError(f"Download failed: {resp.message}")  # noqa: TRY004  # preserve RuntimeError contract expected by callers
-
-        # Get raw bytes
-        if isinstance(resp, MemoryDownloadResponse):
-            data = resp.body
-        else:
-            data = Path(resp.filename).read_bytes()
-
-        # Decrypt E2EE media if encrypted
-        if "file" in content:
-            from nio.crypto import decrypt_attachment
-
-            file_info = content["file"]
-            data = decrypt_attachment(
-                ciphertext=data,
-                key=file_info["key"]["k"],
-                hash=file_info["hashes"]["sha256"],
-                iv=file_info["iv"],
-            )
-
-        # Save to file
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        write_download(out_path, data, overwrite=overwrite)
-
-        if debug:
-            print(
-                f"Saved to {out_path} ({out_path.stat().st_size:,} bytes)",
-                file=sys.stderr,
-            )
-
-        return str(out_path)
-
-    finally:
-        await client.close()
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Download media from Matrix room")
-    parser.add_argument("room", help="Room alias, ID, or name")
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Download media from a Matrix room")
+    parser.add_argument("room", help="Room ID, alias, name or matrix.to link")
     parser.add_argument("event_id", help="Event ID of the media message")
-    parser.add_argument("--output", default=".", help="Output directory [default: .]")
+    parser.add_argument("--output", help="Output directory [default: .]")
     parser.add_argument("--filename", help="Override filename")
     parser.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="Replace an existing file of the same name (default: refuse)",
+        "--overwrite", action="store_true", help="Refused (see the docstring)"
     )
-    parser.add_argument("--debug", action="store_true", help="Debug output")
-    args = parser.parse_args()
+    parser.add_argument("--debug", action="store_true", help="Ignored")
+    return parser
 
-    suppress_nio_logging()
-    prefer_ipv4()
 
-    config = load_config()
-
-    try:
-        path = asyncio.run(
-            download_media(
-                config,
-                normalize_room_input(args.room),
-                args.event_id,
-                output_dir=args.output,
-                filename=args.filename,
-                debug=args.debug,
-                overwrite=args.overwrite,
-            )
+def translate(args):
+    if args.overwrite:
+        raise Unsupported(
+            "--overwrite is not supported any more: matrix-e2ee-cli never replaces a file. "
+            "Remove the old file first, or pick another --filename or --output"
         )
-        print(path)
-    except Exception as e:
-        if args.debug:
-            raise
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+    cli = ["download"]
+    if args.output:
+        cli += ["--output", args.output]
+    if args.filename:
+        cli += ["--filename", args.filename]
+    cli += ["--", normalize_room_input(args.room), args.event_id]
+    return cli, None
+
+
+def main(argv=None) -> None:
+    args = build_parser().parse_args(argv)
+    try:
+        cli_args, extra_env = translate(args)
+    except Unsupported as exc:
+        refuse(str(exc))
+    exit_with(cli_args, extra_env)
 
 
 if __name__ == "__main__":

@@ -153,30 +153,32 @@ class CheckTokenTests(CredentialTestCase):
 class CheckE2eeSetupTests(CredentialTestCase):
     def setUp(self):
         super().setUp()
-        self.store = Path(tempfile.mkdtemp())
-        self.addCleanup(self._cleanup_store)
-        real_store_path = doctor.get_store_path
-        doctor.get_store_path = lambda: self.store
-        self.addCleanup(setattr, doctor, "get_store_path", real_store_path)
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.session = Path(tmp.name) / "session.json"
+        self.nio_pending = False
+        for name, value in (
+            ("get_session_path", lambda: self.session),
+            ("nio_pending", lambda: self.nio_pending),
+        ):
+            real = getattr(doctor, name)
+            setattr(doctor, name, value)
+            self.addCleanup(setattr, doctor, name, real)
 
-    def _cleanup_store(self):
-        for child in self.store.iterdir():
-            child.unlink()
-        self.store.rmdir()
-
-    def _write_credentials(self, **fields):
-        creds = {
+    def _write_session(self, **fields):
+        session = {
+            "homeserver": "https://matrix.example.org",
             "user_id": "@user:example.org",
             "device_id": "DEVICEAAAA",
             "access_token": "syt_device",
         }
-        creds.update(fields)
-        (self.store / "credentials.json").write_text(json.dumps(creds))
+        session.update(fields)
+        self.session.write_text(json.dumps(session))
 
     def test_revoked_credential_fails(self):
         """Regression (#71): the check read the file only, so a device that had
         been logged out server-side still reported 'E2EE device configured'."""
-        self._write_credentials()
+        self._write_session()
         self.responses = [REJECTED]
         state, message = doctor.check_e2ee_setup(CONFIG)
         self.assertIs(state, False)
@@ -185,7 +187,7 @@ class CheckE2eeSetupTests(CredentialTestCase):
 
     def test_credential_of_another_device_fails(self):
         """Another client's token verifies fine - it just is not ours."""
-        self._write_credentials()
+        self._write_session()
         self.responses = [{**OK, "device_id": "ELEMENTBBBB"}]
         state, message = doctor.check_e2ee_setup(CONFIG)
         self.assertIs(state, False)
@@ -193,34 +195,42 @@ class CheckE2eeSetupTests(CredentialTestCase):
         self.assertIn("another client's token", message)
 
     def test_live_credential_passes(self):
-        self._write_credentials()
+        self._write_session()
         self.responses = [OK]
         state, message = doctor.check_e2ee_setup(CONFIG)
         self.assertIs(state, True)
         self.assertIn("DEVICEAAAA", message)
+        self.assertEqual(self.requests, [("syt_device", "GET", "/account/whoami")])
 
-    def test_missing_credentials_file(self):
+    def test_missing_session_file(self):
         state, message = doctor.check_e2ee_setup(CONFIG)
         self.assertIs(state, False)
-        self.assertIn("no credentials", message)
+        self.assertIn("no matrix-e2ee-cli session", message)
         self.assertEqual(self.requests, [])
 
-    def test_credentials_without_token(self):
-        self._write_credentials(access_token=None)
+    def test_a_nio_device_waiting_for_its_takeover_is_unknown_not_failed(self):
+        self.nio_pending = True
+        state, message = doctor.check_e2ee_setup(CONFIG)
+        self.assertIsNone(state)
+        self.assertIn("migrate-nio", message)
+        self.assertEqual(self.requests, [])
+
+    def test_session_without_token(self):
+        self._write_session(access_token=None)
         state, message = doctor.check_e2ee_setup(CONFIG)
         self.assertIs(state, False)
         self.assertIn("no access_token", message)
         self.assertEqual(self.requests, [])
 
     def test_offline_is_unknown_not_ok(self):
-        self._write_credentials()
+        self._write_session()
         state, message = doctor.check_e2ee_setup(CONFIG, offline=True)
         self.assertIsNone(state)
         self.assertIn("--offline", message)
         self.assertEqual(self.requests, [])
 
     def test_unreachable_homeserver_is_unknown_not_ok(self):
-        self._write_credentials()
+        self._write_session()
         self.responses = [UNREACHABLE]
         state, _ = doctor.check_e2ee_setup(CONFIG)
         self.assertIsNone(state)
@@ -268,92 +278,70 @@ class CheckConfigTokenSourceTests(unittest.TestCase):
         self.assertIn("absent.token", message)
 
 
-class CheckMatrixNioTests(unittest.TestCase):
-    """The nio row probes the uv environment of the E2EE scripts.
-
-    The doctor must start where nio's olm binding cannot be built (no libolm,
-    no C toolchain), so it declares no dependency itself and asks uv in a
-    subprocess. A stub `uv` on PATH stands in for the real one.
-    """
+class CheckE2eeCliTests(unittest.TestCase):
+    """The e2ee_cli row: the pinned binary, or MATRIX_E2EE_CLI's."""
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.bin = Path(tmp.name)
-        self.argv_log = self.bin / "argv"
-        patcher = mock.patch.dict(os.environ, {"PATH": str(self.bin)})
+        self.dir = Path(tmp.name)
+        env = {
+            "HOME": str(self.dir / "home"),
+            "XDG_DATA_HOME": str(self.dir / "data"),
+            "PATH": os.environ.get("PATH", ""),
+        }
+        patcher = mock.patch.dict(os.environ, env, clear=True)
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def stub_uv(self, stdout, stderr, rc):
-        uv = self.bin / "uv"
-        uv.write_text(
-            "#!/bin/sh\n"
-            f'printf "%s\\n" "$@" > "{self.argv_log}"\n'
-            f"printf '%s' '{stdout}'\n"
-            f"printf '%s\\n' '{stderr}' >&2\n"
-            f"exit {rc}\n"
-        )
-        uv.chmod(0o755)
+    def fake_cli(self, rc=0):
+        path = self.dir / "fake-cli"
+        path.write_text(f"#!/bin/sh\necho 'matrix-e2ee-cli 9.9.9'\nexit {rc}\n")
+        path.chmod(0o755)
+        os.environ["MATRIX_E2EE_CLI"] = str(path)
+        return path
 
     def test_the_doctor_declares_no_dependency(self):
         source = Path(_HERE, "matrix-doctor.py").read_text()
         self.assertIn("# dependencies = []\n", source)
 
-    def test_a_built_environment_with_olm_passes(self):
-        self.stub_uv("ok 0.25.2", "", 0)
-        ok, message = doctor.check_matrix_nio_e2ee()
+    def test_a_working_binary_passes_with_its_version(self):
+        path = self.fake_cli()
+        ok, message = doctor.check_e2ee_cli()
         self.assertIs(ok, True)
-        self.assertIn("0.25.2", message)
-        argv = self.argv_log.read_text().splitlines()
-        self.assertEqual(argv[:2], ["run", "--no-project"])
-        self.assertIn(doctor.NIO_REQUIREMENT, argv)
-        self.assertIn(">=3.11", argv)
+        self.assertIn("matrix-e2ee-cli 9.9.9", message)
+        self.assertIn(str(path), message)
 
-    def test_a_failed_build_reports_uvs_cause_line(self):
-        # uv's output on python:3.13-slim without libolm or a C toolchain.
-        self.stub_uv(
-            "",
-            "  × Failed to build `python-olm==3.2.16`\n"
-            "  ├─▶ The build backend returned an error\n"
-            "  ╰─▶ Call to `setuptools.build_meta.build_wheel` failed (exit status: 1)\n"
-            "  help: `python-olm` (v3.2.16) was included because `matrix-nio[e2e]`\n"
-            "        (v0.25.2) depends on `python-olm`",
-            1,
-        )
-        ok, message = doctor.check_matrix_nio_e2ee()
+    def test_a_binary_that_fails_fails(self):
+        self.fake_cli(rc=3)
+        ok, message = doctor.check_e2ee_cli()
         self.assertIs(ok, False)
-        self.assertTrue(
-            message.endswith(": Failed to build `python-olm==3.2.16`"), message
-        )
+        self.assertIn("exited 3", message)
 
-    def test_a_failure_without_a_cause_line_reports_the_last_line(self):
-        self.stub_uv(
-            "", "No interpreter found for Python >=3.11 in managed installations", 2
-        )
-        ok, message = doctor.check_matrix_nio_e2ee()
+    def test_a_missing_binary_names_the_pinned_version_and_the_fix(self):
+        version = doctor.cli.load_release()["version"]
+        with mock.patch.object(doctor.cli, "ensure_binary") as ensure:
+            ok, message = doctor.check_e2ee_cli()
         self.assertIs(ok, False)
-        self.assertIn("No interpreter found for Python >=3.11", message)
+        self.assertIn(version, message)
+        self.assertIn("--install", message)
+        ensure.assert_not_called()
 
-    def test_offline_keeps_uv_off_the_network(self):
-        self.stub_uv("ok 0.25.2", "", 0)
-        doctor.check_matrix_nio_e2ee(offline=True)
-        self.assertIn("--offline", self.argv_log.read_text().splitlines())
-        doctor.check_matrix_nio_e2ee()
-        self.assertNotIn("--offline", self.argv_log.read_text().splitlines())
+    def test_install_downloads(self):
+        path = self.fake_cli()
+        del os.environ["MATRIX_E2EE_CLI"]
+        with mock.patch.object(
+            doctor.cli, "ensure_binary", return_value=path
+        ) as ensure:
+            ok, _ = doctor.check_e2ee_cli(install=True)
+        self.assertIs(ok, True)
+        ensure.assert_called_once()
 
-    def test_nio_without_olm_fails(self):
-        self.stub_uv("no-e2ee 0.25.2", "", 0)
-        ok, message = doctor.check_matrix_nio_e2ee()
+    def test_install_offline_downloads_nothing(self):
+        with mock.patch.object(doctor.cli, "ensure_binary") as ensure:
+            ok, _ = doctor.check_e2ee_cli(install=True, offline=True)
         self.assertIs(ok, False)
-        self.assertIn("E2EE deps missing", message)
-
-    def test_without_uv_the_running_interpreter_is_checked(self):
-        with mock.patch.dict("sys.modules", {"nio": None}):
-            ok, message = doctor.check_matrix_nio_e2ee()
-        self.assertIs(ok, False)
-        self.assertEqual(message, "matrix-nio not installed")
-        self.assertFalse(self.argv_log.exists())
+        ensure.assert_not_called()
 
 
 if __name__ == "__main__":

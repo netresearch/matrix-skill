@@ -5,17 +5,17 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Matrix Skill health check and dependency installer.
+"""Matrix Skill health check and E2EE binary installer.
 
-Checks all dependencies and configuration, installs missing packages,
-and reports on E2EE setup status.
+Checks the matrix-e2ee-cli binary, the configuration and the tokens, and
+reports on the E2EE device.
 
 Usage:
     matrix-doctor.py [--install] [--json] [--quiet] [--offline]
     matrix-doctor.py --help
 
 Options:
-    --install   Automatically install missing dependencies
+    --install   Download the pinned matrix-e2ee-cli binary when it is missing
     --json      Output as JSON
     --quiet     Only show errors
     --offline   Skip the homeserver calls (token and e2ee_setup read 'not verified')
@@ -24,7 +24,6 @@ Options:
 
 import json
 import os
-import shutil
 import socket
 import subprocess
 import sys
@@ -32,151 +31,47 @@ import sys
 # Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import http
+from _lib import cli, cutover, http
 from _lib.config import TokenSourceError, get_config_path, resolve_tokens
-from _lib.e2ee import get_store_path
 
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
 
-def check_command_exists(cmd: str) -> bool:
-    """Check if a command exists in PATH."""
-    return shutil.which(cmd) is not None
+def check_e2ee_cli(install: bool = False, offline: bool = False) -> tuple[bool, str]:
+    """Check that the pinned matrix-e2ee-cli binary is there and runs.
 
-
-def get_pip_command() -> str | None:
-    """Get the best available pip command. Priority: uvx, pip, pip3."""
-    # Check uvx first (preferred)
-    if check_command_exists("uvx"):
-        return "uvx pip"
-    if check_command_exists("uv"):
-        return "uv pip"
-    if check_command_exists("pip"):
-        return "pip"
-    if check_command_exists("pip3"):
-        return "pip3"
-    return None
-
-
-def run_pip_command(pip_cmd: str, args: list[str]) -> tuple[bool, str]:
-    """Run a pip command and return success status and output."""
-    if pip_cmd.startswith("uvx"):
-        full_cmd = ["uvx", "pip"] + args
-    elif pip_cmd.startswith("uv"):
-        full_cmd = ["uv", "pip"] + args
-    else:
-        full_cmd = [pip_cmd] + args
-
-    try:
-        result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=120)  # noqa: PLW1510  # returncode inspected manually below
-        return result.returncode == 0, result.stdout + result.stderr
-    except subprocess.TimeoutExpired:
-        return False, "Command timed out"
-    except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-        return False, str(e)
-
-
-NIO_REQUIREMENT = "matrix-nio[e2e]<0.26"
-
-# Runs inside the environment uv builds for the E2EE scripts.
-_NIO_PROBE = """
-from importlib.metadata import version
-v = version("matrix-nio")
-try:
-    from nio.crypto import Olm  # noqa: F401
-except ImportError:
-    print("no-e2ee", v)
-else:
-    print("ok", v)
-"""
-
-
-def check_matrix_nio_e2ee(offline: bool = False) -> tuple[bool, str]:
-    """Check that matrix-nio with E2EE support is usable by the E2EE scripts.
-
-    Those scripts declare NIO_REQUIREMENT in their PEP 723 block and run under
-    `uv run`, so with uv on PATH the doctor builds that same environment in a
-    subprocess. The doctor itself declares no dependency: building nio's olm
-    binding needs libolm and a C toolchain on some hosts, and the doctor has to
-    start on exactly those hosts to say so. With `offline`, uv may use only its
-    cache, so `--offline` keeps the whole run off the network.
+    Every E2EE script downloads it on first use; ``--install`` does that now, so
+    a host without network access later is set up in advance. MATRIX_E2EE_CLI
+    names a binary of your own instead (no download, no hash check).
     """
-    if shutil.which("uv"):
-        cmd = [
-            "uv",
-            "run",
-            "--no-project",
-            "--quiet",
-            *(["--offline"] if offline else []),
-            "--python",
-            ">=3.11",
-            "--with",
-            NIO_REQUIREMENT,
-            "python",
-            "-c",
-            _NIO_PROBE,
-        ]
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # noqa: PLW1510  # returncode inspected below
-        except subprocess.TimeoutExpired:
-            return False, f"uv could not build {NIO_REQUIREMENT} within 300 s"
-        if result.returncode != 0:
-            # uv puts the cause on its first `×` or `error:` line and follows
-            # it with indented build output and `help:` hints.
-            lines = [l.strip() for l in result.stderr.splitlines() if l.strip()]
-            heads = [l for l in lines if l.startswith(("×", "error:"))]
-            if heads:
-                reason = heads[0].removeprefix("×").removeprefix("error:").strip()
-            else:
-                reason = lines[-1] if lines else f"uv exited {result.returncode}"
-            return False, f"uv could not build {NIO_REQUIREMENT}: {reason}"
-        state, _, nio_version = result.stdout.strip().partition(" ")
-        if state == "ok":
-            return (
-                True,
-                f"matrix-nio {nio_version} with E2EE support (uv environment of the E2EE scripts)",
-            )
-        return False, f"matrix-nio {nio_version} installed but E2EE deps missing"
-
     try:
-        import nio  # noqa: F401
-
-        # Try to get version
+        path = cli.find_binary()
+        if path is None and install and not offline:
+            path = cli.ensure_binary(log=cli.stderr_log)
+    except cli.CliError as exc:
+        return False, str(exc)
+    if path is None:
         try:
-            from importlib.metadata import version
-
-            nio_version = version("matrix-nio")
-        except Exception:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-            nio_version = "unknown"
-
-        # Check for E2EE support by trying to import olm
-        try:
-            from nio.crypto import Olm  # noqa: F401
-
-            return True, f"matrix-nio {nio_version} with E2EE support"
-        except ImportError:
-            return False, f"matrix-nio {nio_version} installed but E2EE deps missing"
-    except ImportError:
-        return False, "matrix-nio not installed"
-
-
-def check_libolm() -> tuple[bool, str]:
-    """Check if libolm system library is installed."""
+            version = cli.load_release()["version"]
+        except cli.CliError as exc:
+            return False, str(exc)
+        return (
+            False,
+            (
+                f"matrix-e2ee-cli {version} not downloaded yet - run matrix-doctor.py "
+                "--install (the E2EE scripts also download it on first use)"
+            ),
+        )
     try:
-        import _libolm  # noqa: F401
-
-        return True, "libolm available"
-    except ImportError:
-        pass
-
-    # Try loading the shared library
-    import ctypes.util
-
-    lib = ctypes.util.find_library("olm")
-    if lib:
-        return True, f"libolm found: {lib}"
-    return False, "libolm not found (required for E2EE)"
+        result = subprocess.run(  # noqa: PLW1510  # returncode inspected below
+            [str(path), "--version"], capture_output=True, text=True, timeout=30
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, f"{path} does not run: {exc}"
+    if result.returncode != 0:
+        return False, f"{path} --version exited {result.returncode}"
+    return True, f"{result.stdout.strip()} ({path})"
 
 
 def check_config() -> tuple[bool, str, dict]:
@@ -288,10 +183,10 @@ def check_token(
     present, ``(False, msg)`` when it rejected any of them, and ``(None, msg)``
     when there is nothing to verify or an answer is missing. Unknown is never OK:
     no token in the config is normal for E2EE use (those scripts authenticate
-    from the credentials store), and an unreachable homeserver is a missing
+    from the matrix-e2ee-cli session), and an unreachable homeserver is a missing
     answer, not a passing one.
 
-    ``store_ok`` is ``check_e2ee_setup``'s verdict on the credentials store, and
+    ``store_ok`` is ``check_e2ee_setup``'s verdict on the E2EE session, and
     it only changes the *remedy*, never the verdict. A rejected config token
     while the store holds a credential the homeserver confirmed is a stale
     config, not a lost credential: the fix is to repair or drop the config entry,
@@ -308,7 +203,7 @@ def check_token(
     if not tokens:
         return (
             None,
-            "No token in config (normal for E2EE - those scripts use the credentials store)",
+            "No token in config (normal for E2EE - those scripts use the matrix-e2ee-cli session)",
         )
 
     if not config.get("homeserver"):
@@ -318,7 +213,7 @@ def check_token(
 
     if store_ok is True:
         remedy = (
-            "the credentials store holds a credential the homeserver confirmed, so this is a "
+            "the E2EE session holds a credential the homeserver confirmed, so this is a "
             "stale token, not a lost credential - repair or remove it where it is set "
             "(MATRIX_ACCESS_TOKEN / MATRIX_ADMIN_TOKEN, the *_token_file, or "
             "~/.config/matrix/config.json); do not mint a new token, and do not report no access"
@@ -342,44 +237,63 @@ def check_token(
     return None, message
 
 
+def get_session_path():
+    """The matrix-e2ee-cli session file (a function, so tests can redirect it)."""
+    return cutover.cli_session_path()
+
+
+def nio_pending() -> bool:
+    """A matrix-nio device of an older version still waits for its takeover."""
+    return cutover.pending()
+
+
 def check_e2ee_setup(config: dict, offline: bool = False) -> tuple[bool | None, str]:
     """Check the E2EE credential - against the homeserver, not just the file.
 
-    Reading ``credentials.json`` proves a device was set up at some point. It does
-    not prove the device still exists: log the device out in Element, or delete it
-    from the session list, and the file is unchanged while every ``*-e2ee.py``
-    script starts failing. The failure surfaces as ``Room not found`` (a rejected
-    token yields an empty joined-rooms list), which points nowhere near the
-    credential - so the file check alone is exactly the trap ``check_token``
-    exists to close, on the credential the E2EE scripts actually authenticate with.
+    Reading matrix-e2ee-cli's ``session.json`` proves a device was set up at some
+    point. It does not prove the device still exists: log the device out in
+    Element, or delete it from the session list, and the file is unchanged while
+    every ``*-e2ee.py`` script starts failing. The failure surfaces as ``Room
+    not found`` (a rejected token yields an empty joined-rooms list), which points
+    nowhere near the credential - so the file check alone is exactly the trap
+    ``check_token`` exists to close, on the credential the E2EE scripts actually
+    authenticate with.
 
     The device comparison also catches the reverse mistake: pasting another
-    client's access token into ``credentials.json``. The token verifies, but it
+    client's access token into ``session.json``. The token verifies, but it
     belongs to that client's device - and driving one device from two clients
     breaks decryption in both.
     """
-    store_dir = get_store_path()
-    creds_file = store_dir / "credentials.json"
+    session_file = get_session_path()
 
-    if not store_dir.exists():
-        return False, "E2EE not set up (no store directory)"
-
-    if not creds_file.exists():
-        return False, "E2EE not set up (no credentials)"
+    if not session_file.exists():
+        if nio_pending():
+            return (
+                None,
+                (
+                    "E2EE device of an older version (matrix-nio) not taken over yet - the "
+                    "next E2EE command takes it over (migrate-nio, after a backup of the old "
+                    "store)"
+                ),
+            )
+        return (
+            False,
+            "E2EE not set up (no matrix-e2ee-cli session) - run matrix-e2ee-setup.py",
+        )
 
     try:
-        with open(creds_file) as f:
-            creds = json.load(f)
+        with open(session_file) as f:
+            session = json.load(f)
     except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-        return False, f"Error reading E2EE credentials: {e}"
+        return False, f"Error reading the E2EE session: {e}"
 
-    device_id = creds.get("device_id", "unknown")
-    token = creds.get("access_token")
+    device_id = session.get("device_id", "unknown")
+    token = session.get("access_token")
 
     if not token:
         return (
             False,
-            f"E2EE credentials for {device_id} carry no access_token - run matrix-e2ee-setup.py",
+            f"E2EE session for {device_id} carries no access_token - run matrix-e2ee-setup.py",
         )
     if not config.get("homeserver"):
         return None, f"E2EE device {device_id} configured - no homeserver to verify it"
@@ -400,31 +314,13 @@ def check_e2ee_setup(config: dict, offline: bool = False) -> tuple[bool | None, 
         return (
             False,
             (
-                f"E2EE credential belongs to device {served_device}, but credentials.json "
+                f"E2EE credential belongs to device {served_device}, but session.json "
                 f"says {device_id} - this is another client's token; run matrix-e2ee-setup.py "
                 "for a device of your own"
             ),
         )
 
     return True, f"E2EE device confirmed by the homeserver: {device_id}"
-
-
-def install_dependencies(pip_cmd: str, quiet: bool = False) -> tuple[bool, list[str]]:
-    """Install missing dependencies."""
-    messages = []
-
-    # Install matrix-nio with E2EE support
-    if not quiet:
-        messages.append("Installing matrix-nio[e2e]...")
-
-    success, output = run_pip_command(pip_cmd, ["install", "matrix-nio[e2e]<0.26"])
-    if success:
-        messages.append("matrix-nio[e2e] installed successfully")
-    else:
-        messages.append(f"Failed to install matrix-nio[e2e]: {output}")
-        return False, messages
-
-    return True, messages
 
 
 def main():
@@ -434,7 +330,7 @@ def main():
     parser.add_argument(
         "--install",
         action="store_true",
-        help="Automatically install missing dependencies",
+        help="Download the pinned matrix-e2ee-cli binary when it is missing",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Only show errors")
@@ -447,39 +343,18 @@ def main():
     args = parser.parse_args()
 
     checks = {
-        "pip_available": {"ok": False, "message": "", "critical": True},
-        # Not critical: every E2EE-capable script in this skill declares
-        # `matrix-nio[e2e]` as a PEP 723 inline dependency and runs under
-        # `uv run`, which resolves it per script. An ambient nio in the
-        # interpreter running the doctor is a convenience, not a requirement,
-        # and reporting its absence as a broken setup sends the reader to fix
-        # something that is not in the way.
-        "matrix_nio": {"ok": False, "message": "", "critical": False},
-        "libolm": {"ok": False, "message": "", "critical": False},
+        # Not critical: the non-E2EE scripts work without it, and every E2EE
+        # script downloads it on first use.
+        "e2ee_cli": {"ok": False, "message": "", "critical": False},
         "config": {"ok": False, "message": "", "critical": True},
         "token": {"ok": False, "message": "", "critical": False},
         "e2ee_setup": {"ok": False, "message": "", "critical": False},
     }
 
-    # Check pip availability
-    pip_cmd = get_pip_command()
-    if pip_cmd:
-        checks["pip_available"]["ok"] = True
-        checks["pip_available"]["message"] = f"Using: {pip_cmd}"
-    else:
-        checks["pip_available"]["message"] = (
-            "No pip command found (tried: uvx, uv pip, pip, pip3)"
-        )
-
-    # Check matrix-nio
-    nio_ok, nio_msg = check_matrix_nio_e2ee(offline=args.offline)
-    checks["matrix_nio"]["ok"] = nio_ok
-    checks["matrix_nio"]["message"] = nio_msg
-
-    # Check libolm
-    olm_ok, olm_msg = check_libolm()
-    checks["libolm"]["ok"] = olm_ok
-    checks["libolm"]["message"] = olm_msg
+    # Check the E2EE binary (downloaded with --install)
+    cli_ok, cli_msg = check_e2ee_cli(install=args.install, offline=args.offline)
+    checks["e2ee_cli"]["ok"] = cli_ok
+    checks["e2ee_cli"]["message"] = cli_msg
 
     # Check config
     config_ok, config_msg, config_data = check_config()
@@ -504,16 +379,6 @@ def main():
     checks["token"]["unknown"] = token_ok is None
     checks["token"]["message"] = token_msg
 
-    # Auto-install if requested
-    if args.install and pip_cmd and not checks["matrix_nio"]["ok"]:
-        success, messages = install_dependencies(pip_cmd, args.quiet)
-        if success:
-            # Re-check after install
-            nio_ok, nio_msg = check_matrix_nio_e2ee(offline=args.offline)
-            checks["matrix_nio"]["ok"] = nio_ok
-            checks["matrix_nio"]["message"] = nio_msg
-            checks["install_messages"] = messages
-
     # Output
     if args.json:
         print(json.dumps(checks, indent=2))
@@ -532,9 +397,6 @@ def main():
     unverified = []
 
     for name, check in checks.items():
-        if name == "install_messages":
-            continue
-
         # Three states, not two: a check that could not be answered must not
         # render as OK (it would claim a verification that never happened) and
         # must not render as FAIL either (it is not a finding).
@@ -571,9 +433,7 @@ def main():
         print("Some required checks failed. See above for details.")
         print()
         print("Quick fix:")
-        if not checks["pip_available"]["ok"]:
-            print("  - Install uv: pip install uv")
-        if not checks["matrix_nio"]["ok"]:
+        if not checks["e2ee_cli"]["ok"]:
             print("  - Run: matrix-doctor.py --install")
         if not checks["config"]["ok"]:
             print("  - Set up Matrix: see SKILL.md Setup Guide")

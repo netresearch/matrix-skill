@@ -3,449 +3,62 @@
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["matrix-nio[e2e]<0.26"]
+# dependencies = []
 # ///
-"""Send an E2EE-capable message to a Matrix room.
+"""Send a message to a Matrix room, end-to-end encrypted when the room is.
 
-Requires libolm system library:
-    Debian/Ubuntu: sudo apt install libolm-dev
-    Fedora:        sudo dnf install libolm-devel
-    macOS 26+:     unsupported, python-olm build fails (Clang 17); see setup-guide.md
+Runs `matrix-e2ee-cli send` (see _lib/cli.py for how the binary is found).
 
 Usage:
     matrix-send-e2ee.py ROOM MESSAGE [OPTIONS]
     matrix-send-e2ee.py --to @user:server MESSAGE [OPTIONS]
-    matrix-send-e2ee.py --help
 
-Arguments:
-    ROOM        Room identifier. Supports multiple formats:
-                - Room ID: !abc123xyz (direct, fastest)
-                - Room alias: #room:server (resolved via directory)
-                - Room name: "agent-work" (looked up from joined rooms)
-    MESSAGE     Message content (markdown supported)
-
-Options:
-    --emote           Send as /me action (m.emote)
-    --notice          Send as m.notice — bot-flagged, suppressed from auto-reply
-                      loops. Use for unattended automation (release announcements,
-                      CI summaries, scheduled digests). Mutually exclusive with --emote.
-    --thread EVENT    Reply in thread (event ID of thread root)
-    --reply EVENT     Reply to message (event ID to reply to)
-    --to USER         Send to the existing direct chat with USER (@user:server)
-                      instead of ROOM; never creates a room
-    --no-prefix       Don't add bot_prefix from config
-    --json            Output as JSON
-    --quiet           Minimal output
-    --debug           Show debug information
-    --help            Show this help
-
-Note: First run takes ~2-5s for initial sync and key setup.
-      Subsequent runs use cached keys (~2-3s).
-
-Examples:
-    # Send by room name (easiest)
-    matrix-send-e2ee.py agent-work "Hello team!"
-
-    # Send by room ID
-    matrix-send-e2ee.py '!sZBoTOreI1z0BgHY-s2ZC9MV63B1orGFigPXvYMQ22E' "Hello!"
-
-    # Send by alias
-    matrix-send-e2ee.py '#general:matrix.org' "Hello everyone!"
-
-    # Send to the direct chat with a person
-    matrix-send-e2ee.py --to '@jane:matrix.org' "Hello Jane!"
+ROOM: room ID (!id:server), alias (#room:server), room name or matrix.to link.
+MESSAGE: Markdown. Prints "Event ID: $..." (--quiet: the id alone, --json: JSON).
+--debug is accepted and ignored.
 """
 
-import asyncio
-import json
+import argparse
 import os
 import sys
 
-# Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import (
-    UntrustedDevicesError,
-    add_bot_prefix,
-    build_mentions,
-    check_e2ee_dependencies,
-    clean_message,
-    daemon_request,
-    find_direct_room,
-    find_room_in_nio_client,
-    get_store_path,
-    inject_pills,
-    load_config,
-    load_credentials,
-    markdown_to_html,
-    normalize_room_input,
-    prefer_ipv4,
-    restore_login_checked,
-    send_checked,
-    suppress_nio_logging,
-)
-
-# Check dependencies before importing nio
-check_e2ee_dependencies()
-
-from nio import (
-    AsyncClient,
-    AsyncClientConfig,
-    RoomResolveAliasResponse,
-    RoomSendResponse,
-)
-
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+from _lib.rooms import normalize_room_input
+from _lib.utils import clean_message
+from _lib.wrapper import Unsupported, exit_with, refuse
 
 
-async def send_message_e2ee(
-    config: dict,
-    room: str,
-    message: str,
-    emote: bool = False,
-    notice: bool = False,
-    thread_id: str | None = None,
-    reply_id: str | None = None,
-    mentions: list | None = None,
-    mention_room: bool = False,
-    debug: bool = False,
-    trust_unverified_devices: bool = False,
-) -> dict:
-    """Send an E2EE-capable message to a Matrix room.
-
-    msgtype precedence: notice > emote > text. The caller is expected to pass
-    only one of `notice` or `emote`; the CLI enforces this via a mutually
-    exclusive argument group.
-    """
-
-    # A running daemon holds the store, so a direct open here would be the
-    # second one - the state that corrupts it. Delegate instead. The signal is
-    # a socket that answers, never the store lock: a direct send holds that
-    # lock too, so routing on it would aim at a socket nobody serves. None
-    # means nothing is listening; an error response is an answer and is
-    # returned, because falling through on it would send the message twice.
-    msgtype = "m.notice" if notice else ("m.emote" if emote else "m.text")
-    response = daemon_request(
-        {
-            "op": "send",
-            "room": room,
-            "body": message,
-            "msgtype": msgtype,
-            "reply_to": reply_id,
-            "thread_root": thread_id,
-            "mentions": mentions,
-            "mention_room": mention_room,
-            "trust_unverified_devices": trust_unverified_devices,
-        }
-    )
-    if response is not None:
-        if response.get("ok"):
-            return {"event_id": response["event_id"], "room_id": room}
-        return {"error": response.get("error", "daemon refused the message")}
-
-    store_path = get_store_path()
-
-    # Check for E2EE device credentials
-    # Priority: 1) Dedicated device from setup, 2) Access token from config
-    stored_creds = load_credentials()
-
-    if stored_creds and stored_creds.get("user_id") == config["user_id"]:
-        # Use dedicated E2EE device (created via matrix-e2ee-setup.py)
-        device_id = stored_creds["device_id"]
-        access_token = stored_creds["access_token"]
-        if debug:
-            print(f"Using dedicated device: {device_id}", file=sys.stderr)
-    elif "access_token" in config:
-        # Use access token from config (reuses existing device)
-        access_token = config["access_token"]
-        # Get device_id from server
-        from nio import WhoamiResponse
-
-        temp_client = AsyncClient(config["homeserver"], config["user_id"])
-        temp_client.access_token = access_token
-        whoami = await temp_client.whoami()
-        await temp_client.close()
-        if isinstance(whoami, WhoamiResponse):
-            device_id = whoami.device_id
-            if debug:
-                print(f"Using existing device from token: {device_id}", file=sys.stderr)
-        else:
-            return {"error": f"Failed to get device info: {whoami}"}
-    else:
-        return {
-            "error": "No credentials found. Add 'access_token' to config, or run matrix-e2ee-setup.py"
-        }
-
-    if debug:
-        print(f"Store path: {store_path}", file=sys.stderr)
-
-    # Configure client for E2EE
-    client_config = AsyncClientConfig(
-        store_sync_tokens=True,
-        encryption_enabled=True,
-    )
-
-    # Create client
-    client = AsyncClient(
-        homeserver=config["homeserver"],
-        user=config["user_id"],
-        device_id=device_id,
-        store_path=str(store_path),
-        config=client_config,
-    )
-
-    try:
-        # Restore session from stored credentials
-        restore_login_checked(client, config["user_id"], device_id, access_token)
-        if debug:
-            print("Session restored", file=sys.stderr)
-
-        if debug:
-            print(f"Store initialized: {client.store is not None}", file=sys.stderr)
-            print(f"Olm initialized: {client.olm is not None}", file=sys.stderr)
-
-        # Load existing crypto keys from store
-        if client.store:
-            client.load_store()
-            if debug:
-                print(
-                    f"Keys loaded. Olm account shared: {client.olm_account_shared}",
-                    file=sys.stderr,
-                )
-
-        # Upload device keys if needed
-        if client.should_upload_keys:
-            if debug:
-                print("Uploading device keys...", file=sys.stderr)
-            from nio import KeysUploadResponse
-
-            keys_response = await client.keys_upload()
-            if isinstance(keys_response, KeysUploadResponse):
-                if debug:
-                    print("Keys uploaded successfully", file=sys.stderr)
-            else:
-                if debug:
-                    print(f"Keys upload response: {keys_response}", file=sys.stderr)
-
-        # Sync first to populate client.rooms (timeout=0 = no long-poll).
-        if debug:
-            print("Syncing (timeout=0, full_state=True)...", file=sys.stderr)
-
-        sync_response = await client.sync(timeout=0, full_state=True)
-        if (
-            hasattr(sync_response, "transport_response")
-            and sync_response.transport_response.status != 200
-        ):
-            return {"error": f"Sync failed: {sync_response}"}
-
-        if debug:
-            print(f"Sync complete. Rooms: {len(client.rooms)}", file=sys.stderr)
-
-        # Resolve room: alias via server, name via client.rooms (post-sync)
-        room_id = room
-        if room.startswith("#"):
-            response = await client.room_resolve_alias(room)
-            if isinstance(response, RoomResolveAliasResponse):
-                room_id = response.room_id
-                if debug:
-                    print(f"Resolved alias {room} -> {room_id}", file=sys.stderr)
-            else:
-                return {"error": f"Could not resolve room alias: {response}"}
-        elif not room.startswith("!"):
-            # Plain name — resolve from synced rooms (no HTTP calls)
-            found = find_room_in_nio_client(client.rooms, room)
-            if found:
-                room_id = found
-                if debug:
-                    print(f"Found room by name: {room} -> {room_id}", file=sys.stderr)
-            else:
-                return {
-                    "error": f"Could not find room '{room}'. Use 'matrix-rooms.py' to list available rooms."
-                }
-
-        # Get room object and check encryption
-        room_obj = client.rooms.get(room_id)
-        if debug:
-            print(f"Room object: {room_obj is not None}", file=sys.stderr)
-            if room_obj:
-                print(f"Room encrypted: {room_obj.encrypted}", file=sys.stderr)
-            print(f"Olm loaded: {client.olm is not None}", file=sys.stderr)
-
-        if room_obj and room_obj.encrypted and client.olm:
-            # Always include own user so own devices get Olm sessions established.
-            # should_query_keys is False when own keys were last queried recently, which
-            # causes share_group_session to skip own devices and fail to deliver Megolm keys.
-            if hasattr(client, "users_for_key_query"):
-                client.users_for_key_query.add(config["user_id"])
-
-            # Query device keys for all room members
-            if client.should_query_keys:
-                if debug:
-                    print("Querying device keys...", file=sys.stderr)
-                from nio import KeysQueryResponse
-
-                keys_query_response = await client.keys_query()
-                if debug:
-                    if isinstance(keys_query_response, KeysQueryResponse):
-                        print("Keys query successful", file=sys.stderr)
-                    else:
-                        print(
-                            f"Keys query response: {keys_query_response}",
-                            file=sys.stderr,
-                        )
-
-            # Claim one-time keys for devices we don't have sessions with
-            try:
-                users_to_claim = client.get_users_for_key_claiming()
-                if users_to_claim:
-                    if debug:
-                        print(
-                            f"Claiming keys for {len(users_to_claim)} users...",
-                            file=sys.stderr,
-                        )
-                    from nio import KeysClaimResponse
-
-                    claim_response = await client.keys_claim(users_to_claim)
-                    if debug:
-                        if isinstance(claim_response, KeysClaimResponse):
-                            print("Keys claimed successfully", file=sys.stderr)
-                        else:
-                            print(
-                                f"Keys claim response: {claim_response}",
-                                file=sys.stderr,
-                            )
-            except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-                if debug:
-                    print(f"Key claiming skipped: {e}", file=sys.stderr)
-
-        # Build message content with HTML formatting
-        if notice:
-            msgtype = "m.notice"
-        elif emote:
-            msgtype = "m.emote"
-        else:
-            msgtype = "m.text"
-        content = {
-            "msgtype": msgtype,
-            "body": message,
-        }
-
-        # m.mentions is what actually notifies (MSC3952). A plain @name in the
-        # body only ever matched the legacy push rule, and only on an exact
-        # localpart - "@bjoern" never reached "bjoern.marten".
-        mention_block = build_mentions(mentions, room=mention_room)
-        if mention_block:
-            content["m.mentions"] = mention_block
-
-        # Pills go into the HTML body only. The plain body keeps the bare name,
-        # which is what a client without HTML shows and what the legacy rule
-        # reads.
-        html = markdown_to_html(inject_pills(message, mentions))
-        if html != message:
-            content["format"] = "org.matrix.custom.html"
-            content["formatted_body"] = html
-
-        # Thread reply
-        if thread_id:
-            content["m.relates_to"] = {
-                "rel_type": "m.thread",
-                "event_id": thread_id,
-                "is_falling_back": True,
-                "m.in_reply_to": {"event_id": reply_id or thread_id},
-            }
-        elif reply_id:
-            content["m.relates_to"] = {"m.in_reply_to": {"event_id": reply_id}}
-
-        # The room key goes to verified devices only, unless the caller opted
-        # in for this send (see _lib/trust.py).
-        members = list(room_obj.users) if room_obj and room_obj.encrypted else []
-        try:
-            response = await send_checked(
-                client,
-                room_id,
-                members,
-                "m.room.message",
-                content,
-                trust_unverified=trust_unverified_devices,
-            )
-        except UntrustedDevicesError as exc:
-            return {"error": str(exc)}
-
-        if isinstance(response, RoomSendResponse):
-            return {"event_id": response.event_id, "room_id": room_id}
-        else:
-            return {"error": str(response)}
-
-    finally:
-        await client.close()
-
-
-def resolve_direct_target(config: dict, user_id: str, json_out: bool) -> str:
-    """Return the room ID of the direct chat with `user_id`, or exit 1."""
-    stored_creds = load_credentials()
-    if stored_creds and stored_creds.get("user_id") == config["user_id"]:
-        token = stored_creds["access_token"]
-    else:
-        token = config.get("access_token")
-    try:
-        if not token:
-            raise ValueError(
-                "No credentials found. Add 'access_token' to config, "
-                "or run matrix-e2ee-setup.py"
-            )
-        return find_direct_room({**config, "access_token": token}, user_id)
-    except ValueError as e:
-        if json_out:
-            print(json.dumps({"error": str(e)}))
-        else:
-            print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
-
-
-def main():
-    import argparse
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Send an E2EE-capable message to a Matrix room"
+        description="Send a message to a Matrix room (E2EE)"
     )
     parser.add_argument(
-        "room",
-        nargs="?",
-        help="Room ID (!id), alias (#room:server), or name. Omit with --to",
+        "room", nargs="?", help="Room ID, alias, name or matrix.to link; omit with --to"
     )
-    parser.add_argument("message", help="Message content")
+    parser.add_argument("message", help="Message content (Markdown)")
     parser.add_argument(
         "--to",
         metavar="@user:server",
-        help="Send to the existing direct chat with this user instead of ROOM. "
-        "Found through m.direct; never creates a room",
+        help="Send to the existing direct chat with this user",
     )
-    msgtype_group = parser.add_mutually_exclusive_group()
-    msgtype_group.add_argument(
-        "--emote", action="store_true", help="Send as /me action (m.emote msgtype)"
-    )
-    msgtype_group.add_argument(
-        "--notice",
-        action="store_true",
-        help="Send as m.notice — bot-flagged, suppressed from auto-reply loops. "
-        "Use for unattended automation (release announcements, CI summaries).",
+    kind = parser.add_mutually_exclusive_group()
+    kind.add_argument("--emote", action="store_true", help="Send as m.emote")
+    kind.add_argument(
+        "--notice", action="store_true", help="Send as m.notice (automation)"
     )
     parser.add_argument(
-        "--thread", metavar="EVENT_ID", help="Reply in thread (event ID of thread root)"
+        "--thread", metavar="EVENT_ID", help="Reply in the thread of this root event"
     )
+    parser.add_argument("--reply", metavar="EVENT_ID", help="Reply to this event")
     parser.add_argument(
-        "--reply", metavar="EVENT_ID", help="Reply to message (event ID)"
-    )
-    parser.add_argument(
-        "--no-prefix", action="store_true", help="Don't add bot_prefix from config"
+        "--no-prefix", action="store_true", help="Do not add bot_prefix from config"
     )
     parser.add_argument(
         "--mention",
         action="append",
         metavar="@user:server",
-        help="Notify this user (repeatable). Sets m.mentions and pills the name "
-        "where it appears in the text",
+        help="Notify this user (repeatable)",
     )
     parser.add_argument(
         "--mention-room",
@@ -455,85 +68,53 @@ def main():
     parser.add_argument(
         "--trust-unverified-devices",
         action="store_true",
-        help="Share this message's room key with devices that are not verified. "
-        "By default the message is not sent while the room has such devices.",
+        help="Share this message's room key with unverified devices too",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
-    parser.add_argument("--debug", action="store_true", help="Show debug info")
-
-    # Intermixed, so ROOM and MESSAGE are told apart around --to wherever
-    # it stands; plain parse_args would fill MESSAGE first.
-    args = parser.parse_intermixed_args()
-
-    prefer_ipv4()
-    if not args.debug:
-        suppress_nio_logging()
-
-    if (args.room is None) == (args.to is None):
-        parser.error("give exactly one of ROOM or --to @user:server")
-
-    config = load_config(require_user_id=True)
-
-    # Clean message from bash escaping artifacts
-    message = clean_message(args.message)
-    if args.to:
-        room_input = resolve_direct_target(config, args.to, args.json)
-        args.room = args.to  # the confirmation names the person, not the ID
-    else:
-        room_input = normalize_room_input(clean_message(args.room))
-
-    # Room resolution: IDs and aliases are passed through directly.
-    # Plain names are resolved AFTER sync (in the async function) using
-    # client.rooms, which avoids 193 HTTP calls from find_room_by_name().
-    room = room_input
-    if room_input.startswith("!"):
-        if args.debug:
-            print(f"Using room ID directly: {room_input}", file=sys.stderr)
-    elif room_input.startswith("#") and ":" not in room_input:
-        # Bare alias without server part — treat as name for post-sync lookup
-        room = room_input.lstrip("#")
-        if args.debug:
-            print(
-                f"Treating '{room_input}' as room name for post-sync lookup",
-                file=sys.stderr,
-            )
-
-    # Add bot prefix if configured (unless --no-prefix or emote)
-    if not args.no_prefix and not args.emote and config.get("bot_prefix"):
-        message = add_bot_prefix(message, config["bot_prefix"])
-
-    # Run async send
-    result = asyncio.run(
-        send_message_e2ee(
-            config=config,
-            room=room,
-            message=message,
-            emote=args.emote,
-            notice=args.notice,
-            thread_id=args.thread,
-            reply_id=args.reply,
-            mentions=args.mention,
-            mention_room=args.mention_room,
-            debug=args.debug,
-            trust_unverified_devices=args.trust_unverified_devices,
-        )
+    parser.add_argument(
+        "--quiet", "-q", action="store_true", help="Print only the event id"
     )
+    parser.add_argument("--debug", action="store_true", help="Ignored")
+    return parser
 
-    if "error" in result:
-        if args.json:
-            print(json.dumps(result))
-        else:
-            print(f"Error: {result['error']}", file=sys.stderr)
-        sys.exit(1)
 
-    if args.json:
-        print(json.dumps(result))
-    elif args.quiet:
-        print(result.get("event_id", ""))
-    else:
-        print(f"Message sent to {args.room}")
-        print(f"Event ID: {result.get('event_id')}")
+def translate(args):
+    if (args.room is None) == (args.to is None):
+        raise Unsupported("give exactly one of ROOM or --to @user:server")
+    cli = ["send"]
+    if args.to:
+        cli += ["--to", args.to]
+    for flag in (
+        "emote",
+        "notice",
+        "no_prefix",
+        "mention_room",
+        "trust_unverified_devices",
+        "json",
+        "quiet",
+    ):
+        if getattr(args, flag):
+            cli.append("--" + flag.replace("_", "-"))
+    for flag in ("thread", "reply"):
+        if getattr(args, flag):
+            cli += ["--" + flag, getattr(args, flag)]
+    for user in args.mention or []:
+        cli += ["--mention", user]
+    if args.room is not None:
+        # Before "--": with an optional ROOM, clap puts everything after "--"
+        # into MESSAGE.
+        cli.append(normalize_room_input(clean_message(args.room)))
+    cli += ["--", clean_message(args.message)]
+    return cli, None
+
+
+def main(argv=None) -> None:
+    args = build_parser().parse_intermixed_args(argv)
+    try:
+        cli_args, extra_env = translate(args)
+    except Unsupported as exc:
+        refuse(str(exc))
+    exit_with(cli_args, extra_env)
 
 
 if __name__ == "__main__":
