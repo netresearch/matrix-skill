@@ -59,8 +59,7 @@ uv run $C/matrix-react.py ROOM '$eventId' "✅" --replace "▶️" "🩹"   # st
 uv run $C/matrix-redact.py ROOM '$eventId' --reason "reason"
 
 # Rooms / aliases
-uv run $C/matrix-rooms.py [--search ops]
-uv run $C/matrix-resolve.py "#room:server"
+uv run $C/matrix-rooms.py [--search ops]; uv run $C/matrix-resolve.py "#room:server"
 
 # Live awareness (daemon owns the store) / E2EE setup / verify / keys
 uv run $C/matrix-watchd.py --start | --status | --stop
@@ -72,8 +71,7 @@ uv run $C/matrix-key-backup.py --import-keys   # prompts for the recovery key or
 uv run $C/matrix-e2ee-cli.py COMMAND [ARGS]    # any other matrix-e2ee-cli command (logout, verify --hand-over, …)
 
 # Health check + harness verification
-uv run $C/matrix-doctor.py --install
-bash scripts/verify-harness.sh --status
+uv run $C/matrix-doctor.py --install; bash scripts/verify-harness.sh --status
 ```
 
 ## Commands — matrix-administration
@@ -107,16 +105,15 @@ uv run $S/synapse-migrate-room.py '!room:srv' '@admin:srv' '!home:srv'   # harde
 - **Mentions need `--mention`**: a plain `@name` notifies nobody, only `m.mentions` does. `--mention-room` for `@room`.
 - **Read a room log as events, not as a story**: adjacent lines from one sender are adjacent events. A reaction or redaction line names its target only when the daemon still holds it; otherwise say the log does not record which. See [agent-governance.md](skills/matrix-communication/references/agent-governance.md), "Reading a room log".
 - **E2EE first**: Always use `*-e2ee.py` scripts. Only fall back to non-E2EE if the room is confirmed unencrypted.
-- **Room identifiers**: Scripts accept short name (`agent-work`), room alias (`#room:server`), room ID (`!abc:server`), or a `https://matrix.to/#/…` link. A room without a name (a direct chat) goes by the name Element shows: the other person's display name or user ID. Use `matrix-rooms.py` to discover.
+- **Room identifiers**: Scripts accept short name (`agent-work`), room alias (`#room:server`), room ID (`!abc:server`), or a `https://matrix.to/#/…` link. A short name (also `#name` without server) is looked up as in version 4, alias before display name, one request per joined room; several matches stop the command. A room without a name (a direct chat) goes by the name Element shows: the other person's display name or user ID. Use `matrix-rooms.py` to discover.
 - **Config**: `~/.config/matrix/config.json` — required: `homeserver`, `user_id`; optional: `access_token` (non-E2EE only; or `access_token_file`, or `MATRIX_ACCESS_TOKEN`), `bot_prefix`, `watch_rooms` (rooms the daemon logs).
 - **Running scripts**: `uv run` for every script, `matrix-doctor.py` included; it picks Python 3.11 or later from the PEP 723 block.
 - **Bash `!` handling**: Prepend `set +H &&` before any command whose arguments contain `!` — history expansion corrupts otherwise.
 - **Secure defaults** (opt-ins in [SKILL.md](skills/matrix-communication/SKILL.md)): secrets come from `MATRIX_PASSWORD` / `MATRIX_RECOVERY_KEY` / `MATRIX_RECOVERY_PASSPHRASE` or a prompt, never argv (`--allow-secret-argument`); room keys go to verified devices only (`--trust-unverified-devices`, one message, nothing stored).
 - **Key backup**: `--import-keys` restores; without it (or `--status`) the script refuses.
 - **Device verification**: Use Element Desktop or Element Android — Element X has incompatible verification flows.
-- **Output** of the E2EE scripts is matrix-e2ee-cli's own stdout and stderr, passed through; a one-time takeover of a matrix-nio device reports on stderr only, so callers parsing stdout see the command's output alone.
-- **First E2EE run** takes ~2–5 s for initial key sync; subsequent runs are faster.
-- **Dependencies**: `uv` (runs the scripts on Python 3.11 or later), Matrix homeserver access. E2EE downloads the matrix-e2ee-cli release binary on first use (Linux and macOS x86_64/arm64, Windows x86_64).
+- **Output** of the E2EE scripts is matrix-e2ee-cli's own stdout and stderr, passed through (a failed `--json` send, edit, react or redact also prints the old `{"error": …}` object on stdout); a one-time takeover of a matrix-nio device reports on stderr only, so callers parsing stdout see the command's output alone.
+- **Dependencies**: `uv` (runs the scripts on Python 3.11 or later), Matrix homeserver access. E2EE downloads the matrix-e2ee-cli release binary on first use (Linux and macOS x86_64/arm64, Windows x86_64); the first E2EE run takes a few seconds for the initial key sync.
 
 ## Testing
 

@@ -90,7 +90,9 @@ matrix-sdk). The wrapper downloads the release binary pinned in
 every run; `MATRIX_E2EE_CLI=/path/to/binary` uses a binary of your own instead.
 Commands no wrapper covers (`logout`, `migrate-nio`, `verify --hand-over`,
 `--confirm`, `--cancel`) run through `matrix-e2ee-cli.py`, which passes its
-arguments on unchanged.
+arguments on unchanged. Before an explicit `migrate-nio` it copies the store
+named by `--store` (default `matrix-skill/store/`) the same way as the
+automatic takeover below, and records a successful run.
 
 Storage locations (`$XDG_DATA_HOME` when set, else `~/.local/share`):
 - Session (user, device, access token, store passphrase), owner-only: `matrix-e2ee-cli/session.json`
@@ -102,7 +104,9 @@ Storage locations (`$XDG_DATA_HOME` when set, else `~/.local/share`):
 Up to version 4 the skill kept its device in a matrix-nio store,
 `matrix-skill/store/` with `credentials.json`. The first E2EE command on a
 machine that still has that store, and no matrix-e2ee-cli session yet, takes the
-device over once, before it runs:
+device over once, before it runs. It holds `matrix-skill/takeover.lock` from
+start to end, so two commands started together take the device over once: the
+second waits, then finds the takeover done.
 
 1. it stops when the old store is in use (an old `matrix-watchd.py` still
    running holds its lock): stop that process and run the command again,
@@ -122,8 +126,9 @@ not run, and the old store is unchanged. Afterwards:
 - Run `matrix-key-backup.py --import-keys` once: it imports the cross-signing
   keys and the room keys of the server-side backup.
 - `migrate-nio` suggests retiring the old copy with `matrix-e2ee-setup.py
-  --logout`. That flag is refused now; delete `matrix-skill/store/` yourself
-  once the new device works. Never log the device out on the server
+  --logout`. That flag is refused now. Keep `matrix-skill/store/` until the
+  takeover has succeeded and the new device works; only then delete it
+  yourself, if you want to. Never log the device out on the server
   (`matrix-e2ee-cli.py logout`): that ends the migrated device too.
 - Do not run an older version of this skill on the same machine: it would open
   the old store as the same device, and the two copies break each other's
@@ -257,7 +262,7 @@ Requirements: device must be verified, other verified devices must be online.
 
 ### Method 2: Restore from Server Backup (Recommended for old messages)
 
-`matrix-key-backup.py --import-keys` runs `matrix-e2ee-cli backup-restore`: it imports the secrets of the secret storage (the cross-signing keys among them) with the recovery key or passphrase, then downloads the room keys of every joined encrypted room from the server-side backup.
+`matrix-key-backup.py --import-keys` runs `matrix-e2ee-cli backup-restore`: it imports the secrets of the secret storage (the cross-signing keys among them) with the recovery key or passphrase, then downloads the room keys of every joined encrypted room from the server-side backup. Rooms the account has left get no keys; after rejoining one, run `--import-keys` again to read its history.
 
 ```bash
 # Check backup status (matrix-e2ee-cli status)
@@ -272,7 +277,7 @@ MATRIX_RECOVERY_KEY="..." uv run skills/matrix-communication/scripts/matrix-key-
 
 The recovery key and passphrase are not accepted as command-line values: other local users can read those in the process list. `--allow-secret-argument` restores that for scripts that can use neither a prompt nor the environment.
 
-**Important:** `--import-keys` is what restores the keys. Without it (and without `--status`) the script refuses: the CLI has no mode that only displays them. Every run asks for the recovery key or passphrase (environment or prompt).
+**Important:** `--import-keys` is what restores the keys. Without it (and without `--status`) the script refuses: the CLI has no mode that only displays them. With both flags, `--status` wins and nothing is imported. Every run asks for the recovery key or passphrase (environment or prompt).
 
 Find your recovery key in Element: Settings → Security & Privacy → Secure Backup → "Show Recovery Key"
 

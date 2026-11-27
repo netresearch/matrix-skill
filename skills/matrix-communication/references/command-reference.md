@@ -11,8 +11,12 @@ full surface.
 (`#room:server`) or a `https://matrix.to/#/…` link copied from Element
 everywhere below. A room without a name — a direct chat, usually — goes by
 the name Element shows for it: the other person's display name, or their
-user ID (`@jane:server`). Resolving such names costs one request per unnamed
-room on the paths that do not sync.
+user ID (`@jane:server`). A short name, also `#name` without the server, is
+looked up with the skill's device token in the order version 4 used: alias
+without server, then display name, then a single partial match. That costs a
+few requests per joined room; a name that matches several rooms, or none,
+stops the command before anything is sent. A room ID or full alias goes to
+matrix-e2ee-cli unchanged, without the lookup.
 
 **Prepend `set +H &&` whenever an argument contains `!`** — bash history
 expansion mangles it otherwise, and the corruption is silent.

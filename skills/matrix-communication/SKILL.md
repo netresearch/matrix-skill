@@ -46,6 +46,8 @@ Send, read and download media in Matrix rooms. **Always use `*-e2ee.py`.**
 
 `ROOM` = short name (`test`), ID (`!abc:server`), alias (`#room:server`) or
 `matrix.to` link; a direct chat also goes by the other person's name or ID.
+A short name is looked up as before (alias before display name); several
+matches stop the command, so pass the ID or full alias then.
 **Prepend `set +H &&` when an argument contains `!`.**
 
 ```bash
