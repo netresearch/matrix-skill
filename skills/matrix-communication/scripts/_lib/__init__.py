@@ -4,7 +4,8 @@
 """Matrix Skill shared library.
 
 This module provides common functionality for all Matrix scripts.
-All modules use ONLY stdlib to ensure non-E2EE scripts work without dependencies.
+All modules use ONLY stdlib; end-to-end encryption is matrix-e2ee-cli's job
+(see cli.py, cutover.py and wrapper.py).
 
 Usage:
     # At the top of each script, add:
@@ -18,29 +19,8 @@ Usage:
 # Config
 from _lib.config import get_config_path, load_config
 
-# E2EE (only used by E2EE scripts, but still stdlib-only)
+# The watch daemon's socket (a daemon of an older version of this skill)
 from _lib.daemon_client import daemon_request, running_daemon_pid, socket_path
-
-# Dependency checking
-from _lib.deps import check_e2ee_dependencies
-from _lib.e2ee import (
-    delete_credentials,
-    explain_store_error,
-    get_credentials_path,
-    get_store_path,
-    load_credentials,
-    private_dir,
-    refuse_unsupported_nio,
-    restore_login_checked,
-    rooms_dir,
-    save_credentials,
-    store_files_for,
-    store_lock,
-    store_lock_path,
-    verification_emoji_path,
-    verification_partner_allowed,
-    write_private_file,
-)
 
 # Formatting
 from _lib.formatting import (
@@ -58,28 +38,11 @@ from _lib.http import matrix_request, path_segment
 
 # The account's own reactions on an event
 from _lib.reactions import annotations, own_reactions
-from _lib.roomlog import (
-    append_record,
-    build_record,
-    cursor_path,
-    log_path,
-    next_seq,
-    read_cursor,
-    read_records,
-    remember_subject,
-    room_slug,
-    subject_index,
-    summarize_since,
-    target_of,
-    write_cursor,
-    write_room_bundle,
-)
 
 # Room operations
 from _lib.rooms import (
     find_direct_room,
     find_room_by_name,
-    find_room_in_nio_client,
     get_room_info,
     list_joined_rooms,
     normalize_room_input,
@@ -88,79 +51,37 @@ from _lib.rooms import (
     room_matches,
 )
 
-# Device trust for encrypted sends
-from _lib.trust import UntrustedDevicesError, send_checked, untrusted_devices
-
 # Utilities
 from _lib.utils import (
     clean_message,
     format_timestamp,
-    prefer_ipv4,
-    suppress_nio_logging,
 )
 
 __all__ = [
-    "UntrustedDevicesError",
     "add_bot_prefix",
     "annotations",
-    "append_record",
     "build_mentions",
-    "build_record",
-    "check_e2ee_dependencies",
     "clean_message",
-    "cursor_path",
     "daemon_request",
-    "delete_credentials",
-    "explain_store_error",
     "find_direct_room",
     "find_room_by_name",
-    "find_room_in_nio_client",
     "format_timestamp",
     "get_config_path",
-    "get_credentials_path",
     "get_room_info",
-    "get_store_path",
     "inject_pills",
     "list_joined_rooms",
     "load_config",
-    "load_credentials",
-    "log_path",
     "markdown_to_html",
     "matrix_request",
     "mention_pill",
-    "next_seq",
     "normalize_room_input",
     "own_reactions",
     "path_segment",
-    "prefer_ipv4",
-    "private_dir",
-    "read_cursor",
-    "read_records",
-    "refuse_unsupported_nio",
-    "remember_subject",
     "resolve_room_alias",
     "resolve_room_cli",
-    "restore_login_checked",
     "rich_text_fields",
     "room_matches",
-    "room_slug",
-    "rooms_dir",
     "running_daemon_pid",
-    "save_credentials",
-    "send_checked",
     "shorten_service_urls",
     "socket_path",
-    "store_files_for",
-    "store_lock",
-    "store_lock_path",
-    "subject_index",
-    "summarize_since",
-    "suppress_nio_logging",
-    "target_of",
-    "untrusted_devices",
-    "verification_emoji_path",
-    "verification_partner_allowed",
-    "write_cursor",
-    "write_private_file",
-    "write_room_bundle",
 ]

@@ -269,49 +269,6 @@ class FindRoomByNameTests(unittest.TestCase):
         self.assertEqual(matches, [])
 
 
-class FakeNioRoom:
-    def __init__(self, users, name=None, canonical_alias=None, display_name=None):
-        self.users = {u: object() for u in users}
-        self.own_user_id = ME
-        self.name = name
-        self.canonical_alias = canonical_alias
-        self.display_name = display_name or name or canonical_alias
-
-
-NIO_ROOMS = {
-    DM: FakeNioRoom([ME, JANE], display_name="Jane Doe"),
-    GROUP: FakeNioRoom([ME, JANE, "@max:example.org"], display_name="Jane Doe and Max"),
-    OPS: FakeNioRoom([ME, JANE], name="Ops", canonical_alias="#ops:example.org"),
-}
-
-
-class FindRoomInNioClientTests(unittest.TestCase):
-    def find(self, term, client_rooms=None):
-        return rooms.find_room_in_nio_client(client_rooms or NIO_ROOMS, term)
-
-    def test_display_name_finds_the_direct_chat(self):
-        self.assertEqual(self.find("Jane Doe"), DM)
-
-    def test_user_id_finds_the_direct_chat_when_unique(self):
-        only_dm = {DM: NIO_ROOMS[DM], OPS: NIO_ROOMS[OPS]}
-        self.assertEqual(self.find(JANE, only_dm), DM)
-
-    def test_user_id_shared_by_two_unnamed_rooms_is_not_guessed(self):
-        self.assertIsNone(self.find(JANE))
-
-    def test_partial_user_id_finds_the_direct_chat(self):
-        """`@jane:` is in the user ID only, never in the display name."""
-        only_dm = {DM: NIO_ROOMS[DM], OPS: NIO_ROOMS[OPS]}
-        self.assertEqual(self.find("@jane:", only_dm), DM)
-
-    def test_own_user_id_matches_nothing(self):
-        only_dm = {DM: NIO_ROOMS[DM]}
-        self.assertIsNone(self.find(ME, only_dm))
-
-    def test_named_room_does_not_match_on_members(self):
-        self.assertIsNone(self.find("@jane", {OPS: NIO_ROOMS[OPS]}))
-
-
 class NormalizeRoomInputTests(unittest.TestCase):
     def test_room_permalink_with_via(self):
         link = "https://matrix.to/#/!abc:example.org?via=example.org&via=x.org"
