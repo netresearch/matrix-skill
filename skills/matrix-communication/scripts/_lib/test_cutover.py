@@ -515,5 +515,51 @@ class RecordedTakeoverTests(CutoverTestCase):
         self.assert_unchanged()
 
 
+class MarkerWriteTests(CutoverTestCase):
+    def setUp(self):
+        super().setUp()
+        self.make_nio_store()
+        self.session = cutover.cli_session_path(self.env)
+        self.session.parent.mkdir(parents=True)
+        self.session.write_text("{}")
+
+    @unittest.skipIf(os.geteuid() == 0, "root writes into a read-only directory")
+    def test_a_running_marker_that_cannot_be_settled_stops_the_command(self):
+        cutover._write_marker(self.env, self.store, None, running=True)
+        directory = cutover.marker_path(self.env).parent
+        directory.chmod(0o500)
+        self.addCleanup(directory.chmod, 0o700)
+        try:
+            cutover.settle(self.env)
+        except cutover.CutoverError as exc:
+            self.assertIn("cannot finish the record", str(exc))
+        except OSError as exc:
+            self.fail(f"{exc!r} escaped as a traceback")
+        else:
+            self.fail("the command went on with an unsettled marker")
+
+    def test_a_failed_write_leaves_the_previous_marker(self):
+        cutover._write_marker(self.env, self.store, Path("/backup/old"))
+        path = cutover.marker_path(self.env)
+        before = path.read_text()
+        full = OSError(28, "No space left on device")
+        with (
+            unittest.mock.patch.object(cutover.os, "write", side_effect=full),
+            self.assertRaises(OSError),
+        ):
+            cutover._write_marker(self.env, self.store, None, running=True)
+        self.assertTrue(path.exists(), "the previous marker is gone")
+        self.assertEqual(path.read_text(), before)
+        self.assertEqual(
+            sorted(p.name for p in path.parent.iterdir() if ".tmp" in p.name), []
+        )
+
+    def test_a_marker_is_owner_only(self):
+        cutover._write_marker(self.env, self.store, None)
+        self.assertEqual(
+            stat.S_IMODE(cutover.marker_path(self.env).stat().st_mode), 0o600
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

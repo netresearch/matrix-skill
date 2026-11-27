@@ -32,6 +32,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -275,14 +276,22 @@ def settle(env=None) -> None:
     """
     env = os.environ if env is None else env
     try:
-        if _marker_state(env) == "running" and cli_session_path(env).exists():
-            data = json.loads(marker_path(env).read_text(encoding="utf-8"))
-            data.pop("running", None)
-            marker_path(env).write_text(
-                json.dumps(data, indent=2) + "\n", encoding="utf-8"
-            )
-    except (OSError, ValueError, CutoverError):
-        pass  # the next command tries again; pending() stays false while a session exists
+        unsettled = _marker_state(env) == "running" and cli_session_path(env).exists()
+    except CutoverError:
+        return  # no data directory to read: nothing was recorded there
+    if not unsettled:
+        return
+    path = marker_path(env)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data.pop("running", None)
+        _write_json(path, data)
+    except (OSError, ValueError) as exc:
+        # Going on could be a logout, after which the takeover would reopen.
+        raise CutoverError(
+            f"cannot finish the record of the matrix-nio takeover in {path}: {exc}. "
+            "Make that file writable, then run the command again."
+        ) from exc
 
 
 @contextlib.contextmanager
@@ -309,20 +318,32 @@ def _recording(env, store: Path, backup):
             marker_path(env).unlink(missing_ok=True)
 
 
+def _write_json(path: Path, data: dict) -> None:
+    """Replace PATH with DATA as JSON in one step: a temporary file beside it
+    (owner-only), then os.replace. A kill or a full disk leaves the old file,
+    never an empty one, which would read as a final record."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        try:
+            os.write(fd, (json.dumps(data, indent=2) + "\n").encode("utf-8"))
+        finally:
+            os.close(fd)
+        os.replace(temp, path)
+    except BaseException:
+        Path(temp).unlink(missing_ok=True)
+        raise
+
+
 def _write_marker(env, store: Path, backup, running=False) -> None:
-    marker_path(env).parent.mkdir(parents=True, exist_ok=True)
-    marker_path(env).write_text(
-        json.dumps(
-            {
-                "migrated_at": datetime.now(UTC).isoformat(timespec="seconds"),
-                "store": str(store),
-                "backup": str(backup) if backup else None,
-                **({"running": True} if running else {}),
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
+    _write_json(
+        marker_path(env),
+        {
+            "migrated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "store": str(store),
+            "backup": str(backup) if backup else None,
+            **({"running": True} if running else {}),
+        },
     )
 
 
