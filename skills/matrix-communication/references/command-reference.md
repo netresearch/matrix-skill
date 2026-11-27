@@ -11,8 +11,20 @@ full surface.
 (`#room:server`) or a `https://matrix.to/#/…` link copied from Element
 everywhere below. A room without a name — a direct chat, usually — goes by
 the name Element shows for it: the other person's display name, or their
-user ID (`@jane:server`). Resolving such names costs one request per unnamed
-room on the paths that do not sync.
+user ID (`@jane:server`). A short name, also `#name` without the server, is
+looked up with the skill's device token in the order the E2EE scripts of
+version 4 used: alias without server, then a single exact display name (one
+exact name wins even when other names contain it), then a single partial
+match. `matrix-react.py` and `matrix-redact.py` now follow that order too;
+in version 4 they refused an exact name that another room's name contained.
+That costs two requests per joined room (three for a room without name and
+alias), 30 s each at most; a request that fails or answers with something
+other than JSON stops the command. Send,
+edit, react and redact accept only an exact alias or exact name: anyone who
+can name a room you are in could otherwise steer a partial match. A name
+that matches several rooms, or none, stops the command before anything is
+sent. A room ID or full alias goes to matrix-e2ee-cli unchanged, without the
+lookup.
 
 **Prepend `set +H &&` whenever an argument contains `!`** — bash history
 expansion mangles it otherwise, and the corruption is silent.
@@ -47,15 +59,18 @@ set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py --to '@user:ser
   room has unverified devices, the send is refused and lists them. Verify them,
   or pass `--trust-unverified-devices` to share this one message's key with
   them anyway; the flag is not remembered and marks no device verified. The
-  same flag exists on `matrix-edit-e2ee.py` and `matrix-react.py` (and is
-  passed to the daemon when it sends).
+  same flag exists on `matrix-edit-e2ee.py`. Reactions are sent unencrypted,
+  so `matrix-react.py` shares no room key and accepts the flag without effect.
+- `matrix-react.py` and `matrix-redact.py` run matrix-e2ee-cli's `react` and
+  `redact` with the skill's E2EE device, like the `*-e2ee.py` scripts; an
+  `access_token` in the config is not enough for them.
 
 ## Read, download, edit, delete, react
 
 ```bash
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 10
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-read-e2ee.py ROOM --limit 20 --json
-uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-download-e2ee.py ROOM '$eventId' --output ./downloads   # --overwrite to replace an existing file
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-download-e2ee.py ROOM '$eventId' --output ./downloads   # never replaces an existing file
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-edit-e2ee.py ROOM '$eventId' "new text"
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-redact.py ROOM '$eventId' --reason "reason"
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-react.py ROOM '$eventId' "✅"
@@ -75,8 +90,8 @@ from `formatted_body`, never from `body` alone.
 
 `--json` output includes the media URL and info for `m.image` / `m.file` /
 `m.video` / `m.audio` events; `matrix-download-e2ee.py` decrypts and saves by
-event ID. It keeps an existing file of the same name (pass `--overwrite` or
-`--filename`) and writes new files readable by your account only.
+event ID. It refuses to replace an existing file of the same name (pass
+`--filename` or another `--output`; `--overwrite` is not supported any more).
 
 ## Live awareness
 
@@ -85,7 +100,10 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watchd.py --start | --status | --stop
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-watch.py ROOM [--cursor NAME] [--once]
 ```
 
-The daemon owns the store for its whole run; everything else routes through it.
+The daemon (`matrix-e2ee-cli watch-daemon`) owns the store for its whole run;
+the E2EE send, edit, react and redact of the CLI route through it.
+`matrix-watch.py` takes a room ID, or the alias or name as written in
+`watch_rooms`.
 
 ## Rooms and membership
 
@@ -109,20 +127,35 @@ Run `--show` before `--set` on any room you did not create — see
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py --status
 MATRIX_PASSWORD="pass" uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-verify.py --request DEVICE --timeout 180
-uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-verify.py --listen --timeout 180   # own devices; --accept-from USER for another
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-verify.py --listen --timeout 180   # own devices only
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-verify.py --list
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-cli.py verify --listen --hand-over   # no terminal: see e2ee-guide.md
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-fetch-keys.py ROOM --sync-time 60
-uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --recovery-key --import-keys   # prompts; or MATRIX_RECOVERY_KEY
-uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --import-keys
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-key-backup.py --import-keys   # prompts; or MATRIX_RECOVERY_KEY / MATRIX_RECOVERY_PASSPHRASE
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-cli.py COMMAND [ARGS]   # any other matrix-e2ee-cli command
 ```
+
+The E2EE scripts run [matrix-e2ee-cli](https://github.com/netresearch/matrix-e2ee-cli),
+downloaded on first use and checked against the SHA-256 pinned in
+`scripts/_lib/cli_release.json` (`MATRIX_E2EE_CLI=/path` uses your own binary).
+The first E2EE command on a machine with a matrix-nio store of version 4 or
+older takes that device over once (`e2ee-guide.md`, "Moving from matrix-nio").
 
 - Pass the password through `MATRIX_PASSWORD`, never as an argument — special
   characters do not survive the shell.
 - `--listen` lets Element initiate; prefer it over `--request` when several
   sessions exist. Use Element Desktop or Android — Element X has an incompatible
   verification flow.
-- `--import-keys` is what stores restored keys. Without it they are displayed and
-  lost.
+- `--import-keys` is what restores the keys; without it (or `--status`) the
+  script refuses.
+- `matrix-e2ee-verify.py` needs `--request`, `--listen` or `--list`, and a
+  terminal for the first two; an agent uses `verify --hand-over` (e2ee-guide.md).
+- `matrix-e2ee-setup.py` keeps an existing session and shows its state;
+  `--force` replaces a dead or foreign device with a new one. On a machine
+  still on matrix-nio the takeover runs first, so `--force` then replaces the
+  device just taken over.
+- `matrix-e2ee-setup.py --logout` is refused: `matrix-e2ee-cli.py logout` also
+  ends the device on the server.
 
 ## Health check
 
@@ -131,13 +164,11 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --offline
 ```
 
-`matrix-doctor.py` runs under `uv run` like the other scripts but declares no
-dependency, so it starts on hosts where nio's olm binding cannot be built.
-Its `matrix_nio` row asks uv to build the environment the E2EE scripts get
-(`matrix-nio[e2e]<0.26` on Python 3.11 or later) and shows uv's error when
-that fails. `--offline` skips the homeserver call, and the token row then
-reads `not verified` rather than OK; the `matrix_nio` probe then runs
-`uv run --offline` and uses only what uv has cached.
+`matrix-doctor.py` runs under `uv run` like the other scripts and declares no
+dependency. Its `e2ee_cli` row checks the pinned matrix-e2ee-cli binary (or
+`MATRIX_E2EE_CLI`); `--install` downloads it. `--offline` skips the homeserver
+calls and the download, and the token and E2EE rows then read `not verified`
+rather than OK.
 
 ## Script selection
 
@@ -147,8 +178,8 @@ reads `not verified` rather than OK; the `matrix_nio` probe then runs
 | Read | `matrix-read-e2ee.py` | `matrix-read.py` |
 | Edit | `matrix-edit-e2ee.py` | `matrix-edit.py` |
 | Download | `matrix-download-e2ee.py` | — |
-| React | `matrix-react.py` | (same) |
-| Delete | `matrix-redact.py` | (same) |
+| React | `matrix-react.py` | — |
+| Delete | `matrix-redact.py` | — |
 
 Fall back to the non-E2EE scripts only for a room confirmed to be unencrypted. The one exception is a bot command to a bridge that does not decrypt (see [hookshot-integration.md](hookshot-integration.md)), and only for content you are fine to disclose to the homeserver.
 
@@ -169,6 +200,6 @@ Fall back to the non-E2EE scripts only for a room confirmed to be unencrypted. T
 overrides `access_token` (`_lib/config.py`, `resolve_tokens`). Rotating the
 token means replacing that one value; the rest of `config.json` stays as it is.
 
-Copy `access_token` from the skill's own `credentials.json` (setup-guide, step
-6) — never from a client you use. The reason is in `SKILL.md`, and it is the one
+Copy `access_token` from the skill's own session, matrix-e2ee-cli's
+`session.json` (setup-guide, step 6) — never from a client you use. The reason is in `SKILL.md`, and it is the one
 mistake in this skill that damages something outside it.

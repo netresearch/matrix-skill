@@ -37,9 +37,10 @@ def normalize_room_input(room_input: str) -> str:
 def group_name(names: list[str]) -> str:
     """Name a room without m.room.name or alias after its members.
 
-    Same wording as matrix-nio's MatrixRoom.group_name(), so the HTTP path
-    and the nio path give a direct chat the same name: the other person's
-    display name, "A and B", "A, B and 3 others", or "Empty Room".
+    Same wording as matrix-nio's MatrixRoom.group_name(), which named rooms
+    for the E2EE scripts up to version 4, so a direct chat keeps the name it
+    had there: the other person's display name, "A and B", "A, B and 3
+    others", or "Empty Room".
     """
     names = sorted(names, key=str.lower)
     shown = names[:GROUP_NAME_HEROES]
@@ -266,68 +267,6 @@ def find_room_by_name(config: dict, search_term: str) -> tuple[str | None, list]
         return matches[0]["room_id"], matches
 
     return None, matches
-
-
-def find_room_in_nio_client(client_rooms: dict, search_term: str) -> str | None:
-    """Find a room by name in a matrix-nio client.rooms dict (post-sync).
-
-    This avoids the N+1 HTTP calls of find_room_by_name() by using
-    room data already loaded by client.sync().
-
-    Args:
-        client_rooms: dict from AsyncClient.rooms (room_id -> MatrixRoom)
-        search_term: Room name, alias, or ID to match
-
-    Returns:
-        room_id if found, None otherwise
-    """
-    search_lower = search_term.lower()
-
-    def member_ids(room) -> list[str]:
-        # Like list_joined_rooms(): only a room named after its members
-        # matches on their user IDs; named rooms match as before.
-        if room.name or room.canonical_alias:
-            return []
-        own = getattr(room, "own_user_id", None)
-        return [u.lower() for u in room.users if u != own]
-
-    # Exact alias match
-    for room_id, room in client_rooms.items():
-        if room.canonical_alias and room.canonical_alias.lower() == search_lower:
-            return room_id
-
-    # Alias name match (without server part)
-    for room_id, room in client_rooms.items():
-        if room.canonical_alias:
-            alias_name = room.canonical_alias.split(":")[0].lstrip("#")
-            if alias_name.lower() == search_lower:
-                return room_id
-
-    # Exact display name match (for a room named after its members, also a
-    # member's user ID)
-    exact_matches = [
-        room_id
-        for room_id, room in client_rooms.items()
-        if (room.display_name and room.display_name.lower() == search_lower)
-        or search_lower in member_ids(room)
-    ]
-    if len(exact_matches) == 1:
-        return exact_matches[0]
-    if len(exact_matches) > 1:
-        return None  # Ambiguous exact match
-
-    # Partial name match
-    partial_matches = [
-        room_id
-        for room_id, room in client_rooms.items()
-        if search_lower in (room.display_name or "").lower()
-        or search_lower in (room.canonical_alias or "").lower()
-        or any(search_lower in u for u in member_ids(room))
-    ]
-    if len(partial_matches) == 1:
-        return partial_matches[0]
-
-    return None
 
 
 def find_direct_room(config: dict, user_id: str) -> str:

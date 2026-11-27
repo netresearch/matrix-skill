@@ -3,290 +3,130 @@
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["matrix-nio[e2e]<0.26"]
+# dependencies = []
 # ///
-"""Set up E2EE device for Matrix Skill.
+"""Set up this skill's own E2EE device, or show its state.
 
-This creates a dedicated Matrix device with encryption keys.
-Run once to set up E2EE, then matrix-send-e2ee.py works without password.
-
-Requires libolm system library:
-    Debian/Ubuntu: sudo apt install libolm-dev
-    Fedora:        sudo dnf install libolm-devel
-    macOS 26+:     unsupported, python-olm build fails (Clang 17); see setup-guide.md
+Runs `matrix-e2ee-cli login` (a new device "Matrix Skill E2EE (Rust)") or
+`matrix-e2ee-cli status`. A matrix-nio device of an older version of this
+skill is taken over first instead (see _lib/cutover.py), so it keeps its
+verification and room keys.
 
 Usage:
-    matrix-e2ee-setup.py              # Interactive password prompt
-    MATRIX_PASSWORD=... matrix-e2ee-setup.py   # Non-interactive
-    matrix-e2ee-setup.py --allow-secret-argument PASSWORD   # Argument (visible in ps)
-    matrix-e2ee-setup.py --status
-    matrix-e2ee-setup.py --logout
-    matrix-e2ee-setup.py --logout --purge-all
-    matrix-e2ee-setup.py --help
+    matrix-e2ee-setup.py                         # prompts for the password
+    MATRIX_PASSWORD=... matrix-e2ee-setup.py     # non-interactive
+    matrix-e2ee-setup.py --allow-secret-argument PASSWORD
+    matrix-e2ee-setup.py --status [--json]
+    matrix-e2ee-setup.py --force                 # replace a dead or foreign device
 
-Options:
-    --status      Check if E2EE device is set up
-    --logout      Remove the credentials and this device's store files
-    --purge-all   With --logout: wipe every other device's store files too
-    --help        Show this help
+With a session already in place (also right after the takeover of a
+matrix-nio device) it does not log in again: it says so, shows
+`matrix-e2ee-cli status` and exits with its code. --force runs
+`matrix-e2ee-cli login --force`, which replaces the local session with a new
+device; the old device stays on the server (remove it in Element).
 
---logout is scoped to the device in credentials.json. The store directory is
-shared by every device ever set up here, and their megolm history lives in it.
+--logout and --purge-all are refused: the old flag only deleted local files,
+while `matrix-e2ee-cli logout` logs the device out on the server. Run
+`matrix-e2ee-cli.py logout` when that is what you want. --json without
+--status is refused (login has no JSON output). --debug is accepted and ignored.
 """
 
-import asyncio
-import json
+import argparse
 import os
 import sys
 
-# Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import (
-    check_e2ee_dependencies,
-    delete_credentials,
-    get_store_path,
-    load_config,
-    load_credentials,
-    prefer_ipv4,
-    refuse_unsupported_nio,
-    save_credentials,
-    store_lock,
-    suppress_nio_logging,
-)
-from _lib.secret_input import ALLOW_FLAG, SecretInputError, read_secret
+from _lib.cutover import CutoverError, cli_session_path, nio_store_path
+from _lib.wrapper import Unsupported, exit_with, refuse, secret_env
 
-# Check dependencies before importing nio
-check_e2ee_dependencies()
-
-from nio import (
-    AsyncClient,
-    AsyncClientConfig,
-    LoginResponse,
-)
-
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+ALLOW_FLAG = "--allow-secret-argument"
 
 
-async def setup_device(config: dict, password: str) -> dict:
-    """Create a new E2EE device using password login."""
-    refuse_unsupported_nio()
-    store_path = get_store_path()
-
-    client_config = AsyncClientConfig(
-        store_sync_tokens=True,
-        encryption_enabled=True,
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Set up the E2EE device of the Matrix skill"
     )
-
-    # Extract localpart from user_id for login (some servers require this)
-    # @user:server -> user
-    user_id = config["user_id"]
-    login_user = (
-        user_id.split(":")[0].lstrip("@") if user_id.startswith("@") else user_id
+    parser.add_argument(
+        "password", nargs="?", help=f"Account password; refused unless {ALLOW_FLAG}"
     )
-
-    client = AsyncClient(
-        homeserver=config["homeserver"],
-        user=login_user,
-        store_path=str(store_path),
-        config=client_config,
+    parser.add_argument(ALLOW_FLAG, dest="allow_secret_argument", action="store_true")
+    parser.add_argument(
+        "--status", action="store_true", help="Show the E2EE device state"
     )
+    parser.add_argument(
+        "--logout", action="store_true", help="Refused (see the docstring)"
+    )
+    parser.add_argument(
+        "--purge-all", action="store_true", help="Refused (see the docstring)"
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="With --status: JSON output"
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Replace an existing session with a new device (dead or foreign token)",
+    )
+    parser.add_argument("--debug", action="store_true", help="Ignored")
+    return parser
 
-    try:
-        # Login to create new device with hostname suffix
-        import socket
 
-        hostname = socket.gethostname()
-        device_name = f"Matrix Skill E2EE @ {hostname}"
-
-        login_response = await client.login(
-            password=password,
-            device_name=device_name,
+def translate(args):
+    if args.logout or args.purge_all:
+        try:
+            store = str(nio_store_path(os.environ))
+        except CutoverError:
+            store = "the matrix-skill/store directory of your data directory"
+        raise Unsupported(
+            "--logout and --purge-all are not supported any more. The old flag deleted local "
+            "files only; `matrix-e2ee-cli.py logout` also logs the device out on the server, "
+            "which ends it for good. Do not use it for the copy an older version of this "
+            f"skill left in {store}. Keep that store until the takeover has succeeded (the "
+            "first E2EE command makes a backup and runs it) and the new device works; "
+            "only then remove it, if you want to."
         )
-
-        if isinstance(login_response, LoginResponse):
-            # Save credentials (password NOT saved)
-            save_credentials(
-                user_id=login_response.user_id,
-                device_id=login_response.device_id,
-                access_token=login_response.access_token,
-            )
-            return {
-                "success": True,
-                "device_id": login_response.device_id,
-                "user_id": login_response.user_id,
-                "device_name": device_name,
-            }
-        else:
-            return {"error": str(login_response)}
-
-    finally:
-        await client.close()
-
-
-def show_status(config: dict):
-    """Show current E2EE setup status."""
-    creds = load_credentials()
-
-    if creds and creds.get("user_id") == config["user_id"]:
-        print("E2EE Status: SET UP")
-        print(f"  User:   {creds['user_id']}")
-        print(f"  Device: {creds['device_id']}")
-        print(f"  Store:  {get_store_path()}")
-    else:
-        print("E2EE Status: NOT SET UP")
-        print()
-        print("Run setup; it prompts for your Matrix password:")
-        print("  matrix-e2ee-setup.py")
-        print("Non-interactive: MATRIX_PASSWORD=... matrix-e2ee-setup.py")
-
-
-def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Set up E2EE device for Matrix Skill")
-    parser.add_argument(
-        "password",
-        nargs="?",
-        help="Matrix account password - refused unless "
-        f"{ALLOW_FLAG} is given; use the prompt or MATRIX_PASSWORD instead",
-    )
-    parser.add_argument(
-        ALLOW_FLAG,
-        dest="allow_secret_argument",
-        action="store_true",
-        help="Accept the password as a command-line argument (visible to other "
-        "local users in the process list)",
-    )
-    parser.add_argument("--status", action="store_true", help="Check E2EE setup status")
-    parser.add_argument(
-        "--logout",
-        action="store_true",
-        help="Remove the stored credentials and this device's store files",
-    )
-    parser.add_argument(
-        "--purge-all",
-        action="store_true",
-        help="With --logout: also delete the store files of every OTHER device "
-        "in the store directory (destroys their megolm history)",
-    )
-    parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument("--debug", action="store_true", help="Show debug info")
-
-    args = parser.parse_args()
-
-    prefer_ipv4()
-    if not args.debug:
-        suppress_nio_logging()
-
-    config = load_config(require_user_id=True)
-
+    if args.status and args.force:
+        raise Unsupported("--force replaces the device; it does not go with --status")
     if args.status:
-        if args.json:
-            creds = load_credentials()
-            if creds and creds.get("user_id") == config["user_id"]:
-                print(
-                    json.dumps(
-                        {"status": "configured", "device_id": creds["device_id"]}
-                    )
-                )
-            else:
-                print(json.dumps({"status": "not_configured"}))
-        else:
-            show_status(config)
-        return
-
-    if args.logout:
-        creds = load_credentials()
-        if creds:
-            removed = delete_credentials(purge_all=args.purge_all)
-            if args.json:
-                print(
-                    json.dumps(
-                        {
-                            "success": True,
-                            "message": "Credentials removed",
-                            "device_id": creds.get("device_id"),
-                            "removed": removed,
-                        }
-                    )
-                )
-            else:
-                scope = (
-                    "every device in the store"
-                    if args.purge_all
-                    else f"device {creds.get('device_id')}"
-                )
-                print(f"E2EE credentials removed for {scope}:")
-                for name in removed:
-                    print(f"  {name}")
-                print("Note: The device still exists on the server.")
-                print("To fully remove it, go to Element > Settings > Sessions")
-        else:
-            if args.json:
-                print(json.dumps({"success": False, "message": "No credentials found"}))
-            else:
-                print("No E2EE credentials found.")
-        return
-
-    # Check if already set up
-    creds = load_credentials()
-    if creds and creds.get("user_id") == config["user_id"]:
-        if args.json:
-            print(
-                json.dumps(
-                    {"status": "already_configured", "device_id": creds["device_id"]}
-                )
-            )
-        else:
-            print("E2EE already set up!")
-            print(f"Device: {creds['device_id']}")
-            print()
-            print("To reconfigure, first run: matrix-e2ee-setup.py --logout")
-        return
-
-    # Password: MATRIX_PASSWORD or an interactive prompt. A command-line
-    # argument only with --allow-secret-argument (see _lib/secret_input.py).
-    if not args.password and not os.environ.get("MATRIX_PASSWORD"):
-        print(f"Setting up E2EE device for {config['user_id']}")
-        print("Password is used once to create device, then not stored.")
-        print()
-    try:
-        password = read_secret(
-            args.password or "",
-            "MATRIX_PASSWORD",
-            f"Matrix password for {config['user_id']}: ",
-            allow_argument=args.allow_secret_argument,
-        )
-    except (KeyboardInterrupt, EOFError):
-        print("\nAborted.")
-        sys.exit(1)
-    except SecretInputError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        sys.exit(1)
-
-    # Run setup under the store lock: the new device's store is created in the
-    # directory a running daemon or command is using.
-    with store_lock():
-        result = asyncio.run(setup_device(config, password))
-
-    if "error" in result:
-        if args.json:
-            print(json.dumps(result))
-        else:
-            print(f"Error: {result['error']}", file=sys.stderr)
-        sys.exit(1)
-
+        return (["status", "--json"] if args.json else ["status"]), None
     if args.json:
-        print(json.dumps(result))
-    else:
-        print("E2EE device created successfully!")
-        print(f"  Device ID: {result['device_id']}")
-        print(f"  User:      {result['user_id']}")
-        print()
-        print("You can now use matrix-send-e2ee.py without password.")
-        print(f"The device appears as '{result['device_name']}' in your sessions.")
+        raise Unsupported("--json is only supported with --status")
+    extra = secret_env(
+        args.password, "MATRIX_PASSWORD", args.allow_secret_argument, ALLOW_FLAG
+    )
+    return (["login", "--force"] if args.force else ["login"]), extra
+
+
+def keep_existing_session(cli_args, env):
+    """Run status instead of a login that would refuse an existing session.
+
+    Decided after the takeover, which may just have created the session.
+    """
+    if cli_args != ["login"]:
+        return cli_args
+    try:
+        exists = cli_session_path(env).exists()
+    except CutoverError:
+        return cli_args
+    if not exists:
+        return cli_args
+    print(
+        "E2EE already set up. To replace a dead or foreign device, run "
+        "matrix-e2ee-setup.py --force (never matrix-e2ee-cli.py logout for that: it "
+        "ends the device on the server).",
+        flush=True,
+    )
+    return ["status"]
+
+
+def main(argv=None) -> None:
+    args = build_parser().parse_args(argv)
+    try:
+        cli_args, extra_env = translate(args)
+    except Unsupported as exc:
+        refuse(str(exc))
+    exit_with(cli_args, extra_env, choose=keep_existing_session)
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ The skill uses a script-driven architecture:
 
 1. **SKILL.md** (`skills/matrix-communication/SKILL.md`) -- Entry point loaded by the agent runtime. Contains metadata, quick reference for all operations, and formatting rules.
 
-2. **Scripts** (`skills/matrix-communication/scripts/`) -- Python scripts for each Matrix operation (send, read, edit, react, redact, rooms, resolve, E2EE setup/verify, and the watch daemon plus its reader). E2EE variants use `matrix-nio[e2ee]` with libolm for end-to-end encryption. A shared `_lib/` module provides common functionality.
+2. **Scripts** (`skills/matrix-communication/scripts/`) -- Python scripts for each Matrix operation (send, read, edit, react, redact, rooms, resolve, E2EE setup/verify, and the watch daemon plus its reader). The E2EE scripts are stdlib wrappers that translate their flags into a command of [matrix-e2ee-cli](https://github.com/netresearch/matrix-e2ee-cli) (Rust, matrix-sdk) and run it. A shared `_lib/` module provides common functionality, the CLI bootstrap included.
 
 3. **References** (`skills/matrix-communication/references/`) -- Detailed guides for API usage, E2EE configuration, messaging patterns, and initial setup.
 
@@ -25,25 +25,41 @@ The skill creates a dedicated "Matrix Skill E2EE" device that operates alongside
 User's Matrix account
   ├── Element client (primary device)
   └── Matrix Skill E2EE device (agent device)
-      ├── matrix-e2ee-setup.py    → initial device/key setup
-      ├── matrix-e2ee-verify.py   → SAS emoji verification
-      ├── matrix-fetch-keys.py    → fetch missing keys
-      └── matrix-key-backup.py    → restore keys from the server-side backup
+      ├── matrix-e2ee-setup.py    → matrix-e2ee-cli login / status
+      ├── matrix-e2ee-verify.py   → matrix-e2ee-cli verify (SAS emoji)
+      ├── matrix-fetch-keys.py    → matrix-e2ee-cli fetch-keys
+      └── matrix-key-backup.py    → matrix-e2ee-cli backup-restore / status
 ```
 
 Key sync happens on first run (~2-5s). Subsequent operations reuse the established session.
 
-**One process at a time.** Two `matrix-nio` processes on one store corrupt it, and
-the corruption does not announce itself: it surfaces later as a message nobody can
-decrypt, or a store that no longer opens. Every path that opens the store takes an
-exclusive `flock` on the store directory, held until the process exits. A command
-that arrives while another holds it waits, then refuses and names the holder's pid.
+**Where the binary comes from.** `_lib/cli.py` maps the platform to a release
+asset of matrix-e2ee-cli, keeps it in `<data dir>/matrix-skill/cli/<version>/`
+and checks its SHA-256 against `_lib/cli_release.json` before every run; a
+missing or differing file is downloaded again, and a download that does not
+match the pin is deleted unrun. The pin, not a SHA256SUMS file fetched next to
+the binary, is the trust anchor; `Build/Scripts/pin-cli-release.py` writes it
+from a release's SHA256SUMS. `MATRIX_E2EE_CLI` names a binary to use as it is.
 
-**The pin is part of the format.** `matrix-nio[e2e]<0.26` is pinned in every script
-that imports nio. 0.26 changed the crypto backend and converts a 0.25 store
-one way, so the pin and the store on disk belong together, and moving one means
-recreating the other. `refuse_unsupported_nio` stops a script that runs with 0.26 or
-later before it opens the store.
+**One process at a time.** The CLI takes an exclusive lock on its data
+directory (`matrix-e2ee-cli/`) for every command that opens the store; a
+command that arrives while another holds it waits, then refuses.
+
+**The takeover of the matrix-nio device.** Up to version 4 the device lived in a
+matrix-nio store (`matrix-skill/store/`). `_lib/cutover.py` runs before the
+first CLI command on a machine that has that store and no CLI session: it takes
+the store's lock without waiting, copies the store to an owner-only
+`store.backup-<time>`, runs `migrate-nio` (which only reads the store) and
+records the takeover in `matrix-skill/nio-migrated.json`; that record is
+written as "running" before `migrate-nio` starts and made final once a session
+exists, also after Ctrl-C, and the next command finishes a record a kill left
+behind, so a later logout never reopens the takeover. All of that runs
+under `matrix-skill/takeover.lock`, and `pending()` is asked again once that
+lock is held, so concurrent first commands take over once; the store's own lock
+is free while `migrate-nio` runs, because `migrate-nio` takes it itself. An
+explicit `matrix-e2ee-cli.py migrate-nio` makes the same backup first. A held
+lock or a failed migration stops the command. All of it reports on stderr, because
+callers parse the commands' stdout.
 
 ## Live Room Awareness
 
@@ -54,6 +70,7 @@ homeserver
     │  sync
     ▼
 matrix-watchd.py ──── holds the store, decrypts ────┐
+(watch-daemon)                                      │
     │  appends                                       │  Unix socket
     ▼                                                │  send · react · redact · edit
 rooms/<slug>.jsonl ──── tail ────► matrix-watch.py   │
@@ -66,8 +83,11 @@ why it is the only one that syncs: a Matrix sync is account-wide and consumes th
 to-device events — room keys, verification requests — for every other process on
 that device.
 
-Commands decide between the socket and the direct path by **connecting to the
-socket**, never by testing the lock. A direct send holds that lock too for its
+The daemon and its logs are matrix-e2ee-cli's (`watch-daemon`, `watch`, in
+`matrix-e2ee-cli/rooms/`); the two scripts run them. The CLI's commands decide
+between the socket and the direct path by **connecting to the socket**, never
+by testing the lock; `matrix-react.py` and `matrix-redact.py` run the CLI's
+`react` and `redact` and so go through the daemon as well. A direct send holds that lock too for its
 couple of seconds; deciding on it would aim a command at a socket nobody serves.
 
 Design and implementation plan: [`docs/specs/`](specs/) and

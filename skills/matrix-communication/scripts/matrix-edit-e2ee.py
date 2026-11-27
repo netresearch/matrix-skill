@@ -3,250 +3,78 @@
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["matrix-nio[e2e]<0.26"]
+# dependencies = []
 # ///
-"""Edit an existing message in an E2EE Matrix room.
+"""Edit one of your own messages in a Matrix room (E2EE when the room is).
+
+Runs `matrix-e2ee-cli edit`.
 
 Usage:
-    matrix-edit-e2ee.py ROOM EVENT_ID NEW_MESSAGE
-    matrix-edit-e2ee.py --help
+    matrix-edit-e2ee.py ROOM EVENT_ID NEW_MESSAGE [--no-prefix] [--json] [--quiet]
 
-Arguments:
-    ROOM        Room alias (#room:server), room ID (!id:server), or room name
-    EVENT_ID    Event ID of the message to edit ($xxx:server)
-    NEW_MESSAGE The new message content (replaces original)
-
-Options:
-    --no-prefix Don't add bot_prefix from config
-    --json      Output as JSON
-    --quiet     Minimal output
-    --debug     Show debug information
-    --help      Show this help
+--debug is accepted and ignored.
 """
 
-import asyncio
-import json
+import argparse
 import os
 import sys
 
-# Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import (
-    UntrustedDevicesError,
-    add_bot_prefix,
-    check_e2ee_dependencies,
-    clean_message,
-    daemon_request,
-    find_room_in_nio_client,
-    get_store_path,
-    load_config,
-    load_credentials,
-    markdown_to_html,
-    normalize_room_input,
-    prefer_ipv4,
-    restore_login_checked,
-    send_checked,
-    suppress_nio_logging,
-)
-
-# Check dependencies before importing nio
-check_e2ee_dependencies()
-
-from nio import (
-    AsyncClient,
-    AsyncClientConfig,
-    RoomResolveAliasResponse,
-    RoomSendResponse,
-)
-
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+from _lib.rooms import normalize_room_input
+from _lib.utils import clean_message
+from _lib.wrapper import Unsupported, exit_with, refuse, room_chooser
 
 
-async def edit_message_e2ee(
-    config: dict,
-    room: str,
-    event_id: str,
-    message: str,
-    debug: bool = False,
-    trust_unverified_devices: bool = False,
-) -> dict:
-    # A running daemon holds the store; opening it here would be the second
-    # opener. Before this branch existed, edits went direct and produced events
-    # the daemon could not decrypt - holes in its own log. See #95.
-    response = daemon_request(
-        {
-            "op": "edit",
-            "room": room,
-            "event_id": event_id,
-            "body": message,
-            "trust_unverified_devices": trust_unverified_devices,
-        }
-    )
-    if response is not None:
-        if response.get("ok"):
-            return {"event_id": response["event_id"], "room_id": room}
-        return {"error": response.get("error", "daemon refused the edit")}
-
-    store_path = get_store_path()
-    stored_creds = load_credentials()
-
-    if stored_creds and stored_creds.get("user_id") == config["user_id"]:
-        device_id = stored_creds["device_id"]
-        access_token = stored_creds["access_token"]
-        if debug:
-            print(f"Using dedicated device: {device_id}", file=sys.stderr)
-    elif "access_token" in config:
-        access_token = config["access_token"]
-        from nio import WhoamiResponse
-
-        temp_client = AsyncClient(config["homeserver"], config["user_id"])
-        temp_client.access_token = access_token
-        whoami = await temp_client.whoami()
-        await temp_client.close()
-        if isinstance(whoami, WhoamiResponse):
-            device_id = whoami.device_id
-        else:
-            return {"error": f"Failed to get device info: {whoami}"}
-    else:
-        return {"error": "No credentials found. Run matrix-e2ee-setup.py first"}
-
-    client_config = AsyncClientConfig(store_sync_tokens=True, encryption_enabled=True)
-    client = AsyncClient(
-        homeserver=config["homeserver"],
-        user=config["user_id"],
-        device_id=device_id,
-        store_path=str(store_path),
-        config=client_config,
-    )
-
-    try:
-        restore_login_checked(client, config["user_id"], device_id, access_token)
-        if client.store:
-            client.load_store()
-        if client.should_upload_keys:
-            await client.keys_upload()
-
-        # Sync first, then resolve room from client.rooms
-        await client.sync(timeout=0, full_state=True)
-
-        room_id = room
-        if room.startswith("#"):
-            response = await client.room_resolve_alias(room)
-            if isinstance(response, RoomResolveAliasResponse):
-                room_id = response.room_id
-            else:
-                return {"error": f"Could not resolve room alias: {response}"}
-        elif not room.startswith("!"):
-            found = find_room_in_nio_client(client.rooms, room)
-            if found:
-                room_id = found
-            else:
-                return {
-                    "error": f"Could not find room '{room}'. Use 'matrix-rooms.py' to list rooms."
-                }
-
-        room_obj = client.rooms.get(room_id)
-        if room_obj and room_obj.encrypted and client.olm and client.should_query_keys:
-            await client.keys_query()
-
-        # Build edit content
-        content = {
-            "msgtype": "m.text",
-            "body": f"* {message}",
-            "m.new_content": {"msgtype": "m.text", "body": message},
-            "m.relates_to": {"rel_type": "m.replace", "event_id": event_id},
-        }
-        html = markdown_to_html(message)
-        if html != message:
-            content["format"] = "org.matrix.custom.html"
-            content["formatted_body"] = f"* {html}"
-            content["m.new_content"]["format"] = "org.matrix.custom.html"
-            content["m.new_content"]["formatted_body"] = html
-
-        members = list(room_obj.users) if room_obj and room_obj.encrypted else []
-        try:
-            response = await send_checked(
-                client,
-                room_id,
-                members,
-                "m.room.message",
-                content,
-                trust_unverified=trust_unverified_devices,
-            )
-        except UntrustedDevicesError as exc:
-            return {"error": str(exc)}
-
-        if isinstance(response, RoomSendResponse):
-            return {"event_id": response.event_id, "room_id": room_id}
-        return {"error": str(response)}
-    finally:
-        await client.close()
-
-
-def main():
-    import argparse
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Edit a message in an E2EE Matrix room"
     )
-    parser.add_argument(
-        "room", help="Room alias (#room:server), room ID (!id:server), or room name"
-    )
+    parser.add_argument("room", help="Room ID, alias, name or matrix.to link")
     parser.add_argument("event_id", help="Event ID to edit")
     parser.add_argument("message", help="New message content")
-    parser.add_argument("--no-prefix", action="store_true", help="Don't add bot_prefix")
+    parser.add_argument(
+        "--no-prefix", action="store_true", help="Do not add bot_prefix"
+    )
     parser.add_argument(
         "--trust-unverified-devices",
         action="store_true",
-        help="Share this edit's room key with devices that are not verified. "
-        "By default the message is not sent while the room has such devices.",
+        help="Share this edit's room key with unverified devices too",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
-    parser.add_argument("--debug", action="store_true", help="Show debug info")
-    args = parser.parse_args()
-
-    prefer_ipv4()
-    if not args.debug:
-        suppress_nio_logging()
-
-    config = load_config(require_user_id=True)
-    message = clean_message(args.message)
-    room_input = normalize_room_input(clean_message(args.room))
-
-    if not args.no_prefix and config.get("bot_prefix"):
-        message = add_bot_prefix(message, config["bot_prefix"])
-
-    # Room name resolution happens post-sync inside the async function
-    room = room_input
-
-    result = asyncio.run(
-        edit_message_e2ee(
-            config,
-            room,
-            args.event_id,
-            message,
-            args.debug,
-            trust_unverified_devices=args.trust_unverified_devices,
-        )
+    parser.add_argument(
+        "--quiet", "-q", action="store_true", help="Print only the edit's event id"
     )
+    parser.add_argument("--debug", action="store_true", help="Ignored")
+    return parser
 
-    if "error" in result:
-        if args.json:
-            print(json.dumps(result))
-        else:
-            print(f"Error: {result['error']}", file=sys.stderr)
-        sys.exit(1)
 
-    if args.json:
-        print(json.dumps(result))
-    elif args.quiet:
-        print(result.get("event_id", ""))
-    else:
-        print(f"Message edited in {args.room}")
-        print(f"Edit event ID: {result.get('event_id')}")
+def translate(args):
+    cli = ["edit"]
+    for flag in ("no_prefix", "trust_unverified_devices", "json", "quiet"):
+        if getattr(args, flag):
+            cli.append("--" + flag.replace("_", "-"))
+    cli += [
+        "--",
+        normalize_room_input(clean_message(args.room)),
+        args.event_id,
+        clean_message(args.message),
+    ]
+    return cli, None
+
+
+def main(argv=None) -> None:
+    args = build_parser().parse_args(argv)
+    try:
+        cli_args, extra_env = translate(args)
+    except Unsupported as exc:
+        refuse(str(exc))
+    exit_with(
+        cli_args,
+        extra_env,
+        choose=room_chooser(cli_args[cli_args.index("--") + 1], write=True),
+        json_errors=args.json,
+    )
 
 
 if __name__ == "__main__":

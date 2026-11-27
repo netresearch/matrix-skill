@@ -7,6 +7,7 @@ All functions use ONLY stdlib.
 """
 
 import contextlib
+import http.client
 import json
 import socket
 import urllib.error
@@ -71,7 +72,7 @@ def _prefer_ipv4():
         socket.getaddrinfo = original
 
 
-def _do_request(req: urllib.request.Request) -> dict:
+def _do_request(req: urllib.request.Request, timeout=None) -> dict:
     """Execute a request and return parsed JSON response.
 
     The caller must have validated the URL scheme via
@@ -79,21 +80,73 @@ def _do_request(req: urllib.request.Request) -> dict:
     """
     _require_http_scheme(req.full_url)
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-    with _OPENER.open(req) as response:
+    kwargs = {} if timeout is None else {"timeout": timeout}
+    with _OPENER.open(req, **kwargs) as response:
         return json.loads(response.read().decode())
 
 
 def _parse_http_error(e: urllib.error.HTTPError) -> dict:
     """Parse an HTTPError into a result dict."""
-    error_body = e.read().decode()
+    try:
+        error_body = e.read().decode(errors="replace")
+    finally:
+        e.close()
     try:
         error_json = json.loads(error_body)
-        return {
-            "error": error_json.get("error", error_body),
-            "errcode": error_json.get("errcode"),
-        }
     except json.JSONDecodeError:
+        error_json = None
+    if not isinstance(error_json, dict):  # not JSON, or [] / null / a string
         return {"error": error_body, "errcode": str(e.code)}
+    return {
+        "error": error_json.get("error", error_body),
+        "errcode": error_json.get("errcode"),
+    }
+
+
+def _lenient_http_error(e: urllib.error.HTTPError) -> dict:
+    """_parse_http_error, and an error dict too when the body cannot be read.
+
+    A body cut off (IncompleteRead) or lost to a timeout or a reset while it
+    is read is still an error answer with a status.
+    """
+    try:
+        return _parse_http_error(e)
+    except (http.client.HTTPException, OSError) as broken:
+        return {
+            "error": f"HTTP {e.code} with a broken body ({broken!r})",
+            "errcode": str(e.code),
+        }
+
+
+class RequestFailed(OSError):
+    """An error answer that a strict caller must not read as "not set"."""
+
+
+def _strict_http_error(e: urllib.error.HTTPError, endpoint: str) -> dict:
+    """The error dict for a 404 M_NOT_FOUND on a state event, else raise.
+
+    A state event that is not set answers 404 M_NOT_FOUND; that is an
+    answer. Any other error status (a 502 from a proxy, a 403, a 429) says
+    nothing about the room, and reading it as "no name" or "no alias" can
+    pick another room.
+    """
+    try:
+        result = _parse_http_error(e)
+    except (http.client.HTTPException, OSError) as broken:
+        # A cut-off body, or a timeout or reset while reading it: the status
+        # still says the request failed.
+        raise RequestFailed(
+            f"{endpoint} answered HTTP {e.code} with a broken body ({broken!r})"
+        ) from broken
+    if (
+        e.code == 404
+        and result.get("errcode") == "M_NOT_FOUND"
+        and "/state/" in endpoint
+    ):
+        return result
+    raise RequestFailed(
+        f"{endpoint} answered HTTP {e.code}: {result.get('error')}"
+    ) from e
 
 
 def matrix_request(
@@ -113,9 +166,18 @@ def matrix_request(
         api_version: Client-API version in the path; the relations endpoint
             exists only under v1
 
+    ``config`` may carry ``timeout`` (seconds per request) and ``strict``. With
+    ``strict`` every failure raises instead of coming back as an error dict:
+    a transport failure (timeout, refused connection) as its OSError, a broken
+    HTTP answer (http.client.HTTPException) and an error status as
+    RequestFailed (except 404 M_NOT_FOUND on a state event, which means "not
+    set"), and a JSON answer that is not an object as ValueError.
+
     Returns:
         Response dict, or dict with 'error' key on failure
     """
+    timeout = config.get("timeout")
+    strict = config.get("strict", False)
     url = f"{config['homeserver']}/_matrix/client/{api_version}{endpoint}"
     _require_http_scheme(url)
     headers = {
@@ -127,11 +189,21 @@ def matrix_request(
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
 
     try:
-        return _do_request(req)
+        return _checked(_do_request(req, timeout), strict, endpoint)
     except urllib.error.HTTPError as e:
-        return _parse_http_error(e)
+        if strict:
+            return _strict_http_error(e, endpoint)
+        return _lenient_http_error(e)
+    except http.client.HTTPException as e:
+        if strict:
+            raise RequestFailed(f"{endpoint}: broken HTTP answer ({e!r})") from e
+        if isinstance(e, OSError):  # RemoteDisconnected: an answer-less close
+            return {"error": str(e)}
+        raise
     except OSError as e:
         if e.errno not in (101, 113):  # ENETUNREACH, EHOSTUNREACH
+            if strict:
+                raise
             return {"error": str(e)}
         # IPv6 likely unreachable — retry with IPv4 preference
         try:
@@ -139,11 +211,27 @@ def matrix_request(
                 req2 = urllib.request.Request(
                     url, data=body, headers=headers, method=method
                 )
-                return _do_request(req2)
+                return _checked(_do_request(req2, timeout), strict, endpoint)
         except urllib.error.HTTPError as e2:
-            return _parse_http_error(e2)
+            if strict:
+                return _strict_http_error(e2, endpoint)
+            return _lenient_http_error(e2)
+        except http.client.HTTPException as e2:
+            if strict:
+                raise RequestFailed(f"{endpoint}: broken HTTP answer ({e2!r})") from e2
+            if isinstance(e2, OSError):
+                return {"error": str(e2)}
+            raise
         except OSError as e2:
+            if strict:
+                raise
             return {"error": str(e2)}
+
+
+def _checked(result, strict: bool, endpoint: str):
+    if strict and not isinstance(result, dict):
+        raise ValueError(f"{endpoint} answered JSON that is not an object")
+    return result
 
 
 def path_segment(value: str) -> str:

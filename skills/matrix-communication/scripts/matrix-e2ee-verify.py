@@ -3,735 +3,84 @@
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["matrix-nio[e2e]<0.26"]
+# dependencies = []
 # ///
-"""Interactive device verification for Matrix E2EE.
+"""Verify this device with one of your own devices (SAS emoji).
 
-This script initiates verification and displays emojis for the user to confirm.
-The user must confirm the emojis match in Element to complete verification.
+Runs `matrix-e2ee-cli verify`. The CLI needs a terminal on stdin and stderr
+for --request and --listen; without one, use the hand-over flow of
+`matrix-e2ee-cli.py verify --hand-over` (see references/e2ee-guide.md).
 
 Usage:
-    matrix-e2ee-verify.py                    # Auto-find device and verify
-    matrix-e2ee-verify.py --request DEVICE   # Verify with specific device
-    matrix-e2ee-verify.py --listen           # Wait for Element to initiate
-    matrix-e2ee-verify.py --list             # List your devices
+    matrix-e2ee-verify.py --request DEVICE [--timeout S]
+    matrix-e2ee-verify.py --listen [--timeout S]
+    matrix-e2ee-verify.py --list
 
-The script will:
-1. Find another device (or use specified device)
-2. Initiate verification
-3. Display 7 emojis that must match Element
-4. Wait for user to confirm in Element
-5. Complete verification and fetch room keys
+Not supported any more: running without --request, --listen or --list (it
+picked a device itself) and --accept-from (the CLI verifies devices of your
+own account only). The default timeout is the CLI's, 180 s (was 120 s).
+--debug is accepted and ignored.
 """
 
-import asyncio
+import argparse
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import (
-    check_e2ee_dependencies,
-    get_store_path,
-    load_config,
-    load_credentials,
-    prefer_ipv4,
-    restore_login_checked,
-    suppress_nio_logging,
-    verification_emoji_path,
-    verification_partner_allowed,
-    write_private_file,
-)
-
-# Check dependencies before importing nio
-check_e2ee_dependencies()
-
-from nio import (
-    AsyncClient,
-    AsyncClientConfig,
-    DevicesResponse,
-    KeyVerificationAccept,
-    KeyVerificationCancel,
-    KeyVerificationEvent,
-    KeyVerificationKey,
-    KeyVerificationMac,
-    KeyVerificationStart,
-    MegolmEvent,
-    RoomMessagesResponse,
-    ToDeviceError,
-    ToDeviceMessage,
-    UnknownToDeviceEvent,
-)
-
-try:
-    from nio import KeyVerificationRequest
-except ImportError:
-    KeyVerificationRequest = None
-
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+from _lib.wrapper import Unsupported, exit_with, refuse
 
 
-class VerificationHandler:
-    def __init__(self, client, debug=False, own_user_id=None, accept_from=()):
-        self.client = client
-        self.debug = debug
-        # Verification is answered for this account's own devices only, plus
-        # the users named with --accept-from. See verification_partner_allowed.
-        self.own_user_id = own_user_id or getattr(client, "user_id", None)
-        self.accept_from = tuple(accept_from)
-        self.current_verification = None
-        self.emojis = None
-        self.verified = False
-        self.cancelled = False
-        self.key_sent = False
-        self.sas_accepted = False
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Verify this E2EE device (SAS emoji)")
+    parser.add_argument(
+        "--request", metavar="DEVICE", help="Verify with this device of your own"
+    )
+    parser.add_argument("--list", action="store_true", help="List your devices")
+    parser.add_argument(
+        "--listen", action="store_true", help="Wait for a request from another device"
+    )
+    parser.add_argument(
+        "--accept-from", metavar="USER_ID", action="append", default=[], help="Refused"
+    )
+    parser.add_argument(
+        "--timeout", type=int, help="Give up after this many seconds (default: 180)"
+    )
+    parser.add_argument("--debug", action="store_true", help="Ignored")
+    return parser
 
-    def _debug(self, msg):
-        if self.debug:
-            print(f"[DEBUG] {msg}")
 
-    def _partner_allowed(self, sender) -> bool:
-        if verification_partner_allowed(sender, self.own_user_id, self.accept_from):
-            return True
-        print(
-            f"\nIgnoring verification event from {sender}: only devices of "
-            f"{self.own_user_id} are verified here (see --accept-from)."
+def translate(args):
+    if args.accept_from:
+        raise Unsupported(
+            "--accept-from is not supported any more: matrix-e2ee-cli verifies devices of "
+            "your own account only"
         )
-        return False
-
-    def _report_accept_failure(self, exc: Exception) -> None:
-        """Explain a failed accept instead of hiding it behind --debug.
-
-        nio raises "Key verification with the transaction id ... does not exist"
-        when it has no keys for the other device: without them it cannot build
-        the SAS object, so the transaction it is asked about was never created.
-        The message names the transaction, which is the one thing that is not
-        the problem.
-        """
-        message = str(exc)
-        print(f"\n❌ Could not accept the verification: {message}")
-        if "does not exist" in message:
-            print(
-                "   This device has no keys for the other one, so no verification "
-                "could be built for it.\n"
-                "   Run matrix-e2ee-verify.py --list to check the device is visible, "
-                "and see the E2EE guide on querying keys for a fresh store."
-            )
-
-    async def handle_raw_event(self, event):
-        """Handle raw to-device events."""
-        if isinstance(event, UnknownToDeviceEvent) and hasattr(event, "source"):
-            source = event.source
-
-            if source.get("type") == "m.key.verification.request":
-                content = source.get("content", {})
-                txn_id = content.get("transaction_id")
-                from_device = content.get("from_device")
-                methods = content.get("methods", [])
-                sender = source.get("sender")
-
-                if not self._partner_allowed(sender):
-                    return
-
-                print(f"\nVerification request received from {from_device}")
-
-                if "m.sas.v1" in methods:
-                    self.current_verification = txn_id
-                    self._debug(f"Sending ready response for {txn_id}")
-
-                    ready_content = {
-                        "from_device": self.client.device_id,
-                        "transaction_id": txn_id,
-                        "methods": ["m.sas.v1"],
-                    }
-
-                    msg = ToDeviceMessage(
-                        type="m.key.verification.ready",
-                        recipient=sender,
-                        recipient_device=from_device,
-                        content=ready_content,
-                    )
-
-                    await self.client.to_device(msg)
-                    print("Ready sent, waiting for emoji exchange...")
-
-            elif source.get("type", "").startswith("m.key.verification."):
-                self._debug(f"Verification event: {source.get('type')}")
-
-    async def handle_event(self, event):
-        """Handle verification events."""
-        event_type = type(event).__name__
-        self._debug(f"Received {event_type}")
-
-        if not self._partner_allowed(getattr(event, "sender", None)):
-            return
-
-        if KeyVerificationRequest and isinstance(event, KeyVerificationRequest):
-            print(f"\nVerification request from {event.sender}")
-            self.current_verification = event.transaction_id
-            try:
-                await self.client.accept_key_verification(event.transaction_id)
-                print("Accepted, waiting for emoji exchange...")
-            except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-                self._report_accept_failure(e)
-
-        elif isinstance(event, KeyVerificationStart):
-            if self.sas_accepted:
-                return
-            print("Verification started")
-            self.current_verification = event.transaction_id
-            try:
-                await self.client.accept_key_verification(event.transaction_id)
-                self.sas_accepted = True
-                # Our key goes out once theirs arrives, not here: the accepting
-                # side commits to its key in m.key.verification.accept and only
-                # reveals it after the initiator's key, so the initiator can
-                # check that commitment. Sending it early breaks the exchange.
-            except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-                self._report_accept_failure(e)
-
-        elif isinstance(event, KeyVerificationAccept):
-            print("Other device accepted")
-
-        elif isinstance(event, KeyVerificationKey):
-            if self.key_sent:
-                return
-
-            sas = self.client.key_verifications.get(event.transaction_id)
-            if not sas:
-                self._debug(f"No SAS for {event.transaction_id}")
-                return
-
-            try:
-                self.emojis = sas.get_emoji()
-
-                # Build emoji display
-                blank_row = (
-                    "║                                                          ║"
-                )
-                divider = "╠══════════════════════════════════════════════════════════╣"
-                emoji_lines = [
-                    "",
-                    "╔══════════════════════════════════════════════════════════╗",
-                    "║           🔐 VERIFICATION EMOJIS - COMPARE NOW! 🔐        ║",
-                    divider,
-                    blank_row,
-                ]
-
-                for emoji, name in self.emojis:
-                    line = f"       {emoji}    {name}"
-                    padding = 58 - len(line)
-                    emoji_lines.append(f"║{line}{' ' * padding}║")
-
-                emoji_lines.extend(
-                    [
-                        blank_row,
-                        divider,
-                        "║  👆 These emojis must EXACTLY match what Element shows!  ║",
-                        blank_row,
-                        "║  ➡️  Go to Element now and confirm the emojis match      ║",
-                        "║  ➡️  Click 'They match' in Element to complete           ║",
-                        "╚══════════════════════════════════════════════════════════╝",
-                        "",
-                    ]
-                )
-
-                # Write to file for agent polling (before stdout which may be buffered)
-                write_private_file(verification_emoji_path(), "\n".join(emoji_lines))
-
-                # Also print to stdout
-                for line in emoji_lines:
-                    print(line)
-
-                # Their key is in, so ours may go out now. Confirming the short
-                # auth string afterwards is left to nio's client method: it
-                # calls accept_sas() and sends the MAC in the order the protocol
-                # expects. Hand-rolling accept_sas() + get_mac() + to_device()
-                # skips nio's own bookkeeping around the transaction.
-                if not self.key_sent:
-                    key_msg = sas.share_key()
-                    if key_msg:
-                        await self.client.to_device(key_msg)
-                    self.key_sent = True
-
-                await self.client.confirm_short_auth_string(event.transaction_id)
-
-                print("Waiting for you to confirm in Element...")
-
-            except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-                self._debug(f"Error in key exchange: {e}")
-
-        elif isinstance(event, KeyVerificationMac):
-            if self.verified:
-                return
-
-            sas = self.client.key_verifications.get(event.transaction_id)
-            if sas:
-                try:
-                    sas.receive_mac_event(event)
-
-                    other_device = (
-                        sas.other_device_id
-                        if hasattr(sas, "other_device_id")
-                        else sas.other_olm_device.device_id
-                    )
-
-                    # nio's receive_mac_event never raises on a bad MAC — it
-                    # silently sets the SAS state to SasState.canceled. sas.verified
-                    # can also be False after a *successful* MAC exchange due to a
-                    # race in nio's state machine, so it alone cannot tell a genuine
-                    # key mismatch from the benign race. verified_devices is the
-                    # authoritative signal: a device id lands there only once its MAC
-                    # has been cryptographically validated, and a later cancel does
-                    # not clear it.
-                    mac_ok = sas.verified or other_device in getattr(
-                        sas, "verified_devices", []
-                    )
-
-                    if not mac_ok:
-                        # Genuine MAC/key mismatch (possible MITM) — never report
-                        # success and never trust the device. Tell the other side we
-                        # are cancelling instead of sending m.key.verification.done.
-                        print(
-                            f"\n❌ VERIFICATION FAILED: {sas.cancel_reason or 'key mismatch'}"
-                        )
-                        try:
-                            await self.client.to_device(sas.get_cancellation())
-                        except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-                            self._debug(f"Could not send cancellation: {e}")
-                        self.cancelled = True
-                        return
-
-                    # MAC validated. Always send done — Element requires it even when
-                    # sas.verified is False due to the state-machine race noted above.
-                    done_content = {"transaction_id": event.transaction_id}
-                    done_msg = ToDeviceMessage(
-                        type="m.key.verification.done",
-                        recipient=event.sender,
-                        recipient_device=other_device,
-                        content=done_content,
-                    )
-                    await self.client.to_device(done_msg)
-
-                    self.verified = True
-                    if sas.verified:
-                        # nio confirmed the SAS MACs match. Only now is it safe to
-                        # persist trust in the local store; nio's Sas never does this
-                        # itself.
-                        self.client.verify_device(sas.other_olm_device)
-                        print("\n✅ VERIFICATION SUCCESSFUL!")
-                    else:
-                        print("\n✅ VERIFICATION COMPLETE (done sent to Element)")
-
-                except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-                    self._debug(f"Error processing MAC: {e}")
-
-        elif isinstance(event, KeyVerificationCancel):
-            # Ignore stale cancel events from previous verification attempts that
-            # arrive during the initial sync. Only act on cancels for our active txn.
-            if (
-                self.current_verification
-                and event.transaction_id == self.current_verification
-            ):
-                print(f"\n❌ Verification cancelled: {event.reason}")
-                self.cancelled = True
-            else:
-                self._debug(f"Ignoring stale cancel for {event.transaction_id}")
-
-
-async def fetch_room_keys(client):
-    """Request room keys from now-verified devices and wait for them to arrive.
-
-    Runs after a successful verification so the freshly trusted device shares the
-    Megolm keys for encrypted rooms. Used by both the request and --listen flows.
-    """
-    print("\n📦 Fetching room keys from verified devices...")
-
-    # Filter to encrypted rooms *before* limiting, so we always look at up to 10
-    # encrypted rooms rather than 10 arbitrary rooms that might all be unencrypted.
-    encrypted_rooms = [
-        (room_id, room) for room_id, room in client.rooms.items() if room.encrypted
-    ][:10]
-    rooms_checked = len(encrypted_rooms)
-    for room_id, room in encrypted_rooms:
-        try:
-            result = await client.room_messages(room_id, start="", limit=50)
-            if isinstance(result, RoomMessagesResponse):
-                for event in result.chunk:
-                    if isinstance(event, MegolmEvent):
-                        try:
-                            await client.request_room_key(event)
-                        except Exception:  # noqa: BLE001, S110  # best-effort cleanup; blind-except intentional, safe to ignore
-                            pass
-        except Exception:  # noqa: BLE001, S110  # best-effort cleanup; blind-except intentional, safe to ignore
-            pass
-
-    print(f"   Checked {rooms_checked} encrypted rooms")
-    print("   Waiting for keys (30s)...")
-
-    for i in range(6):
-        # Verification already succeeded; a transient sync error here must not
-        # crash the script or mask that success.
-        try:
-            await client.sync(timeout=5000)
-        except Exception:  # noqa: BLE001, S110  # best-effort cleanup; blind-except intentional, safe to ignore
-            pass
-        if (i + 1) % 2 == 0:
-            print(f"   ... {(i + 1) * 5}s")
-
-    print("\n🎉 Device verified and keys synced!")
-    print("   Use matrix-fetch-keys.py ROOM for additional keys")
-
-
-async def run_verification(
-    config: dict,
-    request_device: str | None = None,
-    timeout: int = 120,
-    debug: bool = False,
-    listen: bool = False,
-    accept_from: tuple = (),
-):
-    """Run verification process."""
-    store_path = get_store_path()
-    creds = load_credentials()
-
-    if not creds or creds.get("user_id") != config["user_id"]:
-        if "access_token" not in config:
-            print(
-                "Error: No credentials. Run matrix-e2ee-setup.py first.",
-                file=sys.stderr,
-            )
-            return False
-
-        from nio import WhoamiResponse
-
-        temp_client = AsyncClient(config["homeserver"], config["user_id"])
-        temp_client.access_token = config["access_token"]
-        whoami = await temp_client.whoami()
-        await temp_client.close()
-        if isinstance(whoami, WhoamiResponse):
-            device_id = whoami.device_id
-            access_token = config["access_token"]
-        else:
-            print(f"Error: {whoami}", file=sys.stderr)
-            return False
+    modes = [flag for flag in ("request", "listen", "list") if getattr(args, flag)]
+    if len(modes) != 1:
+        raise Unsupported(
+            "give exactly one of --request DEVICE, --listen or --list; the device to "
+            "verify is no longer picked automatically (--list shows the ids)"
+        )
+    cli = ["verify"]
+    if args.request:
+        cli += ["--request", args.request]
+    elif args.listen:
+        cli.append("--listen")
     else:
-        device_id = creds["device_id"]
-        access_token = creds["access_token"]
+        cli.append("--list")
+    if args.timeout is not None:
+        cli += ["--timeout", str(args.timeout)]
+    return cli, None
 
-    print(f"This device: {device_id}")
 
-    client_config = AsyncClientConfig(store_sync_tokens=True, encryption_enabled=True)
-    client = AsyncClient(
-        homeserver=config["homeserver"],
-        user=config["user_id"],
-        device_id=device_id,
-        store_path=str(store_path),
-        config=client_config,
-    )
-
-    handler = VerificationHandler(
-        client, debug=debug, own_user_id=config["user_id"], accept_from=accept_from
-    )
-
-    client.add_to_device_callback(handler.handle_raw_event, UnknownToDeviceEvent)
-
-    # One registration, on the base class. nio dispatches a callback whenever
-    # isinstance(event, filter) holds, and KeyVerificationEvent is the base of
-    # Request/Start/Accept/Key/Mac/Cancel - so registering the subclasses as
-    # well ran the handler twice for every event. The duplicate call reached
-    # sas.receive_mac_event() a second time on an already-consumed SAS, which
-    # nio answers by cancelling the transaction: Element then reports "The
-    # expected key did not match the verified one" and verification never
-    # completes. KeyVerificationRequest is covered by the same base class.
-    client.add_to_device_callback(handler.handle_event, KeyVerificationEvent)
-
+def main(argv=None) -> None:
+    args = build_parser().parse_args(argv)
     try:
-        restore_login_checked(client, config["user_id"], device_id, access_token)
-        if client.store:
-            client.load_store()
-
-        if client.should_upload_keys:
-            if debug:
-                print("[DEBUG] Uploading keys...")
-            await client.keys_upload()
-
-        print("Syncing...")
-        await client.sync(timeout=10000)
-
-        # Make sure we hold device keys for our own account before verifying.
-        # nio builds the SAS object from the other device's keys, so a device it
-        # has never queried cannot be verified - accept_key_verification() then
-        # fails with "Key verification with the transaction id ... does not
-        # exist", which points at the transaction and not at the missing device.
-        #
-        # nio only queries users it has marked as changed, and a store created
-        # moments ago has marked nobody: keys_query() answers "No key query
-        # required" while the device store is empty. Mark ourselves explicitly.
-        client.olm.add_changed_users({config["user_id"]})
-        query = await client.keys_query()
-        if debug:
-            print(f"[DEBUG] Keys query: {type(query).__name__}")
-        known = len(list(client.device_store.active_user_devices(config["user_id"])))
-        if debug:
-            print(f"[DEBUG] Known devices for this account: {known}")
-
-        # Listen-only mode: wait for Element to initiate verification instead of
-        # sending an outgoing request. Use when Element shows "Verify from other device"
-        # or when a prior outgoing request caused a conflict.
-        if listen:
-            print("Listening for incoming verification request from Element...")
-            print("   → Open Element Settings → Security & Privacy → Sessions")
-            print(f"   → Find device {device_id} and click Verify")
-            print(f"   Timeout: {timeout} seconds\n")
-            handler.cancelled = False
-            start_time = asyncio.get_event_loop().time()
-            while not handler.verified and not handler.cancelled:
-                elapsed = asyncio.get_event_loop().time() - start_time
-                if elapsed > timeout:
-                    print("\n⏰ Timeout waiting for verification.")
-                    return False
-                await client.sync(timeout=5000)
-            if handler.verified:
-                await fetch_room_keys(client)
-            return handler.verified
-
-        # Find target device if not specified
-        if not request_device:
-            print("Finding another device to verify with...")
-            resp = await client.devices()
-            if isinstance(resp, DevicesResponse):
-                other_devices = [d for d in resp.devices if d.id != device_id]
-                if other_devices:
-                    # Filter and prioritize devices
-                    def device_priority(d):
-                        name = (d.display_name or "").lower()
-                        # Skip backup devices (can't respond interactively)
-                        if "backup" in name:
-                            return (4, name)  # Lowest priority
-                        # Prefer Element clients (desktop/mobile - interactive)
-                        if "element" in name:
-                            return (0, name)  # Highest priority
-                        # Then riot/web clients
-                        if "riot" in name or "chrome" in name or "firefox" in name:
-                            return (1, name)
-                        # Named devices
-                        if d.display_name:
-                            return (2, name)
-                        # Unnamed devices last
-                        return (3, name)
-
-                    sorted_devices = sorted(other_devices, key=device_priority)
-                    target = sorted_devices[0]
-                    request_device = target.id
-                    print(
-                        f"Target device: {target.display_name or target.id} ({target.id})"
-                    )
-                else:
-                    print("No other devices found!", file=sys.stderr)
-                    print("Open Element on another device first.", file=sys.stderr)
-                    return False
-
-        # Initiate verification
-        print(f"\nInitiating verification with {request_device}...")
-
-        # Query keys first
-        try:
-            await client.keys_query()
-        except Exception as e:  # noqa: BLE001  # intentional fail-soft: error surfaced to caller, not re-raised
-            if debug:
-                print(f"[DEBUG] Keys query: {e}")
-
-        # Try to find device in store
-        user_id = config["user_id"]
-        if user_id in client.device_store:
-            for dev_id in client.device_store[user_id]:
-                if dev_id == request_device:
-                    break
-
-        # Send verification request
-        import secrets
-        import time
-
-        txn_id = secrets.token_hex(16)
-        handler.current_verification = txn_id
-
-        request_content = {
-            "from_device": device_id,
-            "transaction_id": txn_id,
-            "methods": ["m.sas.v1"],
-            "timestamp": int(time.time() * 1000),
-        }
-
-        msg = ToDeviceMessage(
-            type="m.key.verification.request",
-            recipient=user_id,
-            recipient_device=request_device,
-            content=request_content,
-        )
-
-        resp = await client.to_device(msg)
-        if isinstance(resp, ToDeviceError):
-            print(f"Error: {resp}", file=sys.stderr)
-            return False
-
-        print("Verification request sent!")
-        print("\n📱 Check Element for the verification popup")
-        print(f"   Timeout: {timeout} seconds\n")
-
-        # Discard stale KeyVerificationCancel events that arrived during the
-        # initial sync (from previous verification attempts). We only care about
-        # cancels that arrive after our request was sent.
-        handler.cancelled = False
-
-        # Wait for verification
-        start_time = asyncio.get_event_loop().time()
-        while not handler.verified and not handler.cancelled:
-            elapsed = asyncio.get_event_loop().time() - start_time
-            if elapsed > timeout:
-                print("\n⏰ Timeout waiting for verification.")
-                return False
-
-            await client.sync(timeout=5000)
-
-        # Post-verification: fetch room keys
-        if handler.verified:
-            await fetch_room_keys(client)
-
-        return handler.verified
-
-    finally:
-        await client.close()
-
-
-async def list_devices(config: dict) -> list:
-    """List all devices for the current user."""
-    store_path = get_store_path()
-    creds = load_credentials()
-
-    if creds and creds.get("user_id") == config["user_id"]:
-        device_id = creds["device_id"]
-        access_token = creds["access_token"]
-    elif "access_token" in config:
-        access_token = config["access_token"]
-        from nio import WhoamiResponse
-
-        temp_client = AsyncClient(config["homeserver"], config["user_id"])
-        temp_client.access_token = access_token
-        whoami = await temp_client.whoami()
-        await temp_client.close()
-        if isinstance(whoami, WhoamiResponse):
-            device_id = whoami.device_id
-        else:
-            return []
-    else:
-        return []
-
-    client_config = AsyncClientConfig(store_sync_tokens=True, encryption_enabled=True)
-    client = AsyncClient(
-        homeserver=config["homeserver"],
-        user=config["user_id"],
-        device_id=device_id,
-        store_path=str(store_path),
-        config=client_config,
-    )
-
-    try:
-        restore_login_checked(client, config["user_id"], device_id, access_token)
-
-        resp = await client.devices()
-        if isinstance(resp, DevicesResponse):
-            devices = []
-            for d in resp.devices:
-                devices.append(
-                    {
-                        "device_id": d.id,
-                        "display_name": d.display_name or "No name",
-                        "is_current": d.id == device_id,
-                    }
-                )
-            return devices
-        return []
-    finally:
-        await client.close()
-
-
-def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Verify this device with another device using emoji verification",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  %(prog)s                    # Auto-find device and start verification
-  %(prog)s --request DEVICE   # Verify with specific device
-  %(prog)s --listen           # Wait for Element to initiate (use after conflicts)
-  %(prog)s --list             # List all your devices
-  %(prog)s --listen --accept-from @alice:example.org   # Also accept another user
-
-Only verification requests from devices of your own account are answered
-unless --accept-from names another user. The emojis are also written to
-verification_emojis.txt in the skill's data directory (owner-only).
-
-The script will display 7 emojis that must match what Element shows.
-Confirm the match in Element to complete verification.
-        """,
-    )
-    parser.add_argument("--request", metavar="DEVICE", help="Target specific device ID")
-    parser.add_argument("--list", action="store_true", help="List all your devices")
-    parser.add_argument(
-        "--listen",
-        action="store_true",
-        help="Wait for Element to initiate verification instead of sending a request. "
-        "Use when Element shows 'Verify from other device' or after a prior conflict.",
-    )
-    parser.add_argument(
-        "--accept-from",
-        metavar="USER_ID",
-        action="append",
-        default=[],
-        help="Also answer verification from this other user's devices (repeatable). "
-        "By default only devices of your own account are verified.",
-    )
-    parser.add_argument(
-        "--timeout", type=int, default=120, help="Timeout in seconds (default: 120)"
-    )
-    parser.add_argument("--debug", action="store_true", help="Enable debug output")
-
-    args = parser.parse_args()
-
-    prefer_ipv4()
-    if not args.debug:
-        suppress_nio_logging()
-
-    config = load_config(require_user_id=True)
-
-    if args.list:
-        devices = asyncio.run(list_devices(config))
-        if not devices:
-            print("No devices found or error")
-            sys.exit(1)
-
-        print("Your devices:")
-        for d in devices:
-            marker = " ← this device" if d["is_current"] else ""
-            print(f"  {d['device_id']}: {d['display_name']}{marker}")
-        sys.exit(0)
-
-    success = asyncio.run(
-        run_verification(
-            config=config,
-            request_device=args.request,
-            timeout=args.timeout,
-            debug=args.debug,
-            listen=args.listen,
-            accept_from=tuple(args.accept_from),
-        )
-    )
-
-    sys.exit(0 if success else 1)
+        cli_args, extra_env = translate(args)
+    except Unsupported as exc:
+        refuse(str(exc))
+    exit_with(cli_args, extra_env)
 
 
 if __name__ == "__main__":

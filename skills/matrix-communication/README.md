@@ -7,7 +7,7 @@ Send and receive messages in Matrix chat rooms with full E2EE encryption support
 
 ## Features
 
-- **E2EE Encryption** - Full end-to-end encryption support
+- **E2EE Encryption** - Full end-to-end encryption support, through the [matrix-e2ee-cli](https://github.com/netresearch/matrix-e2ee-cli) binary (downloaded on first use, pinned by SHA-256)
 - **Send Messages** - Post to any joined room with markdown formatting
 - **Read Messages** - Decrypt and read encrypted messages
 - **Live Awareness** - A daemon follows rooms and appends every event to a log the agent tails while it works

@@ -29,17 +29,19 @@ leaves the config file perfectly well-formed. It has three outcomes:
 | --- | --- |
 | `[OK] token` | the homeserver accepted it and it belongs to the configured `user_id` |
 | `[FAIL] token` | the homeserver rejected it (HTTP 401 `M_UNKNOWN_TOKEN`) — log in again and replace it |
-| `[??] token` | nothing was verified: no token in the config (normal for E2EE, which uses the credentials store), `--offline`, or the homeserver was unreachable |
+| `[??] token` | nothing was verified: no token in the config (normal for E2EE, which uses matrix-e2ee-cli's session), `--offline`, or the homeserver was unreachable |
 
 `[??]` is deliberately not `OK`: the summary then reads "Checks passed, except
 token — could not be verified" rather than "All checks passed", so a passing
 doctor never implies a working credential.
 
-**Required for E2EE:**
-- `matrix-nio[e2e]` - Matrix client library with encryption support
-- `libolm` - Olm encryption library, bundled and compiled by `python-olm` (Linux installs a pre-built wheel; **macOS 26+ is unsupported**, see Troubleshooting)
-
-**Package manager priority:** The doctor script tries: `uvx pip` > `uv pip` > `pip` > `pip3`
+**Required for E2EE:** the [matrix-e2ee-cli](https://github.com/netresearch/matrix-e2ee-cli)
+binary for this platform (Linux and macOS on x86_64 and arm64, Windows on
+x86_64). The E2EE scripts download the release pinned in
+`scripts/_lib/cli_release.json` on first use and check its SHA-256;
+`matrix-doctor.py --install` does that in advance. `MATRIX_E2EE_CLI=/path` uses
+a binary of your own instead. No native library and no Python package is
+needed.
 
 ## Setup Steps
 
@@ -119,19 +121,30 @@ A password given as a command-line argument is refused: every local user can
 read it in the process list while setup runs. `--allow-secret-argument`
 accepts it anyway, for automation that can use neither option above.
 
-This creates a dedicated device named "Matrix Skill E2EE @ <hostname>". The password is used once and not stored.
+This creates a dedicated device named "Matrix Skill E2EE (Rust)". The password is used once and not stored.
+
+A machine that ran version 4 or older of this skill keeps its device: the first
+E2EE command takes the matrix-nio device over instead of creating a new one
+(`e2ee-guide.md`, "Moving from matrix-nio").
+
+Run with a session already in place, `matrix-e2ee-setup.py` only shows its
+state. `--force` replaces a dead or foreign device with a new one; the old
+device stays on the server until you remove it in Element. On a machine still
+on matrix-nio the takeover runs first, so `--force` then replaces the device
+just taken over: use it only when that device is dead or foreign too.
 
 **Why environment variable?** Avoids shell escaping issues with special characters (`!`, `$`, etc.).
 
 ### Step 6: Add access token to config
 
 After E2EE setup, copy the access token to enable non-E2EE scripts. The source is
-the skill's own `credentials.json` — the command below reads it from there. Never
+the skill's own session, matrix-e2ee-cli's `session.json` — the command below
+reads it from there. Never
 substitute a token from a client you use; the token in the config is the one most
 likely to be copied around later.
 
 ```bash
-ACCESS_TOKEN=$(python3 -c "import json; print(json.load(open('$HOME/.local/share/matrix-skill/store/credentials.json'))['access_token'])")
+ACCESS_TOKEN=$(python3 -c "import json,os; print(json.load(open(os.path.join(os.environ.get('XDG_DATA_HOME') or os.path.expanduser('~/.local/share'), 'matrix-e2ee-cli', 'session.json')))['access_token'])")
 
 python3 -c "
 import json
@@ -162,10 +175,8 @@ uv run skills/matrix-communication/scripts/matrix-key-backup.py --status
 
 # Restore with recovery key (from Element → Settings → Security → "Show Recovery Key");
 # the script prompts for it, or reads MATRIX_RECOVERY_KEY
-uv run skills/matrix-communication/scripts/matrix-key-backup.py --recovery-key --import-keys
+uv run skills/matrix-communication/scripts/matrix-key-backup.py --import-keys
 ```
-
-**Note on non-interactive contexts:** All scripts use line buffering (`sys.stdout.reconfigure(line_buffering=True)`) to prevent output from hanging in piped/non-interactive environments like Claude Code.
 
 ## Element labels for instructions to people
 
@@ -218,7 +229,7 @@ If the `device_id` belongs to a device whose display name reads like a human
 client — "Element Desktop: Windows", "Element X Android", "FluffyChat android" —
 stop. That is someone's session, not an agent credential.
 
-What happens if you use it anyway: the nio store creates its own olm account for
+What happens if you use it anyway: the skill's store creates its own olm account for
 that device id, so one device now has two crypto identities. The client that
 owns it starts failing to decrypt messages, including its own, and SAS
 verification against the account's other devices fails with "expected key did
@@ -230,8 +241,8 @@ logs in fresh and gets a device of its own.
 
 **Recovery, if a foreign token was already used with the E2EE scripts:** treat
 that device's crypto identity as spent. Log the agent device out
-(`matrix-e2ee-setup.py --logout`, which touches only that device's files), set
-up a fresh one, re-import the room keys, and verify again. The human client
+(`matrix-e2ee-cli.py logout`, which ends that device on the server and deletes
+the local session and store), set up a fresh one, re-import the room keys, and verify again. The human client
 whose device was hijacked needs a logout and a fresh login of its own; its local
 session state cannot be repaired from this side.
 
@@ -251,34 +262,9 @@ MATRIX_PASSWORD="MyPass!word" uv run .../matrix-e2ee-setup.py
 uv run .../matrix-e2ee-setup.py
 ```
 
-**E2EE setup fails with libolm error:**
-```bash
-# Debian/Ubuntu
-sudo apt install libolm-dev
-
-# Fedora
-sudo dnf install libolm-devel
-```
-
-**macOS 26 (Tahoe) / Apple Clang 17 — `brew install libolm` does NOT help.**
-
-`matrix-nio[e2e]` pulls in `python-olm`, which has **no macOS wheel** on PyPI and compiles a *bundled* copy of `libolm` from source, statically linked — it never uses the Homebrew library. That bundled build fails under Apple Clang 17 / CMake ≥ 3.30 (a C++ const-correctness hard error in `list.hh`, plus an obsolete `cmake_minimum_required(VERSION 3.4)`).
-
-Workarounds, easiest first:
-
-- Use the **non-E2EE scripts** (`matrix-send.py`, `matrix-rooms.py`, …) — they don't need `python-olm`.
-- Run the **E2EE scripts from Linux or a Linux container**, where the pre-built wheel installs cleanly.
-- Build `python-olm` on macOS with **GCC instead of Clang** (community-reported in https://github.com/matrix-nio/matrix-nio/issues/541; not verified by this project):
-
-```bash
-brew install gcc@12
-export CC=/opt/homebrew/bin/gcc-12
-export CXX=/opt/homebrew/bin/g++-12
-export CMAKE_POLICY_VERSION_MINIMUM=3.5   # clears the CMake < 3.5 error
-pip install 'matrix-nio[e2e]<0.26'         # GCC sidesteps the Clang 17 const error
-```
-
-**Upstream status:** `libolm` is archived and deprecated in favor of `vodozemac` (https://github.com/matrix-nio/matrix-nio/issues/518). The real fix — replacing olm with vodozemac in `matrix-nio` — is in progress as open PR https://github.com/matrix-nio/matrix-nio/pull/555; until it ships, macOS installs need one of the workarounds above. Related: https://github.com/matrix-nio/matrix-nio/issues/560 (macOS install) and https://github.com/matrix-nio/matrix-nio/issues/541 (CMake error). Tracking here: https://github.com/netresearch/matrix-skill/issues/43
+**E2EE scripts fail with `no matrix-e2ee-cli release for …`:** there is no release
+binary for this platform. Build matrix-e2ee-cli yourself (`cargo build --release`)
+and set `MATRIX_E2EE_CLI` to the binary.
 
 **Non-E2EE scripts fail with "Config missing required fields: access_token":**
 

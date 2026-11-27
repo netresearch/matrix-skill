@@ -5,155 +5,65 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Redact (delete) a message from a Matrix room.
+"""Redact (delete) an event in a Matrix room, if your power level allows it.
+
+Runs `matrix-e2ee-cli redact` (see _lib/cli.py for how the binary is found).
 
 Usage:
-    matrix-redact.py ROOM EVENT_ID [--reason REASON]
-    matrix-redact.py --help
+    matrix-redact.py ROOM EVENT_ID [--reason REASON] [--json] [--quiet]
 
-Arguments:
-    ROOM        Room alias (#room:server), room ID (!id:server), or room name
-    EVENT_ID    Event ID of the message to redact ($xxx:server)
-
-Options:
-    --reason    Reason for redaction (optional)
-    --json      Output as JSON
-    --quiet     Minimal output
-    --debug     Show debug information
-    --help      Show this help
+Prints "Message redacted from ROOM" and "Redaction event ID: $…" (--quiet: the
+id alone, --json: JSON). --debug is accepted and ignored.
 """
 
-import json
+import argparse
 import os
 import sys
-import time
-import urllib.parse
 
-# Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import (
-    clean_message,
-    daemon_request,
-    find_room_by_name,
-    load_config,
-    matrix_request,
-    normalize_room_input,
-    resolve_room_alias,
-)
-
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+from _lib.rooms import normalize_room_input
+from _lib.utils import clean_message
+from _lib.wrapper import Unsupported, exit_with, refuse, room_chooser
 
 
-def redact_message(
-    config: dict, room_id: str, event_id: str, reason: str | None = None
-) -> dict:
-    """Redact a message from a Matrix room."""
-    # A running daemon owns the account's credentials, so let it redact. See
-    # matrix-react.py for why the socket decides and not the store lock.
-    response = daemon_request(
-        {"op": "redact", "room": room_id, "event_id": event_id, "reason": reason}
-    )
-    if response is not None:
-        if response.get("ok"):
-            return {"event_id": response["event_id"]}
-        return {"error": response.get("error", "daemon refused the redaction")}
-
-    txn_id = str(int(time.time() * 1000))
-
-    data = {}
-    if reason:
-        data["reason"] = reason
-
-    # URL encode the event_id (it contains special characters like $ and :)
-    encoded_event_id = urllib.parse.quote(event_id, safe="")
-
-    return matrix_request(
-        config,
-        "PUT",
-        f"/rooms/{urllib.parse.quote(room_id, safe='')}/redact/{encoded_event_id}/{txn_id}",
-        data,  # Always pass dict, even if empty - {} is falsy but Matrix needs JSON body
-    )
-
-
-def main():
-    import argparse
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Redact a message from a Matrix room")
-    parser.add_argument(
-        "room", help="Room alias (#room:server), room ID (!id:server), or room name"
-    )
+    parser.add_argument("room", help="Room ID, alias, name or matrix.to link")
     parser.add_argument("event_id", help="Event ID of the message to redact")
-    parser.add_argument("--reason", help="Reason for redaction")
+    parser.add_argument("--reason", help="Reason for the redaction, shown to the room")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
-    parser.add_argument("--debug", action="store_true", help="Show debug info")
+    parser.add_argument(
+        "--quiet", "-q", action="store_true", help="Print only the redaction's event id"
+    )
+    parser.add_argument("--debug", action="store_true", help="Ignored")
+    return parser
 
-    args = parser.parse_args()
 
-    config = load_config()
+def translate(args):
+    cli = ["redact"]
+    if args.reason is not None:
+        # Attached with "=", so a reason that starts with "-" stays a value.
+        cli.append(f"--reason={args.reason}")
+    for flag in ("json", "quiet"):
+        if getattr(args, flag):
+            cli.append("--" + flag)
+    cli += ["--", normalize_room_input(clean_message(args.room)), args.event_id]
+    return cli, None
 
-    # Clean and resolve room
-    room_input = normalize_room_input(clean_message(args.room))
-    room_id = room_input
 
-    if room_input.startswith("!"):
-        # Direct room ID
-        room_id = room_input
-        if args.debug:
-            print(f"Using room ID directly: {room_id}", file=sys.stderr)
-    elif room_input.startswith("#"):
-        # Room alias
-        try:
-            room_id = resolve_room_alias(config, room_input)
-            if args.debug:
-                print(f"Resolved {room_input} -> {room_id}", file=sys.stderr)
-        except ValueError as e:
-            if args.json:
-                print(json.dumps({"error": str(e)}))
-            else:
-                print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
-    else:
-        # Room name lookup
-        found_id, matches = find_room_by_name(config, room_input)
-        if found_id:
-            room_id = found_id
-            if args.debug:
-                print(f"Found room: {room_id}", file=sys.stderr)
-        else:
-            error_msg = f"Could not find room '{room_input}'"
-            if matches:
-                error_msg += ". Multiple matches found:\n"
-                for m in matches:
-                    alias_str = f" ({m['alias']})" if m.get("alias") else ""
-                    error_msg += f"  - {m['name']}{alias_str}: {m['room_id']}\n"
-            else:
-                error_msg += ". Use 'matrix-rooms.py' to list available rooms."
-            if args.json:
-                print(json.dumps({"error": error_msg}))
-            else:
-                print(f"Error: {error_msg}", file=sys.stderr)
-            sys.exit(1)
-
-    # Redact message
-    result = redact_message(config, room_id, args.event_id, args.reason)
-
-    if "error" in result:
-        if args.json:
-            print(json.dumps(result))
-        else:
-            print(f"Error: {result['error']}", file=sys.stderr)
-        sys.exit(1)
-
-    if args.json:
-        print(json.dumps(result))
-    elif args.quiet:
-        print(result.get("event_id", ""))
-    else:
-        print(f"Message redacted from {args.room}")
-        print(f"Redaction event ID: {result.get('event_id')}")
+def main(argv=None) -> None:
+    args = build_parser().parse_args(argv)
+    try:
+        cli_args, extra_env = translate(args)
+    except Unsupported as exc:
+        refuse(str(exc))
+    exit_with(
+        cli_args,
+        extra_env,
+        choose=room_chooser(cli_args[cli_args.index("--") + 1], write=True),
+        json_errors=args.json,
+    )
 
 
 if __name__ == "__main__":
