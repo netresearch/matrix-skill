@@ -26,6 +26,7 @@ that would run without the device.
 """
 
 import contextlib
+import hashlib
 import json
 import os
 import shutil
@@ -153,6 +154,45 @@ def backup_store(store: Path, now=None) -> Path:
     return target
 
 
+def tree_digest(root: Path) -> str:
+    """SHA-256 over the relative paths and contents of ROOT's files.
+
+    The store's own ``.daemon.lock`` is left out, as ``backup_store`` leaves it
+    out of the copy; modes and times do not count.
+    """
+    digest = hashlib.sha256()
+    for directory, dirs, files in os.walk(root):
+        dirs.sort()
+        for name in sorted(files):
+            path = Path(directory, name)
+            rel = path.relative_to(root)
+            if str(rel) == LOCK_NAME:
+                continue
+            digest.update(str(rel).encode() + b"\0")
+            if path.is_symlink():
+                digest.update(b"link:" + os.readlink(path).encode() + b"\0")
+            else:
+                digest.update(hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()
+
+
+def existing_backups(store: Path) -> list:
+    """The backups beside STORE, oldest first (their names sort by time)."""
+    return sorted(p for p in store.parent.glob("store.backup-*") if p.is_dir())
+
+
+def reuse_or_backup(store: Path) -> Path:
+    """The newest backup when it still matches STORE's content, else a new one.
+
+    A takeover that failed and is tried again would otherwise leave one more
+    copy of credentials.json each time.
+    """
+    backups = existing_backups(store)
+    if backups and tree_digest(backups[-1]) == tree_digest(store):
+        return backups[-1]
+    return backup_store(store)
+
+
 def _notice(store: Path, backup: Path) -> str:
     return (
         "matrix-communication: this skill's E2EE device now runs in matrix-e2ee-cli "
@@ -177,7 +217,7 @@ def migrate(binary, env=None, runner=subprocess.run, log=None) -> Path:
         f"matrix-communication: taking over the matrix-nio device in {store} (one time)"
     )
     with store_lock(store):
-        backup = backup_store(store)
+        backup = reuse_or_backup(store)
     log(f"  Backup: {backup}")
     # stdout goes to stderr: callers parse the command's stdout (JSON, "Event ID: ...").
     result = runner(
@@ -191,9 +231,11 @@ def migrate(binary, env=None, runner=subprocess.run, log=None) -> Path:
     if result.stdout:
         log(result.stdout.rstrip("\n"))
     if result.returncode != 0:
+        copies = ", ".join(str(p) for p in existing_backups(store))
         raise CutoverError(
             f"migrate-nio failed (exit {result.returncode}); the command did not run. The "
-            f"matrix-nio store is unchanged and a copy is in {backup}. To give up the old "
+            f"matrix-nio store is unchanged. Copies of it, each with credentials.json "
+            f"(the access token), are in: {copies}. To give up the old "
             f"device instead, move {store} away; the next E2EE command then needs "
             "matrix-e2ee-setup.py (a new device)."
         )

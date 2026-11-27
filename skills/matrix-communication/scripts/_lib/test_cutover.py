@@ -159,6 +159,37 @@ class MigrateTests(CutoverTestCase):
         self.assertTrue(cutover.pending(self.env))
         self.assertIn("error: refused", "\n".join(self.logged))
 
+    def failed_attempt(self):
+        with self.assertRaises(cutover.CutoverError) as ctx:
+            self.migrate(FakeRunner(rc=1, output="error: refused"))
+        return str(ctx.exception)
+
+    def test_a_retry_reuses_the_backup_of_an_unchanged_store(self):
+        self.failed_attempt()
+        message = self.failed_attempt()
+        backups = cutover.existing_backups(self.store)
+        self.assertEqual(len(backups), 1)
+        self.assertIn(str(backups[0]), message)
+
+    def test_a_changed_store_gets_a_new_backup_and_the_error_names_all(self):
+        self.failed_attempt()
+        (self.store / "@u:example.org_DEV.db").write_bytes(b"sqlite, changed")
+        message = self.failed_attempt()
+        backups = cutover.existing_backups(self.store)
+        self.assertEqual(len(backups), 2)
+        # Each path whole: one backup name can be the prefix of the next
+        # (store.backup-<time> and store.backup-<time>.1).
+        listed = message.split("are in: ", 1)[1].split(". To give up", 1)[0].split(", ")
+        self.assertEqual(listed, [str(b) for b in backups])
+        self.assertEqual(
+            (backups[-1] / "@u:example.org_DEV.db").read_bytes(), b"sqlite, changed"
+        )
+
+    def test_the_lock_file_is_not_part_of_the_comparison(self):
+        backup = cutover.backup_store(self.store)
+        (self.store / ".daemon.lock").write_text("12345")
+        self.assertEqual(cutover.tree_digest(backup), cutover.tree_digest(self.store))
+
     def test_a_held_store_lock_refuses_before_copying_or_migrating(self):
         holder = os.open(self.store / ".daemon.lock", os.O_RDWR)
         self.addCleanup(os.close, holder)

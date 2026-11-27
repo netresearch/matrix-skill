@@ -108,7 +108,8 @@ device over once, before it runs:
    running holds its lock): stop that process and run the command again,
 2. it copies the whole store, `credentials.json` included, to
    `matrix-skill/store.backup-<UTC time>` (owner-only: the copy holds the
-   access token),
+   access token); a retry after a failed takeover reuses the newest copy while
+   the store's files are unchanged,
 3. it runs `matrix-e2ee-cli migrate-nio`, which only reads the old store and
    keeps the device id, its identity keys (so its verification stays valid),
    its room keys and nio's local trust of other devices,
