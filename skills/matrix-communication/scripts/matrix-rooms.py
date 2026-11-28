@@ -7,6 +7,10 @@
 # ///
 """List joined Matrix rooms.
 
+Runs `matrix-e2ee-cli rooms` (see _lib/cli.py for how the binary is found):
+the rooms come from the CLI's store after one sync, or from the watch daemon
+while it runs.
+
 Usage:
     matrix-rooms.py [--json] [--search TERM]
     matrix-rooms.py --lookup NAME
@@ -19,6 +23,8 @@ Options:
                       matches on their user IDs
     --lookup NAME     Find room by name and output room ID (for scripts)
     --help            Show this help
+
+--debug is accepted and ignored.
 
 Examples:
     # List all rooms with names, aliases, and IDs
@@ -38,22 +44,16 @@ Examples:
     matrix-send.py "$(matrix-rooms.py --lookup agent-work)" "Hello!"
 """
 
-import json
+import argparse
 import os
 import sys
 
-# Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import find_room_by_name, list_joined_rooms, load_config, room_matches
-
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+from _lib.wrapper import Unsupported, exit_with, refuse
 
 
-def main():
-    import argparse
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="List joined Matrix rooms")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument(
@@ -65,58 +65,29 @@ def main():
         metavar="NAME",
         help="Find room by name and output room ID (for scripts)",
     )
+    parser.add_argument("--debug", action="store_true", help="Ignored")
+    return parser
 
-    args = parser.parse_args()
 
-    config = load_config()
-
-    # Lookup mode: find a specific room and print its ID
-    if args.lookup:
-        room_id, matches = find_room_by_name(config, args.lookup)
-        if room_id:
-            if args.json:
-                # Find the full room info from matches
-                room_info = matches[0] if matches else {"room_id": room_id}
-                print(json.dumps(room_info, indent=2))
-            else:
-                print(room_id)
-            return
-        else:
-            # Check if it's an ambiguous match
-            if matches:
-                print(
-                    f"Error: Ambiguous match for '{args.lookup}'. Found {len(matches)} rooms:",
-                    file=sys.stderr,
-                )
-                for m in matches:
-                    alias_str = f" ({m['alias']})" if m.get("alias") else ""
-                    print(
-                        f"  - {m['name']}{alias_str}: {m['room_id']}", file=sys.stderr
-                    )
-            else:
-                print(f"Error: No room found matching '{args.lookup}'", file=sys.stderr)
-            sys.exit(1)
-
-    rooms = list_joined_rooms(config)
-    rooms = sorted(rooms, key=lambda r: r["name"].lower())
-
-    if args.search:
-        rooms = [r for r in rooms if room_matches(r, args.search.lower())]
-
+def translate(args):
+    cli = ["rooms"]
     if args.json:
-        print(json.dumps(rooms, indent=2))
-    else:
-        if not rooms:
-            print("No rooms found")
-            return
+        cli.append("--json")
+    # Attached with "=", so a term that starts with "-" stays a value.
+    if args.search is not None:
+        cli.append(f"--search={args.search}")
+    if args.lookup is not None:
+        cli.append(f"--lookup={args.lookup}")
+    return cli, None
 
-        print(f"{'Room Name':<40} {'Alias':<35} {'Room ID'}")
-        print("-" * 120)
-        for room in rooms:
-            name = room["name"][:38] if len(room["name"]) > 38 else room["name"]
-            alias = room.get("alias") or ""
-            alias = alias[:33] if len(alias) > 33 else alias
-            print(f"{name:<40} {alias:<35} {room['room_id']}")
+
+def main(argv=None) -> None:
+    args = build_parser().parse_args(argv)
+    try:
+        cli_args, extra_env = translate(args)
+    except Unsupported as exc:
+        refuse(str(exc))
+    exit_with(cli_args, extra_env, json_errors=False)
 
 
 if __name__ == "__main__":

@@ -16,20 +16,24 @@ without server, then a single exact display name (or, for a room named after
 its members, a member's user ID), then a single partial match. Only the ID
 reaches the CLI. Two deviations, both refusals: several rooms with the same
 alias name are refused instead of taking the first, and a command that writes
-(send, edit, react, redact) takes no partial match. Room IDs and full aliases
-pass unchanged, without a request. The lookup reads the joined rooms over HTTP
-with the skill's own device token from matrix-e2ee-cli's session.json (two
-requests per joined room, one more for a room without name and alias, 30 s
-each at most). No match, several matches, or rooms that cannot be read stop
-the command: it never falls back to the CLI's own, different choice.
+(send, edit, react, redact, invite, power-level --set) takes no partial match. Room IDs and full aliases
+pass unchanged, without running anything. The lookup takes the joined rooms
+from ``matrix-e2ee-cli rooms --json`` (the CLI's own session and store, or
+the watch daemon while it runs), so it reads no token itself. No match,
+several matches, a room whose members could not be read, or a listing that
+fails stop the command: it never falls back to the CLI's own, different
+choice.
 """
 
 import json
+import sys
 
-from _lib import cutover
-from _lib.rooms import list_joined_rooms, room_matches
+from _lib import cli, cutover
+from _lib.rooms import room_matches
 
-TIMEOUT = 30  # seconds per request
+# rooms.rs prints this for a room named after its members whose members it
+# could not read; that room then goes by its room id and could not match.
+MEMBERS_WARNING = "warning: cannot read the members of "
 
 
 class RoomLookupError(Exception):
@@ -86,12 +90,48 @@ def choose(room: str, term: str, rooms: list, write: bool) -> str:
     )
 
 
-def resolve(room: str, env, lister=list_joined_rooms, write=False) -> str:
+def cli_rooms(env) -> list:
+    """The joined rooms as ``matrix-e2ee-cli rooms --json`` lists them.
+
+    Its stdout never reaches this process's stdout. Raises ValueError when
+    the listing fails, prints no list of rooms, or warns that the members of
+    a room could not be read; other stderr lines are passed on.
+    """
+    binary = cli.ensure_binary(env=env, log=cli.stderr_log)
+    result = cli.run_captured(binary, ["rooms", "--json"], env=env)
+    unreadable, errors = [], []
+    for line in result.stderr.splitlines():
+        if line.startswith(MEMBERS_WARNING):
+            unreadable.append(line.removeprefix("warning: "))
+        elif line.startswith("error: "):
+            errors.append(line.removeprefix("error: "))
+        elif line.strip():
+            print(line, file=sys.stderr)
+    if result.returncode != 0:
+        detail = "; ".join(errors) or f"exit code {result.returncode}"
+        raise ValueError(f"matrix-e2ee-cli rooms failed: {detail}")
+    if unreadable:
+        raise ValueError("; ".join(unreadable))
+    try:
+        rooms = json.loads(result.stdout)
+    except ValueError as exc:
+        raise ValueError(f"matrix-e2ee-cli rooms printed no JSON: {exc}") from exc
+    if not isinstance(rooms, list) or not all(
+        isinstance(r, dict)
+        and isinstance(r.get("room_id"), str)
+        and isinstance(r.get("name"), str)
+        for r in rooms
+    ):
+        raise ValueError("matrix-e2ee-cli rooms printed no list of rooms")
+    return rooms
+
+
+def resolve(room: str, env, lister=cli_rooms, write=False) -> str:
     """The room ID the old scripts chose for ROOM; ROOM itself when it is exact.
 
     Without a session there is nothing to look up with, and the CLI, which
     needs the session too, reports that itself. With WRITE (send, edit,
-    react, redact) only an exact alias or an exact name counts: a room
+    react, redact, invite, power-level --set) only an exact alias or an exact name counts: a room
     name is chosen by whoever named the room, and a partial match would
     let such a name decide where a message goes.
     """
@@ -100,32 +140,15 @@ def resolve(room: str, env, lister=list_joined_rooms, write=False) -> str:
     # matrix-send-e2ee.py and friends looked "#ops" up as the name "ops".
     term = room.removeprefix("#")
     try:
-        session = json.loads(cutover.cli_session_path(env).read_text(encoding="utf-8"))
-    except (OSError, ValueError, cutover.CutoverError):
+        if not cutover.cli_session_path(env).exists():
+            return room
+    except cutover.CutoverError:
         return room
-    config = {
-        "homeserver": session.get("homeserver"),
-        "access_token": session.get("access_token"),
-        "user_id": session.get("user_id"),
-        "timeout": TIMEOUT,
-        "strict": True,
-    }
-    if not config["homeserver"] or not config["access_token"]:
-        # The CLI would pick by display name alone: refuse rather than guess.
-        raise RoomLookupError(
-            f"cannot look {room!r} up: the matrix-e2ee-cli session has no homeserver "
-            "or access token; pass the room ID (!…) or full alias (#name:server)"
-        )
     try:
-        rooms = lister(config)
-    except (OSError, ValueError) as exc:  # timeouts, refused connections, non-JSON
+        rooms = lister(env)
+    except (OSError, ValueError) as exc:  # a failed or unreadable listing
         raise RoomLookupError(
             f"cannot list the joined rooms to find {room!r} ({exc}); pass its room ID "
             "(!…) or full alias (#name:server)"
         ) from exc
-    if not rooms:
-        raise RoomLookupError(
-            f"cannot list the joined rooms to find {room!r}; pass its room ID (!…) "
-            "or full alias (#name:server)"
-        )
     return choose(room, term, rooms, write)

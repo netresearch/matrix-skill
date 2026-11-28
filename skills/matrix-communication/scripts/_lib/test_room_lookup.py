@@ -4,7 +4,8 @@
 """Tests for `_lib/room_lookup.py`: a room shorthand reaches the room the
 scripts of version 4 chose, never matrix-e2ee-cli's own display-name pick.
 
-Run directly (stdlib only; the room list is a fake, nothing is contacted):
+Run directly (stdlib only; the room list is a fake, and the CLI a script named
+by MATRIX_E2EE_CLI; nothing is contacted):
 
     python3 skills/matrix-communication/scripts/_lib/test_room_lookup.py
 """
@@ -16,6 +17,8 @@ _LIB = os.path.dirname(os.path.abspath(__file__))
 sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _LIB]
 sys.path.insert(0, os.path.dirname(_LIB))
 
+import contextlib
+import io
 import json
 import tempfile
 import unittest
@@ -41,21 +44,13 @@ class ResolveTests(unittest.TestCase):
         self.env = {"HOME": tmp.name, "XDG_DATA_HOME": os.path.join(tmp.name, "data")}
         session = Path(self.env["XDG_DATA_HOME"], "matrix-e2ee-cli", "session.json")
         session.parent.mkdir(parents=True)
-        session.write_text(
-            json.dumps(
-                {
-                    "homeserver": "https://m.e",
-                    "user_id": "@u:e",
-                    "access_token": "syt_d",
-                }
-            )
-        )
+        session.write_text(json.dumps({"homeserver": "https://m.e", "user_id": "@u:e"}))
         self.session = session
         self.configs = []
         self.rooms = ROOMS
 
-    def lister(self, config):
-        self.configs.append(config)
+    def lister(self, env):
+        self.configs.append(env)
         return self.rooms
 
     def resolve(self, room):
@@ -67,20 +62,9 @@ class ResolveTests(unittest.TestCase):
     def test_a_hash_name_without_server_is_looked_up_as_that_name(self):
         self.assertEqual(self.resolve("#ops"), "!a:e")
 
-    def test_the_lookup_uses_the_session_of_the_skills_own_device(self):
+    def test_the_lookup_gets_the_commands_environment(self):
         self.resolve("ops")
-        self.assertEqual(
-            self.configs,
-            [
-                {
-                    "homeserver": "https://m.e",
-                    "access_token": "syt_d",
-                    "user_id": "@u:e",
-                    "timeout": 30,
-                    "strict": True,
-                }
-            ],
-        )
+        self.assertEqual(self.configs, [self.env])
 
     def test_ids_and_full_aliases_pass_without_a_request(self):
         for room in ("!b:e", "#ops:e"):
@@ -103,18 +87,21 @@ class ResolveTests(unittest.TestCase):
             self.resolve("nowhere")
         self.assertIn("no joined room matches", str(ctx.exception))
 
-    def test_rooms_that_cannot_be_listed_are_refused_not_guessed(self):
+    def test_no_joined_room_is_no_match(self):
         self.rooms = []
         with self.assertRaises(room_lookup.RoomLookupError) as ctx:
             self.resolve("ops")
-        self.assertIn("cannot list the joined rooms", str(ctx.exception))
+        self.assertIn("no joined room matches", str(ctx.exception))
 
-    def test_a_session_without_a_token_is_refused_not_passed_on(self):
-        self.session.write_text(json.dumps({"homeserver": "https://m.e"}))
-        with self.assertRaises(room_lookup.RoomLookupError) as ctx:
-            self.resolve("ops")
-        self.assertIn("no homeserver or access token", str(ctx.exception))
-        self.assertEqual(self.configs, [])
+    def test_the_lookup_reads_no_token_from_the_session(self):
+        # The CLI lists the rooms with its own session; the lookup needs none
+        # of its fields, so a session without a token is still looked up in.
+        self.session.write_text("{}")
+        try:
+            resolved = self.resolve("ops")
+        except room_lookup.RoomLookupError as exc:
+            self.fail(f"refused: {exc}")
+        self.assertEqual(resolved, "!a:e")
 
     def test_a_write_refuses_a_partial_only_match_and_names_it(self):
         with self.assertRaises(room_lookup.RoomLookupError) as ctx:
@@ -201,6 +188,94 @@ class ResolveTests(unittest.TestCase):
         self.session.unlink()
         self.assertEqual(self.resolve("ops"), "ops")
         self.assertEqual(self.configs, [])
+
+
+FAKE_ROOMS_CLI = """#!{python}
+import json, os, sys
+with open(os.environ["FAKE_CLI_LOG"], "a") as log:
+    log.write(json.dumps(sys.argv[1:]) + "\\n")
+sys.stderr.write(os.environ.get("FAKE_STDERR", ""))
+sys.stdout.write(os.environ.get("FAKE_STDOUT", ""))
+sys.exit(int(os.environ.get("FAKE_RC", "0")))
+"""
+
+
+class CliRoomsTests(unittest.TestCase):
+    """The default lister runs `matrix-e2ee-cli rooms --json`."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        fake = root / "fake-cli"
+        fake.write_text(FAKE_ROOMS_CLI.format(python=sys.executable))
+        fake.chmod(0o755)
+        self.log = root / "calls.jsonl"
+        self.env = {
+            "HOME": str(root),
+            "XDG_DATA_HOME": str(root / "data"),
+            "MATRIX_E2EE_CLI": str(fake),
+            "FAKE_CLI_LOG": str(self.log),
+            "FAKE_STDOUT": json.dumps(ROOMS),
+        }
+        session = root / "data" / "matrix-e2ee-cli" / "session.json"
+        session.parent.mkdir(parents=True)
+        # A homeserver nothing listens on: a lookup over HTTP cannot succeed.
+        session.write_text(
+            json.dumps({"homeserver": "http://127.0.0.1:9", "access_token": "x"})
+        )
+
+    def resolve(self, room, **env):
+        stderr = io.StringIO()
+        stdout = io.StringIO()
+        with contextlib.redirect_stderr(stderr), contextlib.redirect_stdout(stdout):
+            try:
+                return room_lookup.resolve(room, {**self.env, **env}), stderr, stdout
+            except room_lookup.RoomLookupError as exc:
+                return exc, stderr, stdout
+
+    def calls(self):
+        if not self.log.exists():
+            return []
+        return [json.loads(line) for line in self.log.read_text().splitlines()]
+
+    def test_the_rooms_come_from_the_cli(self):
+        resolved, _, stdout = self.resolve("ops")
+        self.assertEqual(resolved, "!a:e")
+        self.assertEqual(self.calls(), [["rooms", "--json"]])
+        self.assertEqual(stdout.getvalue(), "", "the room list reached stdout")
+
+    def test_unreadable_members_refuse_the_lookup(self):
+        # rooms.rs: a room whose members cannot be read is listed under its
+        # room id with this warning; the lookup is refused, as the HTTP one was.
+        resolved, _, _ = self.resolve(
+            "ops",
+            FAKE_STDERR="warning: cannot read the members of !g:e, listed under its "
+            "room id: 403 forbidden\n",
+        )
+        self.assertIsInstance(resolved, room_lookup.RoomLookupError)
+        self.assertIn("cannot read the members of !g:e", str(resolved))
+
+    def test_other_warnings_are_passed_on_not_refused(self):
+        resolved, stderr, _ = self.resolve(
+            "ops", FAKE_STDERR="warning: the daemon answered slowly\n"
+        )
+        self.assertEqual(resolved, "!a:e")
+        self.assertIn("warning: the daemon answered slowly", stderr.getvalue())
+
+    def test_a_failed_listing_is_refused_with_the_clis_error(self):
+        resolved, _, _ = self.resolve(
+            "ops", FAKE_RC="1", FAKE_STDOUT="", FAKE_STDERR="error: not logged in\n"
+        )
+        self.assertIsInstance(resolved, room_lookup.RoomLookupError)
+        self.assertIn("not logged in", str(resolved))
+
+    def test_output_that_is_no_room_list_is_refused(self):
+        for stdout in ("<html>", "{}", "[1]"):
+            with self.subTest(stdout=stdout):
+                resolved, _, _ = self.resolve("ops", FAKE_STDOUT=stdout)
+                self.assertIsInstance(resolved, room_lookup.RoomLookupError)
+                self.assertIn("cannot list the joined rooms", str(resolved))
 
 
 if __name__ == "__main__":

@@ -7,6 +7,8 @@
 # ///
 """Invite a user to a Matrix room.
 
+Runs `matrix-e2ee-cli invite` (see _lib/cli.py for how the binary is found).
+
 Usage:
     matrix-invite.py ROOM USER_ID [OPTIONS]
     matrix-invite.py --help
@@ -14,14 +16,16 @@ Usage:
 Arguments:
     ROOM        Room identifier. Supports multiple formats:
                 - Room ID: !abc123xyz (direct, fastest)
-                - Room alias: #room:server (resolved via directory)
-                - Room name: "agent-work" (looked up from joined rooms)
+                - Room alias: #room:server
+                - Room name: "agent-work" (looked up among the joined rooms;
+                  an invitation needs the exact name, no partial match)
+                - matrix.to link
     USER_ID     Full Matrix user ID to invite (e.g. @jane.doe:netresearch.de)
 
 Options:
     --json      Output as JSON
     --quiet     Minimal output
-    --debug     Show debug information
+    --debug     Accepted and ignored
     --help      Show this help
 
 Examples:
@@ -32,73 +36,48 @@ Examples:
     matrix-invite.py '!abc123:netresearch.de' '@jane.doe:netresearch.de'
 """
 
-import json
+import argparse
 import os
 import sys
 
-# Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import (
-    load_config,
-    matrix_request,
-    path_segment,
-    resolve_room_cli,
-)
-
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+from _lib.rooms import normalize_room_input
+from _lib.utils import clean_message
+from _lib.wrapper import Unsupported, exit_with, refuse, room_chooser
 
 
-def invite_user(config: dict, room_id: str, user_id: str) -> dict:
-    """Invite a user to a Matrix room.
-
-    Args:
-        config: Matrix config with homeserver and access_token
-        room_id: Room ID to invite to
-        user_id: Full Matrix user ID (e.g. @user:server)
-
-    Returns:
-        Empty dict on success (per Matrix spec), or dict with 'error' on failure
-    """
-    return matrix_request(
-        config, "POST", f"/rooms/{path_segment(room_id)}/invite", {"user_id": user_id}
-    )
-
-
-def main():
-    import argparse
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Invite a user to a Matrix room")
     parser.add_argument("room", help="Room ID (!id), alias (#room:server), or name")
     parser.add_argument("user_id", help="Matrix user ID to invite (@user:server)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
-    parser.add_argument("--debug", action="store_true", help="Show debug info")
+    parser.add_argument("--debug", action="store_true", help="Ignored")
+    return parser
 
-    args = parser.parse_args()
 
-    config = load_config()
-    room_id = resolve_room_cli(config, args.room, args.json, args.debug)
+def translate(args):
+    cli = ["invite"]
+    for flag in ("json", "quiet"):
+        if getattr(args, flag):
+            cli.append("--" + flag)
+    cli += ["--", normalize_room_input(clean_message(args.room)), args.user_id]
+    return cli, None
 
-    if args.debug:
-        print(f"Inviting {args.user_id} to {room_id}", file=sys.stderr)
 
-    result = invite_user(config, room_id, args.user_id)
-
-    if "error" in result:
-        if args.json:
-            print(json.dumps(result))
-        else:
-            print(f"Error: {result['error']}", file=sys.stderr)
-        sys.exit(1)
-
-    if args.json:
-        print(json.dumps({"room_id": room_id, "user_id": args.user_id}))
-    elif args.quiet:
-        print(room_id)
-    else:
-        print(f"Invited {args.user_id} to {room_id}")
+def main(argv=None) -> None:
+    args = build_parser().parse_args(argv)
+    try:
+        cli_args, extra_env = translate(args)
+    except Unsupported as exc:
+        refuse(str(exc))
+    exit_with(
+        cli_args,
+        extra_env,
+        choose=room_chooser(cli_args[cli_args.index("--") + 1], write=True),
+        json_errors=args.json,
+    )
 
 
 if __name__ == "__main__":

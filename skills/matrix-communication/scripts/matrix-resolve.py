@@ -7,6 +7,8 @@
 # ///
 """Resolve a Matrix room alias to room ID.
 
+Runs `matrix-e2ee-cli resolve` (see _lib/cli.py for how the binary is found).
+
 Usage:
     matrix-resolve.py ALIAS [--json]
     matrix-resolve.py --help
@@ -17,54 +19,44 @@ Arguments:
 Options:
     --json      Output as JSON
     --help      Show this help
+
+--debug is accepted and ignored.
 """
 
-import json
+import argparse
 import os
 import sys
 
-# Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import load_config, resolve_room_alias
-
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+from _lib.wrapper import Unsupported, exit_with, refuse
 
 
-def main():
-    import argparse
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Resolve a Matrix room alias to room ID"
     )
     parser.add_argument("alias", help="Room alias (e.g., #myroom:matrix.org)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument("--debug", action="store_true", help="Ignored")
+    return parser
 
-    args = parser.parse_args()
 
-    if not args.alias.startswith("#"):
-        print("Error: Alias must start with #", file=sys.stderr)
-        sys.exit(1)
+def translate(args):
+    cli = ["resolve"]
+    if args.json:
+        cli.append("--json")
+    cli += ["--", args.alias]
+    return cli, None
 
-    config = load_config()
 
+def main(argv=None) -> None:
+    args = build_parser().parse_args(argv)
     try:
-        room_id = resolve_room_alias(config, args.alias)
-        result = {"room_id": room_id, "alias": args.alias}
-
-        if args.json:
-            print(json.dumps(result, indent=2))
-        else:
-            print(f"Alias: {args.alias}")
-            print(f"Room ID: {room_id}")
-
-    except ValueError as e:
-        if args.json:
-            print(json.dumps({"error": str(e)}))
-        else:
-            print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        cli_args, extra_env = translate(args)
+    except Unsupported as exc:
+        refuse(str(exc))
+    exit_with(cli_args, extra_env, json_errors=args.json)
 
 
 if __name__ == "__main__":
