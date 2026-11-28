@@ -9,11 +9,16 @@ token and accept the following optional fields in addition to the standard
 ones:
 
 - ``admin_token``: a Matrix access token for a user with Synapse server-admin
-  rights.  Falls back to ``access_token`` if absent.
-- ``admin_token_file`` / ``access_token_file``: a file holding that token, so
-  the secret can live outside config.json.  ``MATRIX_ADMIN_TOKEN`` and
-  ``MATRIX_ACCESS_TOKEN`` in the environment take precedence over both (see
-  ``resolve_tokens``).
+  rights.
+- ``admin_token_file``: a file holding that token, so the secret can live
+  outside config.json.  ``MATRIX_ADMIN_TOKEN`` in the environment takes
+  precedence over both (see ``resolve_tokens``).
+
+Without any of the three, the scripts use the access token of the
+matrix-e2ee-cli session (``<data dir>/matrix-e2ee-cli/session.json``, the
+device matrix-communication logs in with), which works only when that account
+is a server admin.  ``access_token``, ``access_token_file`` and
+``MATRIX_ACCESS_TOKEN`` are no longer read.
 - ``room_filter``: optional server-suffix filter applied by
   ``synapse-fetch-rooms.py`` (e.g. ``":example.com"``).  Empty/missing means
   no filter.
@@ -30,13 +35,10 @@ import os
 import sys
 from pathlib import Path
 
-# Each token the config can carry, with the environment variable that
-# overrides it. Kept identical to matrix-communication's _lib/config.py: the
-# two skills share one config file but install independently.
-TOKEN_SOURCES = (
-    ("admin_token", "MATRIX_ADMIN_TOKEN"),
-    ("access_token", "MATRIX_ACCESS_TOKEN"),
-)
+# The token the config can carry, with the environment variable that
+# overrides it. The two skills share one config file but install
+# independently, so nothing here is imported from matrix-communication.
+TOKEN_SOURCES = (("admin_token", "MATRIX_ADMIN_TOKEN"),)
 
 
 class TokenSourceError(ValueError):
@@ -57,16 +59,15 @@ def get_config_path() -> Path:
 def resolve_tokens(config: dict, keys: tuple[str, ...] | None = None) -> dict:
     """Return a copy of ``config`` with each token taken from its strongest source.
 
-    For ``admin_token`` and ``access_token``, in this order:
+    For ``admin_token``, in this order:
 
-    1. the environment variable (``MATRIX_ADMIN_TOKEN``, ``MATRIX_ACCESS_TOKEN``),
-       when set and not empty;
-    2. the file named by ``admin_token_file`` / ``access_token_file``, stripped
-       of surrounding whitespace; ``~`` is expanded and a relative path is
-       taken relative to the directory of config.json;
-    3. the ``admin_token`` / ``access_token`` value in config.json itself.
+    1. ``MATRIX_ADMIN_TOKEN``, when set and not empty;
+    2. the file named by ``admin_token_file``, stripped of surrounding
+       whitespace; ``~`` is expanded and a relative path is taken relative
+       to the directory of config.json;
+    3. the ``admin_token`` value in config.json itself.
 
-    Only the tokens named in ``keys`` are resolved (default: both), so a
+    Only the tokens named in ``keys`` are resolved (default: all), so a
     broken source of a token the caller never sends cannot stop it; a token
     left out keeps its config.json value.
 
@@ -100,12 +101,53 @@ def resolve_tokens(config: dict, keys: tuple[str, ...] | None = None) -> dict:
     return resolved
 
 
+def cli_session_path(env=None) -> Path:
+    """matrix-e2ee-cli's session file: $XDG_DATA_HOME, else <home>/.local/share.
+
+    <home> is HOME, else USERPROFILE. The same path as matrix-communication's
+    _lib/cutover.cli_session_path, written out here because the skills
+    install independently.
+    """
+    env = os.environ if env is None else env
+    data = env.get("XDG_DATA_HOME")
+    if not data:
+        home = env.get("HOME") or env.get("USERPROFILE")
+        if not home:
+            raise TokenSourceError(
+                "cannot find the matrix-e2ee-cli session: neither XDG_DATA_HOME "
+                "nor HOME is set"
+            )
+        data = Path(home) / ".local" / "share"
+    return Path(data) / "matrix-e2ee-cli" / "session.json"
+
+
+def session_credentials(path: Path) -> tuple[str, str] | None:
+    """(access_token, homeserver) of the matrix-e2ee-cli session, or None.
+
+    None when the file does not exist or carries no access token. A file
+    that exists but cannot be read or parsed raises TokenSourceError.
+    """
+    try:
+        session = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as exc:
+        raise TokenSourceError(
+            f"cannot read the matrix-e2ee-cli session {path}: {exc}"
+        ) from exc
+    if not isinstance(session, dict) or not session.get("access_token"):
+        return None
+    return str(session["access_token"]), str(session.get("homeserver") or "")
+
+
 def load_config(require_admin: bool = True) -> dict:
     """Load Matrix config from ``$XDG_CONFIG_HOME/matrix/config.json``.
 
     Args:
-        require_admin: If True (the default), require an admin token to be
-            present (either as ``admin_token`` or ``access_token``).
+        require_admin: If True (the default), require an admin token: from
+            MATRIX_ADMIN_TOKEN, admin_token_file or admin_token, else the
+            access token of the matrix-e2ee-cli session, which is then sent
+            to the homeserver recorded in that session.
 
     Returns:
         Parsed config dict.
@@ -125,15 +167,30 @@ def load_config(require_admin: bool = True) -> dict:
 
     with open(config_path) as f:
         config = json.load(f)
+    had_access_token = bool(
+        config.get("access_token") or config.get("access_token_file")
+    )
 
-    # Resolve only the token the scripts will send: admin_token wins when it
-    # yields one, access_token is the fallback, and commands that need no
-    # admin credential resolve none, so an unused token source cannot stop them.
+    # The config's access_token is matrix-communication's old, second device;
+    # it is never sent.
+    for key in ("access_token", "access_token_file"):
+        config.pop(key, None)
+
+    # Resolve only when the scripts will send a token: a set admin token wins,
+    # even a dead one; the session is the fallback. Commands that need no admin
+    # credential resolve none, so an unused token source cannot stop them.
+    session_path = None
     if require_admin:
         try:
             config = resolve_tokens(config, keys=("admin_token",))
             if not config.get("admin_token"):
-                config = resolve_tokens(config, keys=("access_token",))
+                session_path = cli_session_path()
+                credentials = session_credentials(session_path)
+                if credentials:
+                    config["admin_token"] = credentials[0]
+                    # The session's token belongs to the session's homeserver.
+                    if credentials[1]:
+                        config["homeserver"] = credentials[1]
         except TokenSourceError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
@@ -142,13 +199,20 @@ def load_config(require_admin: bool = True) -> dict:
         print("Error: config missing required field: homeserver", file=sys.stderr)
         sys.exit(1)
 
-    if require_admin and not (config.get("admin_token") or config.get("access_token")):
+    if require_admin and not config.get("admin_token"):
         print(
-            "Error: config missing admin token. Set 'admin_token' (preferred) "
-            "or 'access_token' to a token belonging to a Synapse server admin, "
-            "or supply it through MATRIX_ADMIN_TOKEN or 'admin_token_file'.",
+            "Error: no admin token. Set MATRIX_ADMIN_TOKEN, 'admin_token_file' or "
+            "'admin_token' in config.json to a token of a Synapse server admin, "
+            "or log in with matrix-communication's matrix-e2ee-setup.py as a "
+            f"server admin (the matrix-e2ee-cli session {session_path} is used "
+            "when none of the others is set).",
             file=sys.stderr,
         )
+        if had_access_token:
+            print(
+                "Note: access_token in config.json is no longer read.",
+                file=sys.stderr,
+            )
         sys.exit(1)
 
     return config

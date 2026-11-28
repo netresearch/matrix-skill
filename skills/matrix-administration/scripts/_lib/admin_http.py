@@ -140,7 +140,8 @@ def admin_request(
     """Call a Synapse Admin API endpoint.
 
     Args:
-        config: Dict with ``homeserver`` and ``admin_token`` (or ``access_token``).
+        config: Dict with ``homeserver`` and ``admin_token`` (load_config puts
+            the session's token there when no admin token is set).
         method: HTTP method.
         endpoint: Admin path beginning with ``/v1/...`` or ``/v2/...``
             (the ``/_synapse/admin`` prefix is added automatically).
@@ -149,7 +150,7 @@ def admin_request(
     Returns:
         Parsed JSON response, or a dict with ``error``/``errcode`` on failure.
     """
-    token = config.get("admin_token") or config["access_token"]
+    token = config["admin_token"]
     url = f"{config['homeserver']}/_synapse/admin{endpoint}"
     return _request(url, method, token, data)
 
@@ -163,13 +164,14 @@ def client_request(
     can perform (the admin user must be in the room).
 
     Args:
-        config: Dict with ``homeserver`` and ``admin_token`` (or ``access_token``).
+        config: Dict with ``homeserver`` and ``admin_token`` (load_config puts
+            the session's token there when no admin token is set).
         method: HTTP method.
         endpoint: Path beginning with ``/`` (the ``/_matrix/client/v3`` prefix
             is added automatically).
         data: JSON body, if any.
     """
-    token = config.get("admin_token") or config["access_token"]
+    token = config["admin_token"]
     url = f"{config['homeserver']}/_matrix/client/v3{endpoint}"
     return _request(url, method, token, data)
 
