@@ -3,3 +3,4 @@
 - `matrix-send.py`, `matrix-read.py` and `matrix-edit.py` keep their options and run the CLI's `send`, `read` and `edit`: encrypted in an encrypted room, unencrypted in an unencrypted one. `matrix-read.py` prints the messages newest first in the format of `matrix-read-e2ee.py`, decrypted where the device holds the keys. `matrix-edit.py` edits only your own messages
 - `matrix-doctor.py` checks `admin_token` only; a leftover `access_token` gets a warning row and is never sent
 - `matrix-send.py` and `matrix-send-e2ee.py` take an exact room name that starts with "-" (`matrix-send.py -- -ops hello`): it is looked up first and only the room ID reaches matrix-e2ee-cli. Version 5.0.0's `matrix-send-e2ee.py` refused such a name
+- The pinned matrix-e2ee-cli is 0.4.0 (`_lib/cli_release.json`), which adds `rooms`, `resolve`, `create-room`, `invite`, `power-level`, `send --plaintext` and reads through the watch daemon
