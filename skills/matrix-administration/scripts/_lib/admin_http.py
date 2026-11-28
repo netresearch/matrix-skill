@@ -151,7 +151,7 @@ def admin_request(
         Parsed JSON response, or a dict with ``error``/``errcode`` on failure.
     """
     token = config["admin_token"]
-    url = f"{config['homeserver']}/_synapse/admin{endpoint}"
+    url = f"{config['homeserver'].rstrip('/')}/_synapse/admin{endpoint}"
     return _request(url, method, token, data)
 
 
@@ -172,7 +172,7 @@ def client_request(
         data: JSON body, if any.
     """
     token = config["admin_token"]
-    url = f"{config['homeserver']}/_matrix/client/v3{endpoint}"
+    url = f"{config['homeserver'].rstrip('/')}/_matrix/client/v3{endpoint}"
     return _request(url, method, token, data)
 
 

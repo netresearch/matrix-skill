@@ -120,6 +120,31 @@ class RedirectAuthorizationTests(unittest.TestCase):
         )
 
 
+class RequestLine(Recorder):
+    """Records the raw request line: http.server collapses a leading "//"
+    in self.path, so the path alone cannot show a doubled slash."""
+
+    def do_GET(self):
+        self.lines.append(self.requestline.split()[1])
+        super().do_GET()
+
+
+class HomeserverUrlTests(unittest.TestCase):
+    def test_a_trailing_slash_does_not_double_the_path_slash(self):
+        # matrix-doctor.py checks the session token against the session's
+        # homeserver, which matrix-e2ee-cli writes as "https://host/".
+        handler = type("H", (RequestLine,), {"seen": [], "lines": []})
+        server = HTTPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        url = f"http://127.0.0.1:{server.server_address[1]}/"
+        matrix_http.matrix_request(
+            {"homeserver": url, "access_token": "SECRET"}, "GET", "/account/whoami"
+        )
+        self.assertEqual(handler.lines, ["/_matrix/client/v3/account/whoami"])
+
+
 class SocketTimeoutTests(unittest.TestCase):
     """matrix-doctor.py bounds a request with the socket default timeout."""
 
