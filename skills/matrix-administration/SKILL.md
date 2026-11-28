@@ -70,7 +70,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/synapse-search.py            '!room:srv' '@bo
 }
 ```
 
-`homeserver` and either `admin_token` or `access_token` (server-admin) are required. The other fields are optional. To keep the token out of this file, set `admin_token_file` to a file holding it (relative paths resolve against the config directory) or export `MATRIX_ADMIN_TOKEN`; the environment wins over the file, the file over the inline value. Env fallbacks: `MATRIX_USER_ID`, `MATRIX_SPACE_ID`, `LANGUAGE=en|de`, `NO_COLOR`.
+`homeserver` is required. The token of a server admin comes from `MATRIX_ADMIN_TOKEN`, else the file named by `admin_token_file` (relative paths resolve against the config directory), else `admin_token`; with none of them set the scripts use the access token of matrix-communication's matrix-e2ee-cli session, sent to that session's homeserver, which works when that account is a server admin. `access_token` is not read. The other fields are optional. Env fallbacks: `MATRIX_USER_ID`, `MATRIX_SPACE_ID`, `LANGUAGE=en|de`, `NO_COLOR`.
 
 ## Safety
 

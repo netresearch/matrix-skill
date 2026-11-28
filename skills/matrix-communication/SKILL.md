@@ -48,7 +48,8 @@ Send, read and download media in Matrix rooms. **Always use `*-e2ee.py`.**
 `matrix.to` link; a direct chat also goes by the other person's name or ID.
 A short name is looked up as before (alias before display name); several
 matches stop the command, so pass the ID or full alias then. Send, edit,
-react and redact take only an exact alias or name, never a partial match.
+react, redact, invite and `power-level --set` take only an exact alias or
+name, never a partial match.
 **Prepend `set +H &&` when an argument contains `!`.**
 
 ```bash

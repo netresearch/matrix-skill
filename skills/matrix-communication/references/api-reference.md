@@ -219,17 +219,16 @@ GET /room_keys/keys?version={version}
 then fails while `matrix-watchd.py` holds it (matrix-e2ee-cli's data-directory lock) —
 the documented fallback to the direct path applies to sending, not to this. When the messages you are after are
 *unencrypted* — everything a webhook, a bridge or an RSS feed posts is — the plain
-`/messages` endpoint answers with the config's own `access_token` and needs no store at
+`/messages` endpoint answers with the skill's own device token and needs no store at
 all. It performs no `/sync` and touches no key endpoint, so it changes no device state —
 which is why it does not fall under the rule against reusing a client's token: **that
-rule still stands**, take the token from `~/.config/matrix/config.json`, never from
-Element or another running client. Where the config carries no `access_token` (E2EE set
-up by password only), this path is not available; the store holds device credentials, not
-a bearer token.
+rule still stands**, take the token from matrix-e2ee-cli's `session.json` (the skill's
+device), never from Element or another running client.
 
 ```bash
-HS=$(python3 -c 'import json;print(json.load(open("'$HOME'/.config/matrix/config.json"))["homeserver"])')
-TOKEN=$(python3 -c 'import json;print(json.load(open("'$HOME'/.config/matrix/config.json"))["access_token"])')
+SESSION="${XDG_DATA_HOME:-$HOME/.local/share}/matrix-e2ee-cli/session.json"
+HS=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["homeserver"])' "$SESSION")
+TOKEN=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["access_token"])' "$SESSION")
 ROOM=$(curl -s -H "Authorization: Bearer $TOKEN" \
   "$HS/_matrix/client/v3/directory/room/%23room%3Aserver" | python3 -c 'import json,sys;print(json.load(sys.stdin)["room_id"])')
 

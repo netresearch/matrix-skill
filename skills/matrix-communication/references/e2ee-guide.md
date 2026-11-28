@@ -9,9 +9,8 @@ Detailed guide for Matrix E2EE setup, device verification, and key management.
 
 | Scenario | Script | Notes |
 |----------|--------|-------|
-| Unencrypted room | `matrix-send.py` | Fast, no deps |
-| E2EE room with "allow unverified" | `matrix-send.py` | Works but not encrypted |
-| E2EE room, proper encryption | `matrix-send-e2ee.py` | Requires setup; downloads matrix-e2ee-cli on first use |
+| Any room | `matrix-send-e2ee.py` | Encrypted when the room is; requires setup; downloads matrix-e2ee-cli on first use |
+| Any room, older options only | `matrix-send.py` | The same matrix-e2ee-cli command, so the same setup; no plaintext path into an encrypted room |
 
 ## E2EE Setup
 

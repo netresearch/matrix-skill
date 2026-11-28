@@ -29,7 +29,7 @@ uv run scripts/matrix-invite.py "$ROOM" "$BOT"
 uv run scripts/matrix-power-level.py "$ROOM" --set "$BOT" 50
 
 # 3. Ask it to create the webhook (name is free text, liveDuration optional e.g. 30d)
-uv run scripts/matrix-send.py "$ROOM" "!hookshot webhook lsb-tickets" --no-prefix
+uv run scripts/matrix-send-e2ee.py "$ROOM" "!hookshot webhook lsb-tickets" --no-prefix
 ```
 
 Two details decide whether step 3 does anything:
@@ -42,14 +42,11 @@ Two details decide whether step 3 does anything:
   hookshot handles encrypted rooms only when its `encryption:` config is set.
   On a bridge without it (measured on hookshot 7.5.0) the command sent with
   `matrix-send-e2ee.py` (prefix off, key shared with every device) got no reply
-  and created no hook; sent as a plaintext `m.room.message` through the
-  Client-Server API (what `matrix-send.py` does) it was answered within seconds.
-  This is a deliberate **exception** to the rule of using non-E2EE scripts only
-  in confirmed-unencrypted rooms ([command-reference.md](command-reference.md)):
-  the plaintext event is readable by the homeserver and stored unencrypted in
-  the room's history. Use it only for the bare command, whose content (a hook
-  name) you are fine to disclose — the secret webhook URL is never part of it;
-  it arrives in the admin DM either way.
+  and created no hook, while a plaintext `m.room.message` was answered within
+  seconds. Version 5 sent that plaintext with `matrix-send.py`; every send
+  script now runs matrix-e2ee-cli, which encrypts in an encrypted room, so the
+  skill has no plaintext path any more. Set up the bridge's `encryption:`, or
+  provision the webhook in an unencrypted room.
 
 The bot replies in the room with `"Room configured to bridge webhooks. See
 admin room for secret url."` — **the actual URL is never posted in the
@@ -60,19 +57,10 @@ between itself and whichever user issued the command.
 
 The DM room has no name — find it by joined-member set, then read it:
 
-```python
-# find the 1:1 room with hookshot (no m.room.name set)
-rooms = list_joined_rooms(config)
-for r in rooms:
-    if r["room_id"] == r["name"]:  # unnamed room
-        members = matrix_request(config, "GET", f"/rooms/{r['room_id']}/joined_members")
-        if any("hookshot" in u for u in members.get("joined", {})):
-            admin_room = r["room_id"]
-            break
-```
-
 ```bash
-uv run scripts/matrix-read.py "$ADMIN_ROOM" --limit 5 --json
+# a room without a name is named after its members and matches on their user IDs
+uv run scripts/matrix-rooms.py --search "$BOT" --json
+uv run scripts/matrix-read-e2ee.py "$ADMIN_ROOM" --limit 5 --json
 ```
 
 The reply is a message like:

@@ -22,22 +22,23 @@ uv run skills/matrix-communication/scripts/matrix-doctor.py --offline
 ```
 
 The `token` row asks the homeserver (`GET /_matrix/client/v3/account/whoami`)
-whether the config token actually works, because a revoked or expired token
-leaves the config file perfectly well-formed. It has three outcomes:
+whether matrix-administration's `admin_token` actually works, because a revoked
+or expired token leaves the config file perfectly well-formed. The skill's own
+device is checked the same way in the `e2ee_setup` row. It has three outcomes:
 
 | row | meaning |
 | --- | --- |
 | `[OK] token` | the homeserver accepted it and it belongs to the configured `user_id` |
 | `[FAIL] token` | the homeserver rejected it (HTTP 401 `M_UNKNOWN_TOKEN`) — log in again and replace it |
-| `[??] token` | nothing was verified: no token in the config (normal for E2EE, which uses matrix-e2ee-cli's session), `--offline`, or the homeserver was unreachable |
+| `[??] token` | nothing was verified: no admin token in the config (normal: the scripts use matrix-e2ee-cli's session), `--offline`, or the homeserver was unreachable |
 
 `[??]` is deliberately not `OK`: the summary then reads "Checks passed, except
 token — could not be verified" rather than "All checks passed", so a passing
 doctor never implies a working credential.
 
-**Required for E2EE:** the [matrix-e2ee-cli](https://github.com/netresearch/matrix-e2ee-cli)
+**Required:** the [matrix-e2ee-cli](https://github.com/netresearch/matrix-e2ee-cli)
 binary for this platform (Linux and macOS on x86_64 and arm64, Windows on
-x86_64). The E2EE scripts download the release pinned in
+x86_64). The scripts download the release pinned in
 `scripts/_lib/cli_release.json` on first use and check its SHA-256;
 `matrix-doctor.py --install` does that in advance. `MATRIX_E2EE_CLI=/path` uses
 a binary of your own instead. No native library and no Python package is
@@ -89,7 +90,7 @@ EOF
 chmod 600 ~/.config/matrix/config.json
 ```
 
-### Step 5: Set up E2EE device (recommended)
+### Step 5: Set up E2EE device (required: every script uses it)
 
 > **⛔ Do not shortcut this step with a token you already have.**
 >
@@ -135,28 +136,14 @@ just taken over: use it only when that device is dead or foreign too.
 
 **Why environment variable?** Avoids shell escaping issues with special characters (`!`, `$`, etc.).
 
-### Step 6: Add access token to config
+### Step 6: No access token in the config
 
-After E2EE setup, copy the access token to enable non-E2EE scripts. The source is
-the skill's own session, matrix-e2ee-cli's `session.json` — the command below
-reads it from there. Never
-substitute a token from a client you use; the token in the config is the one most
-likely to be copied around later.
-
-```bash
-ACCESS_TOKEN=$(python3 -c "import json,os; print(json.load(open(os.path.join(os.environ.get('XDG_DATA_HOME') or os.path.expanduser('~/.local/share'), 'matrix-e2ee-cli', 'session.json')))['access_token'])")
-
-python3 -c "
-import json
-config_path = '$HOME/.config/matrix/config.json'
-with open(config_path) as f:
-    config = json.load(f)
-config['access_token'] = '$ACCESS_TOKEN'
-with open(config_path, 'w') as f:
-    json.dump(config, f, indent=2)
-print('Access token added to config')
-"
-```
+Nothing to copy: every script logs in with the matrix-e2ee-cli session that
+step 5 created. If `config.json` still carries an `access_token` or
+`access_token_file` from version 5 (or `MATRIX_ACCESS_TOKEN` is exported),
+remove it; no script reads it, and `matrix-doctor.py` warns while it is there.
+When it is the token of the skill's own device, the doctor says so, and
+removing it logs nothing out.
 
 ### Step 7: Verify setup
 
@@ -266,9 +253,9 @@ uv run .../matrix-e2ee-setup.py
 binary for this platform. Build matrix-e2ee-cli yourself (`cargo build --release`)
 and set `MATRIX_E2EE_CLI` to the binary.
 
-**Non-E2EE scripts fail with "Config missing required fields: access_token":**
+**`matrix-doctor.py` warns that `access_token` is no longer used:**
 
-After E2EE setup, the access token is stored separately. Copy it to the main config using Step 6 above.
+Remove it from `config.json` (Step 6 above).
 
 ## Bash Quoting Notes
 

@@ -15,10 +15,10 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --install
 | Error | What it is | Fix |
 |-------|-----------|-----|
 | `M_FORBIDDEN` | not in the room | join it in Element first |
-| `M_UNKNOWN_TOKEN` / HTTP 401 | the config token expired or was revoked — `matrix-doctor.py` reports `[FAIL] token` | mint a new one for the skill via `matrix-e2ee-setup.py --force` when the skill's own device is dead too (else copy its token, setup-guide step 6); **do not** copy a token out of Element |
+| `M_UNKNOWN_TOKEN` / HTTP 401 | a token expired or was revoked — `matrix-doctor.py` reports `[FAIL] e2ee_setup` for the skill's device, `[FAIL] token` for an `admin_token` | for the device, `matrix-e2ee-setup.py --force`; for an `admin_token`, a new server-admin token (or remove it, and the `synapse-*` scripts use the device's); **do not** copy a token out of Element |
 | `M_LIMIT_EXCEEDED` | rate limited | wait, retry |
 | `Could not find room` | name/alias did not resolve | `matrix-rooms.py` to list what you are in |
-| `'NAME' matches several rooms: …` / `no joined room matches 'NAME'` / `'NAME' is only part of the name of …` | an E2EE script looked the short name up (alias before one exact display name, as the E2EE scripts of version 4 did) and found several rooms, none, or (for send, edit, react, redact) only a partial match; nothing was sent | pass the room ID or the full alias (`#name:server`) from the list in the message or from `matrix-rooms.py` |
+| `'NAME' matches several rooms: …` / `no joined room matches 'NAME'` / `'NAME' is only part of the name of …` | a script looked the short name up (alias before one exact display name, as the E2EE scripts of version 4 did) and found several rooms, none, or (for send, edit, react, redact, invite, `power-level --set`) only a partial match; nothing was sent | pass the room ID or the full alias (`#name:server`) from the list in the message or from `matrix-rooms.py` |
 | `Room not found` **on a room you are in** | the E2EE credential is dead — a rejected token yields an empty joined-rooms list, which looks like the room is gone. `matrix-doctor.py` reports `[FAIL] e2ee_setup` | `matrix-e2ee-setup.py --force` (without `--force` it keeps the dead session and only shows its state) |
 | `[Unable to decrypt]` | keys for those messages are not in this device's store | first `matrix-fetch-keys.py ROOM --sync-time 60` (asks other devices, no recovery key needed); only then `matrix-key-backup.py --recovery-key --import-keys` (prompts for the key) |
 | `signature failed` | running on a foreign device | dedicated device via `matrix-e2ee-setup.py --force` |
@@ -99,19 +99,20 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-e2ee-setup.py --status
 config, not a lost credential — and the fix is a repair, not a new token. Say
 "I have not got access" only after the tool has said so too.
 
-**The token copies drift apart independently.** The E2EE `session.json`,
-`access_token` in `config.json` and `admin_token` in `config.json` each go stale
-on their own schedule, and which one is live changes over time. `whoami` each
+**The token copies drift apart independently.** The E2EE `session.json` and
+`admin_token` in `config.json` each go stale on their own schedule, and which
+one is live changes over time. `whoami` each
 copy (the `curl` in `setup-guide.md`) before concluding anything about any of
 them. A doctor `[FAIL] token` names the label it rejected — a dead `admin_token`
 says nothing about sending, which never uses it.
 
-**A dead `admin_token` shadows a live admin `access_token`.** The `synapse-*`
-scripts take `config.get("admin_token") or config["access_token"]`, so a
-non-empty but revoked `admin_token` makes every admin call return `401` even
-when `access_token` belongs to a server admin. The `access_token` is never
-tried. Remove or replace the dead `admin_token` field; do not report "no admin
-access" before checking the other token against an admin endpoint.
+**A dead `admin_token` shadows a live admin session.** The `synapse-*`
+scripts use a set admin token (`MATRIX_ADMIN_TOKEN`, `admin_token_file`,
+`admin_token`) before the matrix-e2ee-cli session, so a non-empty but revoked
+`admin_token` makes every admin call return `401` even when the session's
+account is a server admin. The session is never tried. Remove or replace the
+dead `admin_token`; do not report "no admin access" before checking the
+session's token against an admin endpoint.
 
 ## Mistakes that cost the most time
 
@@ -125,8 +126,6 @@ lines. Before any such claim, read the whole error.
   decryption *in that client*, silently, and nothing fails at the moment you
   paste. `SKILL.md` carries the full reasoning; `matrix-e2ee-setup.py` mints a
   device of its own.
-- **Using a non-E2EE script in an encrypted room.** Always `*-e2ee.py` unless the
-  room is confirmed unencrypted.
 - **Forgetting `set +H`** when the message contains `!`.
 - **Running `matrix-e2ee-cli.py logout` to retire the old matrix-nio copy** — it
   logs the migrated device out on the server. Delete the old store directory

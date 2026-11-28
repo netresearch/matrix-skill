@@ -12,15 +12,15 @@ full surface.
 everywhere below. A room without a name — a direct chat, usually — goes by
 the name Element shows for it: the other person's display name, or their
 user ID (`@jane:server`). A short name, also `#name` without the server, is
-looked up with the skill's device token in the order the E2EE scripts of
-version 4 used: alias without server, then a single exact display name (one
+looked up among the joined rooms `matrix-e2ee-cli rooms --json` lists (from
+the CLI's store, or from the watch daemon while it runs), in the order the
+E2EE scripts of version 4 used: alias without server, then a single exact display name (one
 exact name wins even when other names contain it), then a single partial
 match. `matrix-react.py` and `matrix-redact.py` now follow that order too;
 in version 4 they refused an exact name that another room's name contained.
-That costs two requests per joined room (three for a room without name and
-alias), 30 s each at most; a request that fails or answers with something
-other than JSON stops the command. Send,
-edit, react and redact accept only an exact alias or exact name: anyone who
+A listing that fails, or a room whose members the CLI could not read, stops
+the command. Send, edit, react, redact, invite and `power-level --set`
+accept only an exact alias or exact name: anyone who
 can name a room you are in could otherwise steer a partial match. A name
 that matches several rooms, or none, stops the command before anything is
 sent. A room ID or full alias goes to matrix-e2ee-cli unchanged, without the
@@ -61,9 +61,8 @@ set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py --to '@user:ser
   them anyway; the flag is not remembered and marks no device verified. The
   same flag exists on `matrix-edit-e2ee.py`. Reactions are sent unencrypted,
   so `matrix-react.py` shares no room key and accepts the flag without effect.
-- `matrix-react.py` and `matrix-redact.py` run matrix-e2ee-cli's `react` and
-  `redact` with the skill's E2EE device, like the `*-e2ee.py` scripts; an
-  `access_token` in the config is not enough for them.
+- Every script except `matrix-doctor.py` runs a matrix-e2ee-cli command with
+  the skill's E2EE device; none reads a token from the config.
 
 ## Read, download, edit, delete, react
 
@@ -118,8 +117,10 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-power-level.py ROOM --show
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-power-level.py ROOM --set '@user:server' 50
 ```
 
-Run `--show` before `--set` on any room you did not create — see
-`api-reference.md` for what the levels mean.
+They run matrix-e2ee-cli's `rooms`, `resolve`, `create-room`, `invite` and
+`power-level` with the same flags and output. Run `--show` before `--set` on
+any room you did not create — see `api-reference.md` for what the levels
+mean.
 
 ## E2EE
 
@@ -172,8 +173,8 @@ rather than OK.
 
 ## Script selection
 
-| Operation | E2EE (preferred) | Non-E2EE fallback |
-|-----------|-----------------|-------------------|
+| Operation | E2EE (preferred) | Older options, same command |
+|-----------|-----------------|-----------------------------|
 | Send | `matrix-send-e2ee.py` | `matrix-send.py` |
 | Read | `matrix-read-e2ee.py` | `matrix-read.py` |
 | Edit | `matrix-edit-e2ee.py` | `matrix-edit.py` |
@@ -181,7 +182,7 @@ rather than OK.
 | React | `matrix-react.py` | — |
 | Delete | `matrix-redact.py` | — |
 
-Fall back to the non-E2EE scripts only for a room confirmed to be unencrypted. The one exception is a bot command to a bridge that does not decrypt (see [hookshot-integration.md](hookshot-integration.md)), and only for content you are fine to disclose to the homeserver.
+`matrix-send.py`, `matrix-read.py` and `matrix-edit.py` run the same matrix-e2ee-cli commands as their `-e2ee` siblings: encrypted in an encrypted room, unencrypted in an unencrypted one. They keep their older options and lack the newer ones (`--to`, `--mention`, `--trust-unverified-devices`, `--request-keys`). `matrix-send.py --format text` is refused: the CLI always renders Markdown. `matrix-read.py` prints the messages newest first, in the format of `matrix-read-e2ee.py`.
 
 ## Config
 
@@ -191,15 +192,12 @@ Fall back to the non-E2EE scripts only for a room confirmed to be unencrypted. T
 |---|---|
 | `homeserver` | required |
 | `user_id` | required |
-| `access_token` | optional, **non-E2EE scripts only** |
-| `access_token_file` | optional: path to a file holding `access_token` (relative to the config directory), so the token stays out of `config.json` |
 | `watch_rooms` | rooms `matrix-watchd.py` logs |
 | `bot_prefix` | message prefix |
 
-`MATRIX_ACCESS_TOKEN` in the environment overrides `access_token_file`, which
-overrides `access_token` (`_lib/config.py`, `resolve_tokens`). Rotating the
-token means replacing that one value; the rest of `config.json` stays as it is.
-
-Copy `access_token` from the skill's own session, matrix-e2ee-cli's
-`session.json` (setup-guide, step 6) — never from a client you use. The reason is in `SKILL.md`, and it is the one
-mistake in this skill that damages something outside it.
+No script reads `access_token`, `access_token_file` or `MATRIX_ACCESS_TOKEN`:
+every script logs in with the matrix-e2ee-cli session (`session.json`), the
+device `matrix-e2ee-setup.py` created. `matrix-doctor.py` warns about a
+leftover one; remove it. Never put a token from a client you use anywhere the
+skill reads. The reason is in `SKILL.md`, and it is the one mistake in this
+skill that damages something outside it.
