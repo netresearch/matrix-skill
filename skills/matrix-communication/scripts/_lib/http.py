@@ -141,7 +141,7 @@ def matrix_request(
     Returns:
         Response dict, or dict with 'error' key on failure
     """
-    url = f"{config['homeserver']}/_matrix/client/{api_version}{endpoint}"
+    url = f"{config['homeserver'].rstrip('/')}/_matrix/client/{api_version}{endpoint}"
     _require_http_scheme(url)
     headers = {
         "Authorization": f"Bearer {config['access_token']}",

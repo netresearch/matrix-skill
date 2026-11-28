@@ -91,5 +91,33 @@ class TokenTests(unittest.TestCase):
         self.assertEqual(handler.seen, [])
 
 
+class RequestLine(Recorder):
+    """Records the raw request line: http.server collapses a leading "//"
+    in self.path, so the path alone cannot show a doubled slash."""
+
+    def do_GET(self):
+        self.lines.append(self.requestline.split()[1])
+        super().do_GET()
+
+
+class HomeserverUrlTests(unittest.TestCase):
+    def test_a_trailing_slash_does_not_double_the_path_slash(self):
+        # matrix-e2ee-cli writes the session's homeserver as a serialized
+        # URL, "https://matrix.example.org/", and load_config takes it over.
+        handler = type("H", (RequestLine,), {"seen": [], "lines": []})
+        server = HTTPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        url = f"http://127.0.0.1:{server.server_address[1]}/"
+        config = {"homeserver": url, "admin_token": "SECRET"}
+        admin_http.admin_request(config, "GET", "/v1/rooms")
+        admin_http.client_request(config, "GET", "/joined_rooms")
+        self.assertEqual(
+            handler.lines,
+            ["/_synapse/admin/v1/rooms", "/_matrix/client/v3/joined_rooms"],
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
