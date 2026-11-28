@@ -1,0 +1,1 @@
+- matrix-administration and `matrix-doctor.py` no longer request `//_synapse/…` and `//_matrix/…` when the homeserver ends with "/", as the matrix-e2ee-cli session writes it (`https://matrix.example.org/`); a proxy that routes only `/_matrix` and `/_synapse` would otherwise refuse those requests
