@@ -29,7 +29,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib.rooms import normalize_room_input
 from _lib.utils import clean_message
-from _lib.wrapper import Unsupported, exit_with, refuse, room_chooser
+from _lib.wrapper import (
+    Unsupported,
+    exit_with,
+    parse_intermixed,
+    refuse,
+    room_chooser,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -122,7 +128,7 @@ def translate(args):
 
 
 def main(argv=None) -> None:
-    args = build_parser().parse_intermixed_args(argv)
+    args = parse_intermixed(build_parser(), argv)
     try:
         cli_args, extra_env = translate(args)
     except Unsupported as exc:

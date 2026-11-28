@@ -621,6 +621,31 @@ class TakeoverTests(WrapperTestCase):
         self.run_script("matrix-read-e2ee.py", "ops", **env)
         self.assertEqual([c["argv"][0] for c in self.calls()], ["rooms", "read"])
 
+    def test_a_room_named_like_a_help_flag_still_takes_over(self):
+        # send's ROOM stands before the child's "--"; it is no help request.
+        for script in ("matrix-send.py", "matrix-send-e2ee.py"):
+            with self.subTest(script=script):
+                self.log.unlink(missing_ok=True)
+                for name in ("marker", "session"):
+                    path = (
+                        self.root
+                        / "data"
+                        / (
+                            "matrix-skill/nio-migrated.json"
+                            if name == "marker"
+                            else "matrix-e2ee-cli/session.json"
+                        )
+                    )
+                    path.unlink(missing_ok=True)
+                env = self.takeover_env(
+                    [{"room_id": "!h:e", "name": "--help", "alias": None}]
+                )
+                result = self.run_script(script, "--", "--help", "hi", **env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                argvs = [c["argv"] for c in self.calls()]
+                self.assertEqual(argvs[0][0], "migrate-nio")
+                self.assertEqual(argvs[-1], ["send", "!h:e", "--", "hi"])
+
     def test_without_the_takeover_a_shorthand_needs_a_session(self):
         # A takeover that creates no session leaves nothing to look up with.
         result = self.run_script("matrix-read-e2ee.py", "ops")
@@ -943,6 +968,20 @@ class RoomLookupTests(WrapperTestCase):
             with self.subTest(script=script):
                 self.log.unlink(missing_ok=True)
                 self.assertTranslates(script, args, expected)
+
+    def test_options_stay_intermixed_around_the_separator(self):
+        # An option after ROOM, a message that starts with "-" after "--".
+        self.assertTranslates(
+            "matrix-send-e2ee.py",
+            ["ops", "--notice", "--", "-hi"],
+            ["send", "--notice", "!a:e", "--", "-hi"],
+        )
+        self.log.unlink()
+        self.assertTranslates(
+            "matrix-send-e2ee.py",
+            ["--notice", "ops", "hi", "--json"],
+            ["send", "--notice", "--json", "!a:e", "--", "hi"],
+        )
 
     def test_the_rooms_are_listed_by_the_cli_once(self):
         self.assertTranslates("matrix-read-e2ee.py", ["ops"], ["read", "--", "!a:e"])

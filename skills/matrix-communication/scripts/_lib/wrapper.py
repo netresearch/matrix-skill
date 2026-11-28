@@ -46,7 +46,32 @@ def needs_takeover(args) -> bool:
     if args[0] == "watch-daemon" and NO_STORE_DAEMON_FLAGS & set(args[1:]):
         return False
     flags = args[: args.index("--")] if "--" in args else args
+    if args[0] == "send" and "--" in args:
+        # send's ROOM operand stands right before "--": a room named "--help"
+        # is no help request, and room_chooser replaces it with the room ID.
+        flags = flags[:-1]
     return not any(arg in HELP_FLAGS for arg in flags)
+
+
+def parse_intermixed(parser, argv=None):
+    """``parser.parse_intermixed_args``, with what follows "--" kept positional.
+
+    Python 3.11's two-pass parse drops "--" in its first pass and then reads
+    an operand after it, such as the room "-ops", as an option. The operands
+    after the first "--" are parsed as stand-ins that cannot look like
+    options and put back afterwards, so options stay intermixed before it.
+    """
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if "--" not in argv:
+        return parser.parse_intermixed_args(argv)
+    cut = argv.index("--")
+    operands = argv[cut + 1 :]
+    stand_ins = {f"\x00operand{i}": value for i, value in enumerate(operands)}
+    args = parser.parse_intermixed_args(argv[:cut] + list(stand_ins))
+    for name, value in vars(args).items():
+        if isinstance(value, str) and value in stand_ins:
+            setattr(args, name, stand_ins[value])
+    return args
 
 
 def is_explicit_migration(args) -> bool:

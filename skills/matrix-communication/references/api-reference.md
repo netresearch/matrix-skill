@@ -213,17 +213,19 @@ GET /room_keys/version
 GET /room_keys/keys?version={version}
 ```
 
-### Reading history without the E2EE store
+### Raw, paginated history through `/messages`
 
-`matrix-read-e2ee.py` opens the encryption store, so it waits for the store's lock and
-then fails while `matrix-watchd.py` holds it (matrix-e2ee-cli's data-directory lock) —
-the documented fallback to the direct path applies to sending, not to this. When the messages you are after are
-*unencrypted* — everything a webhook, a bridge or an RSS feed posts is — the plain
-`/messages` endpoint answers with the skill's own device token and needs no store at
-all. It performs no `/sync` and touches no key endpoint, so it changes no device state —
-which is why it does not fall under the rule against reusing a client's token: **that
-rule still stands**, take the token from matrix-e2ee-cli's `session.json` (the skill's
-device), never from Element or another running client.
+`matrix-read-e2ee.py` and `matrix-read.py` read the last messages, decrypted;
+while `matrix-watchd.py` runs they go through the daemon (matrix-e2ee-cli
+0.4.0 or later, and a daemon started from that version). For raw events and
+deeper history than `--limit` covers, the plain `/messages` endpoint pages
+backwards as far as you need. It returns events as the homeserver stores them,
+so only *unencrypted* ones are readable — everything a webhook, a bridge or an
+RSS feed posts is. It answers with the skill's own device token, performs no
+`/sync` and touches no key endpoint, so it changes no device state — which is
+why it does not fall under the rule against reusing a client's token: **that
+rule still stands**, take the token from matrix-e2ee-cli's `session.json` (the
+skill's device), never from Element or another running client.
 
 The token never goes on a command line, where other local users can read it
 in the process list: curl reads the header from stdin (`-H @-`, curl 7.55.0 or
