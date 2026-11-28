@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 
-"""HTTP-based Matrix API requests.
+"""HTTP-based Matrix API requests, for matrix-doctor.py's token checks.
 
 All functions use ONLY stdlib.
 """
@@ -72,7 +72,7 @@ def _prefer_ipv4():
         socket.getaddrinfo = original
 
 
-def _do_request(req: urllib.request.Request, timeout=None) -> dict:
+def _do_request(req: urllib.request.Request) -> dict:
     """Execute a request and return parsed JSON response.
 
     The caller must have validated the URL scheme via
@@ -80,8 +80,7 @@ def _do_request(req: urllib.request.Request, timeout=None) -> dict:
     """
     _require_http_scheme(req.full_url)
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-    kwargs = {} if timeout is None else {"timeout": timeout}
-    with _OPENER.open(req, **kwargs) as response:
+    with _OPENER.open(req) as response:
         return json.loads(response.read().decode())
 
 
@@ -118,37 +117,6 @@ def _lenient_http_error(e: urllib.error.HTTPError) -> dict:
         }
 
 
-class RequestFailed(OSError):
-    """An error answer that a strict caller must not read as "not set"."""
-
-
-def _strict_http_error(e: urllib.error.HTTPError, endpoint: str) -> dict:
-    """The error dict for a 404 M_NOT_FOUND on a state event, else raise.
-
-    A state event that is not set answers 404 M_NOT_FOUND; that is an
-    answer. Any other error status (a 502 from a proxy, a 403, a 429) says
-    nothing about the room, and reading it as "no name" or "no alias" can
-    pick another room.
-    """
-    try:
-        result = _parse_http_error(e)
-    except (http.client.HTTPException, OSError) as broken:
-        # A cut-off body, or a timeout or reset while reading it: the status
-        # still says the request failed.
-        raise RequestFailed(
-            f"{endpoint} answered HTTP {e.code} with a broken body ({broken!r})"
-        ) from broken
-    if (
-        e.code == 404
-        and result.get("errcode") == "M_NOT_FOUND"
-        and "/state/" in endpoint
-    ):
-        return result
-    raise RequestFailed(
-        f"{endpoint} answered HTTP {e.code}: {result.get('error')}"
-    ) from e
-
-
 def matrix_request(
     config: dict,
     method: str,
@@ -158,26 +126,21 @@ def matrix_request(
 ) -> dict:
     """Make a Matrix API request.
 
+    matrix-doctor.py's only use: it asks /account/whoami whether a token
+    works. The scripts themselves talk to the homeserver through
+    matrix-e2ee-cli. No timeout of its own: the caller scopes the socket
+    default around the call.
+
     Args:
         config: Dict with homeserver and access_token
         method: HTTP method (GET, POST, PUT, DELETE)
-        endpoint: API endpoint (e.g., /joined_rooms)
+        endpoint: API endpoint (e.g., /account/whoami)
         data: Optional dict to send as JSON body
-        api_version: Client-API version in the path; the relations endpoint
-            exists only under v1
-
-    ``config`` may carry ``timeout`` (seconds per request) and ``strict``. With
-    ``strict`` every failure raises instead of coming back as an error dict:
-    a transport failure (timeout, refused connection) as its OSError, a broken
-    HTTP answer (http.client.HTTPException) and an error status as
-    RequestFailed (except 404 M_NOT_FOUND on a state event, which means "not
-    set"), and a JSON answer that is not an object as ValueError.
+        api_version: Client-API version in the path
 
     Returns:
         Response dict, or dict with 'error' key on failure
     """
-    timeout = config.get("timeout")
-    strict = config.get("strict", False)
     url = f"{config['homeserver']}/_matrix/client/{api_version}{endpoint}"
     _require_http_scheme(url)
     headers = {
@@ -189,21 +152,15 @@ def matrix_request(
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
 
     try:
-        return _checked(_do_request(req, timeout), strict, endpoint)
+        return _do_request(req)
     except urllib.error.HTTPError as e:
-        if strict:
-            return _strict_http_error(e, endpoint)
         return _lenient_http_error(e)
     except http.client.HTTPException as e:
-        if strict:
-            raise RequestFailed(f"{endpoint}: broken HTTP answer ({e!r})") from e
         if isinstance(e, OSError):  # RemoteDisconnected: an answer-less close
             return {"error": str(e)}
         raise
     except OSError as e:
         if e.errno not in (101, 113):  # ENETUNREACH, EHOSTUNREACH
-            if strict:
-                raise
             return {"error": str(e)}
         # IPv6 likely unreachable — retry with IPv4 preference
         try:
@@ -211,34 +168,12 @@ def matrix_request(
                 req2 = urllib.request.Request(
                     url, data=body, headers=headers, method=method
                 )
-                return _checked(_do_request(req2, timeout), strict, endpoint)
+                return _do_request(req2)
         except urllib.error.HTTPError as e2:
-            if strict:
-                return _strict_http_error(e2, endpoint)
             return _lenient_http_error(e2)
         except http.client.HTTPException as e2:
-            if strict:
-                raise RequestFailed(f"{endpoint}: broken HTTP answer ({e2!r})") from e2
             if isinstance(e2, OSError):
                 return {"error": str(e2)}
             raise
         except OSError as e2:
-            if strict:
-                raise
             return {"error": str(e2)}
-
-
-def _checked(result, strict: bool, endpoint: str):
-    if strict and not isinstance(result, dict):
-        raise ValueError(f"{endpoint} answered JSON that is not an object")
-    return result
-
-
-def path_segment(value: str) -> str:
-    """URL-encode one path segment (room ID, user ID, event ID).
-
-    Room and event IDs contain characters such as ``!``, ``$``, ``:`` and may
-    contain ``/`` or ``?``; unencoded, they can change which endpoint a
-    request reaches.
-    """
-    return urllib.parse.quote(str(value), safe="")
