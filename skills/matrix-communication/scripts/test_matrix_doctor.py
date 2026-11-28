@@ -253,6 +253,17 @@ class CheckE2eeSetupTests(CredentialTestCase):
         state, _ = doctor.check_e2ee_setup(CONFIG)
         self.assertIsNone(state)
 
+    def test_a_session_without_homeserver_fails_and_sends_nothing(self):
+        # Its token belongs to its own homeserver only: never to config.json's.
+        for homeserver in (None, ""):
+            with self.subTest(homeserver=homeserver):
+                self._write_session(homeserver=homeserver)
+                self.requests.clear()
+                state, message = doctor.check_e2ee_setup(CONFIG)
+                self.assertIs(state, False)
+                self.assertIn("no homeserver", message)
+                self.assertEqual(self.requests, [])
+
     def test_the_token_is_checked_where_matrix_e2ee_cli_uses_it(self):
         self._write_session(homeserver="https://device.example.net")
         seen = []

@@ -28,8 +28,11 @@ uv run scripts/matrix-invite.py "$ROOM" "$BOT"
 # 2. Promote it — hookshot refuses to configure a bridge without moderator+
 uv run scripts/matrix-power-level.py "$ROOM" --set "$BOT" 50
 
-# 3. Ask it to create the webhook (name is free text, liveDuration optional e.g. 30d);
-#    --plaintext only for a bridge without encryption, see below
+# 3. Ask it to create the webhook (name is free text, liveDuration optional e.g. 30d)
+set +H && uv run scripts/matrix-send-e2ee.py "$ROOM" "!hookshot webhook lsb-tickets" --no-prefix
+
+# 3, only for a bridge without `encryption:` (see below): the homeserver and
+#    every later member can read this one message; the webhook URL is never in it
 set +H && uv run scripts/matrix-send-e2ee.py "$ROOM" "!hookshot webhook lsb-tickets" --no-prefix --plaintext
 ```
 

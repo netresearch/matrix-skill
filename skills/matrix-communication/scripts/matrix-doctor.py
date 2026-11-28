@@ -373,13 +373,17 @@ def check_e2ee_setup(config: dict, offline: bool = False) -> tuple[bool | None, 
             ),
         )
     # matrix-e2ee-cli talks to the homeserver recorded in the session, not to
-    # config.json's: check the token where it is used.
-    config = {
-        **config,
-        "homeserver": session.get("homeserver") or config.get("homeserver"),
-    }
-    if not config.get("homeserver"):
-        return None, f"E2EE device {device_id} configured - no homeserver to verify it"
+    # config.json's: check the token there, and only there. A session without
+    # one cannot work, and its token is never sent to another homeserver.
+    if not session.get("homeserver"):
+        return (
+            False,
+            (
+                f"E2EE session for {device_id} records no homeserver - run "
+                "matrix-e2ee-setup.py --force"
+            ),
+        )
+    config = {**config, "homeserver": session["homeserver"]}
     if offline:
         return None, f"E2EE device {device_id} configured - not verified (--offline)"
 
