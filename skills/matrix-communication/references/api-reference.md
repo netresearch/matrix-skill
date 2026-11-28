@@ -225,18 +225,23 @@ which is why it does not fall under the rule against reusing a client's token: *
 rule still stands**, take the token from matrix-e2ee-cli's `session.json` (the skill's
 device), never from Element or another running client.
 
+The token never goes on a command line, where other local users can read it
+in the process list: curl reads the header from stdin (`-H @-`, curl 7.55.0 or
+later), fed by a here-string (bash or zsh).
+
 ```bash
 SESSION="${XDG_DATA_HOME:-$HOME/.local/share}/matrix-e2ee-cli/session.json"
 HS=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["homeserver"])' "$SESSION")
-TOKEN=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["access_token"])' "$SESSION")
-ROOM=$(curl -s -H "Authorization: Bearer $TOKEN" \
-  "$HS/_matrix/client/v3/directory/room/%23room%3Aserver" | python3 -c 'import json,sys;print(json.load(sys.stdin)["room_id"])')
+AUTH="Authorization: Bearer $(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["access_token"])' "$SESSION")"
+ROOM=$(curl -s -H @- "$HS/_matrix/client/v3/directory/room/%23room%3Aserver" <<<"$AUTH" \
+  | python3 -c 'import json,sys;print(json.load(sys.stdin)["room_id"])')
 
 # newest first; page with the returned `end` token until `origin_server_ts` is old enough
-curl -s -H "Authorization: Bearer $TOKEN" --get \
+curl -s -H @- --get \
   --data-urlencode 'dir=b' --data-urlencode 'limit=100' \
   --data-urlencode 'filter={"types":["m.room.message","m.room.encrypted"]}' \
-  "$HS/_matrix/client/v3/rooms/$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$ROOM")/messages"
+  "$HS/_matrix/client/v3/rooms/$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$ROOM")/messages" \
+  <<<"$AUTH"
 ```
 
 The response holds `chunk` (the events, newest first) and `end` (pass it back as `from`).

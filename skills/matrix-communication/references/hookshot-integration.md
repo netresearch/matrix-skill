@@ -58,9 +58,16 @@ between itself and whichever user issued the command.
 The DM room has no name — find it by joined-member set, then read it:
 
 ```bash
-# a room without a name is named after its members and matches on their user IDs
-uv run scripts/matrix-rooms.py --search "$BOT" --json
-uv run scripts/matrix-read-e2ee.py "$ADMIN_ROOM" --limit 5 --json
+# a room without a name is named after its members and matches on their user
+# IDs; exactly one such room must match, else nothing is read
+ADMIN_ROOM=$(uv run scripts/matrix-rooms.py --search "$BOT" --json | python3 -c '
+import json, sys
+rooms = json.load(sys.stdin)
+if len(rooms) != 1:
+    sys.exit(f"{len(rooms)} rooms match {sys.argv[1]}; pass the admin room ID")
+print(rooms[0]["room_id"])
+' "$BOT") &&
+  uv run scripts/matrix-read-e2ee.py "$ADMIN_ROOM" --limit 5 --json
 ```
 
 The reply is a message like:

@@ -21,7 +21,12 @@ Options:
     --search TERM     Filter rooms by name or alias; a room without a name
                       (a direct chat) is named after its members and also
                       matches on their user IDs
-    --lookup NAME     Find room by name and output room ID (for scripts)
+    --lookup NAME     Find room by name and output room ID (for scripts).
+                      It may return a single partial match, and it succeeds
+                      when the members of some room could not be read
+                      (warning on stderr), so it is not meant to feed a
+                      command that writes: pass the name to that command,
+                      which looks it up for writing (exact matches only)
     --help            Show this help
 
 --debug is accepted and ignored.
@@ -40,8 +45,8 @@ Examples:
     # Get room ID by name (for use in other commands)
     matrix-rooms.py --lookup "agent-work"
 
-    # Use in pipeline
-    matrix-send.py "$(matrix-rooms.py --lookup agent-work)" "Hello!"
+    # A command that writes takes the name itself and looks it up for writing
+    matrix-send.py agent-work "Hello!"
 """
 
 import argparse

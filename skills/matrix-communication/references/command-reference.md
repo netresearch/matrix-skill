@@ -18,6 +18,14 @@ E2EE scripts of version 4 used: alias without server, then a single exact displa
 exact name wins even when other names contain it), then a single partial
 match. `matrix-react.py` and `matrix-redact.py` now follow that order too;
 in version 4 they refused an exact name that another room's name contained.
+So do `matrix-send.py`, `matrix-read.py`, `matrix-edit.py`,
+`matrix-invite.py` and `matrix-power-level.py`: in version 5.0.0 they refused
+an exact name of a room without alias when another room's name contained it
+(`test` beside `test-archive`), and took the first of several rooms with the
+same alias name, which is now refused. `matrix-rooms.py --lookup` keeps the
+rule of version 5.0.0 (matrix-e2ee-cli's `rooms --lookup`), and it may return a
+single partial match: pass the name itself to a command that writes, which
+looks it up with the stricter rule.
 A listing that fails, or a room whose members the CLI could not read, stops
 the command. Send, edit, react, redact, invite and `power-level --set`
 accept only an exact alias or exact name: anyone who
@@ -109,7 +117,7 @@ the E2EE send, edit, react and redact of the CLI route through it.
 ```bash
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py --search ops
-uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py --lookup "Jane Doe"   # direct chat by name
+uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-rooms.py --lookup "Jane Doe"   # room ID of the direct chat, to read; never feed it to a write
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-resolve.py "#room:server"
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-create-room.py "Room Name" --alias localpart --invite '@user:server'
 uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-invite.py ROOM '@user:server'
