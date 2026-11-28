@@ -13,7 +13,7 @@ The skill uses a script-driven architecture:
 
 1. **SKILL.md** (`skills/matrix-communication/SKILL.md`) -- Entry point loaded by the agent runtime. Contains metadata, quick reference for all operations, and formatting rules.
 
-2. **Scripts** (`skills/matrix-communication/scripts/`) -- Python scripts for each Matrix operation (send, read, edit, react, redact, rooms, resolve, E2EE setup/verify, and the watch daemon plus its reader). The E2EE scripts are stdlib wrappers that translate their flags into a command of [matrix-e2ee-cli](https://github.com/netresearch/matrix-e2ee-cli) (Rust, matrix-sdk) and run it. A shared `_lib/` module provides common functionality, the CLI bootstrap included.
+2. **Scripts** (`skills/matrix-communication/scripts/`) -- Python scripts for each Matrix operation (send, read, edit, react, redact, rooms, resolve, E2EE setup/verify, and the watch daemon plus its reader). Every script except `matrix-doctor.py` is a stdlib wrapper that translates its flags into a command of [matrix-e2ee-cli](https://github.com/netresearch/matrix-e2ee-cli) (Rust, matrix-sdk) and runs it, so the CLI's session is the skill's only login; a short room name is looked up in `matrix-e2ee-cli rooms --json` first (`_lib/room_lookup.py`). `matrix-administration` uses that session's token too when no admin token is set. A shared `_lib/` module provides common functionality, the CLI bootstrap included.
 
 3. **References** (`skills/matrix-communication/references/`) -- Detailed guides for API usage, E2EE configuration, messaging patterns, and initial setup.
 

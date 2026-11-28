@@ -79,5 +79,17 @@ class RedirectAuthorizationTests(unittest.TestCase):
         )
 
 
+class TokenTests(unittest.TestCase):
+    def test_an_access_token_alone_is_never_sent(self):
+        server, handler = serve()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        url = f"http://127.0.0.1:{server.server_address[1]}"
+        for call in (admin_http.admin_request, admin_http.client_request):
+            with self.subTest(call=call.__name__), self.assertRaises(KeyError):
+                call({"homeserver": url, "access_token": "OLD"}, "GET", "/v1/rooms")
+        self.assertEqual(handler.seen, [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

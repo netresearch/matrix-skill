@@ -11,7 +11,9 @@ importable as a package; run the file directly or use unittest discovery:
         -s skills/matrix-administration/scripts/_lib -p 'test_config.py'
 
 Stdlib only. Every case runs against a config directory of its own
-(XDG_CONFIG_HOME) with the MATRIX_* variables removed from the environment.
+(XDG_CONFIG_HOME) with the MATRIX_* variables removed from the environment and the
+matrix-e2ee-cli session looked up under a data directory of its own
+(XDG_DATA_HOME).
 """
 
 import contextlib
@@ -41,6 +43,8 @@ class AdminTokenSourceTests(unittest.TestCase):
 
         env = {k: v for k, v in os.environ.items() if not k.startswith("MATRIX_")}
         env["XDG_CONFIG_HOME"] = str(self.home)
+        env["XDG_DATA_HOME"] = str(self.home / "data")
+        env["HOME"] = str(self.home)
         patcher = mock.patch.dict(os.environ, env, clear=True)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -93,19 +97,105 @@ class AdminTokenSourceTests(unittest.TestCase):
         loaded, _ = self.load(require_admin=False)
         self.assertEqual(loaded["homeserver"], BASE["homeserver"])
 
-    def test_unused_access_token_file_does_not_stop_a_working_admin_token(self):
-        """admin_token wins, so a broken access_token_file is never read."""
-        self.write_config({**BASE, "access_token_file": "missing.token"})
-        os.environ["MATRIX_ADMIN_TOKEN"] = "syt_admin_env"
+    def write_session(self, **fields) -> None:
+        session = self.home / "data" / "matrix-e2ee-cli" / "session.json"
+        session.parent.mkdir(parents=True, exist_ok=True)
+        session.write_text(json.dumps(fields))
+
+    def test_the_cli_session_token_is_the_fallback(self):
+        self.write_config(BASE)
+        self.write_session(
+            homeserver=BASE["homeserver"], user_id="@a:e", access_token="syt_device"
+        )
         loaded, err = self.load()
         self.assertIsNotNone(loaded, err)
-        self.assertEqual(loaded["admin_token"], "syt_admin_env")
+        self.assertEqual(loaded["admin_token"], "syt_device")
 
-    def test_access_token_file_is_the_fallback_without_an_admin_token(self):
+    def test_the_session_follows_xdg_data_home(self):
+        os.environ["XDG_DATA_HOME"] = str(self.home / "elsewhere")
+        session = self.home / "elsewhere" / "matrix-e2ee-cli" / "session.json"
+        session.parent.mkdir(parents=True)
+        session.write_text(
+            json.dumps({"access_token": "syt_xdg", "homeserver": BASE["homeserver"]})
+        )
+        self.write_config(BASE)
+        loaded, err = self.load()
+        self.assertIsNotNone(loaded, err)
+        self.assertEqual(loaded["admin_token"], "syt_xdg")
+
+    def test_the_session_token_goes_to_the_sessions_homeserver(self):
+        self.write_config({"homeserver": "https://other.example.org"})
+        self.write_session(homeserver=BASE["homeserver"], access_token="syt_device")
+        loaded, err = self.load()
+        self.assertIsNotNone(loaded, err)
+        self.assertEqual(loaded["homeserver"], BASE["homeserver"])
+
+    def test_a_session_without_homeserver_is_absent(self):
+        # Its token must never be paired with config.json's homeserver.
+        for homeserver in (None, ""):
+            with self.subTest(homeserver=homeserver):
+                fields = {"access_token": "syt_device"}
+                if homeserver is not None:
+                    fields["homeserver"] = homeserver
+                self.write_config(BASE)
+                self.write_session(**fields)
+                loaded, err = self.load()
+                self.assertIsNone(loaded, "the session token was used")
+                self.assertIn("MATRIX_ADMIN_TOKEN", err)
+
+    def test_a_set_admin_token_wins_over_the_session(self):
+        for source in ("inline", "file", "env"):
+            with self.subTest(source=source):
+                os.environ.pop("MATRIX_ADMIN_TOKEN", None)
+                config = dict(BASE)
+                if source == "inline":
+                    config["admin_token"] = "syt_admin"
+                elif source == "file":
+                    (self.config_dir / "admin.token").write_text("syt_admin")
+                    config["admin_token_file"] = "admin.token"
+                else:
+                    os.environ["MATRIX_ADMIN_TOKEN"] = "syt_admin"
+                self.write_config(config)
+                self.write_session(
+                    homeserver="https://other.example.org", access_token="syt_device"
+                )
+                loaded, err = self.load()
+                self.assertIsNotNone(loaded, err)
+                self.assertEqual(loaded["admin_token"], "syt_admin")
+                self.assertEqual(loaded["homeserver"], BASE["homeserver"])
+
+    def test_a_broken_admin_token_file_stops_even_with_a_session(self):
+        self.write_config({**BASE, "admin_token_file": "missing.token"})
+        self.write_session(homeserver=BASE["homeserver"], access_token="syt_device")
+        loaded, err = self.load()
+        self.assertIsNone(loaded)
+        self.assertIn("missing.token", err)
+
+    def test_access_token_sources_are_no_longer_read(self):
         (self.config_dir / "access.token").write_text("syt_access_file")
-        self.write_config({**BASE, "access_token_file": "access.token"})
-        loaded, _ = self.load()
-        self.assertEqual(loaded["access_token"], "syt_access_file")
+        for data, env in (
+            ({**BASE, "access_token": "syt_access"}, {}),
+            ({**BASE, "access_token_file": "access.token"}, {}),
+            (BASE, {"MATRIX_ACCESS_TOKEN": "syt_access_env"}),
+        ):
+            with self.subTest(data=data, env=env), mock.patch.dict(os.environ, env):
+                self.write_config(data)
+                loaded, err = self.load()
+                self.assertIsNone(loaded, "an access_token source was used")
+                self.assertIn("matrix-e2ee-cli session", err)
+
+    def test_missing_admin_token_names_every_source(self):
+        self.write_config({**BASE, "access_token": "syt_access"})
+        loaded, err = self.load()
+        self.assertIsNone(loaded)
+        for source in (
+            "MATRIX_ADMIN_TOKEN",
+            "admin_token_file",
+            "'admin_token'",
+            str(self.home / "data" / "matrix-e2ee-cli" / "session.json"),
+        ):
+            self.assertIn(source, err)
+        self.assertIn("access_token in config.json is no longer read", err)
 
     def test_broken_token_file_does_not_stop_a_command_without_admin(self):
         self.write_config({**BASE, "admin_token_file": "missing.token"})

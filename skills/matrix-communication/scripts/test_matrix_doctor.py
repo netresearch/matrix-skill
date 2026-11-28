@@ -60,32 +60,25 @@ class CredentialTestCase(unittest.TestCase):
 
 
 class CheckTokenTests(CredentialTestCase):
-    def test_every_token_present_is_verified(self):
-        """Regression (#70): admin_token short-circuited the check, so a dead
-        access_token alongside a live admin_token reported OK."""
-        self.responses = [OK, REJECTED]
+    def test_the_config_access_token_is_never_sent(self):
+        """No script uses the config's access_token any more, so the doctor
+        does not send it to the homeserver either."""
+        self.responses = [OK]
         state, message = doctor.check_token(
-            {**CONFIG, "admin_token": "syt_admin", "access_token": "syt_dead"}
-        )
-        self.assertIs(state, False)
-        self.assertEqual(
-            [token for token, _, _ in self.requests], ["syt_admin", "syt_dead"]
-        )
-        self.assertIn("access_token rejected", message)
-        self.assertIn("admin_token valid", message)
-
-    def test_both_tokens_valid(self):
-        self.responses = [OK, OK]
-        state, message = doctor.check_token(
-            {**CONFIG, "admin_token": "syt_admin", "access_token": "syt_user"}
+            {**CONFIG, "admin_token": "syt_admin", "access_token": "syt_old"}
         )
         self.assertIs(state, True)
-        self.assertIn("admin_token valid", message)
-        self.assertIn("access_token valid", message)
+        self.assertEqual([token for token, _, _ in self.requests], ["syt_admin"])
+        self.assertNotIn("access_token", message)
 
-    def test_single_token_still_verified(self):
+    def test_an_access_token_alone_is_nothing_to_verify(self):
+        state, _ = doctor.check_token({**CONFIG, "access_token": "syt_old"})
+        self.assertIsNone(state)
+        self.assertEqual(self.requests, [])
+
+    def test_admin_token_verified(self):
         self.responses = [REJECTED]
-        state, _ = doctor.check_token({**CONFIG, "access_token": "syt_dead"})
+        state, _ = doctor.check_token({**CONFIG, "admin_token": "syt_dead"})
         self.assertIs(state, False)
 
     def test_unreachable_homeserver_is_unknown_not_ok(self):
@@ -100,14 +93,15 @@ class CheckTokenTests(CredentialTestCase):
         A rejected config token beside a working store is a stale config."""
         self.responses = [REJECTED]
         state, message = doctor.check_token(
-            {**CONFIG, "access_token": "syt_dead"}, store_ok=True
+            {**CONFIG, "admin_token": "syt_dead"}, store_ok=True
         )
         self.assertIs(state, False)
         self.assertIn("stale token", message)
         # The token may come from the environment or a token file, so the
         # remedy names every source, not only config.json.
-        self.assertIn("MATRIX_ACCESS_TOKEN", message)
-        self.assertIn("_token_file", message)
+        self.assertIn("MATRIX_ADMIN_TOKEN", message)
+        self.assertIn("admin_token_file", message)
+        self.assertNotIn("MATRIX_ACCESS_TOKEN", message)
         # The advice must be the negated form, not the bare instruction.
         self.assertIn("do not mint a new token", message)
         self.assertNotIn("mint a new token for the skill", message)
@@ -117,19 +111,20 @@ class CheckTokenTests(CredentialTestCase):
         credential there is nothing to repair against, so the old advice stands."""
         self.responses = [REJECTED]
         state, message = doctor.check_token(
-            {**CONFIG, "access_token": "syt_dead"}, store_ok=False
+            {**CONFIG, "admin_token": "syt_dead"}, store_ok=False
         )
         self.assertIs(state, False)
         self.assertIn("mint a new token", message)
         # The dead token may come from the environment or a token file.
-        self.assertIn("MATRIX_ACCESS_TOKEN", message)
+        self.assertIn("MATRIX_ADMIN_TOKEN", message)
+        self.assertNotIn("MATRIX_ACCESS_TOKEN", message)
 
     def test_store_verdict_does_not_rescue_a_rejected_token(self):
         """A working store must not turn a dead config token green -- the two
         credentials serve different scripts."""
         self.responses = [REJECTED]
         state, _ = doctor.check_token(
-            {**CONFIG, "access_token": "syt_dead"}, store_ok=True
+            {**CONFIG, "admin_token": "syt_dead"}, store_ok=True
         )
         self.assertIs(state, False)
 
@@ -258,6 +253,17 @@ class CheckE2eeSetupTests(CredentialTestCase):
         state, _ = doctor.check_e2ee_setup(CONFIG)
         self.assertIsNone(state)
 
+    def test_a_session_without_homeserver_fails_and_sends_nothing(self):
+        # Its token belongs to its own homeserver only: never to config.json's.
+        for homeserver in (None, ""):
+            with self.subTest(homeserver=homeserver):
+                self._write_session(homeserver=homeserver)
+                self.requests.clear()
+                state, message = doctor.check_e2ee_setup(CONFIG)
+                self.assertIs(state, False)
+                self.assertIn("no homeserver", message)
+                self.assertEqual(self.requests, [])
+
     def test_the_token_is_checked_where_matrix_e2ee_cli_uses_it(self):
         self._write_session(homeserver="https://device.example.net")
         seen = []
@@ -277,7 +283,7 @@ class CheckE2eeSetupTests(CredentialTestCase):
 class CheckConfigTokenSourceTests(unittest.TestCase):
     """check_config resolves tokens the way the scripts do.
 
-    Without that, a token kept in MATRIX_ACCESS_TOKEN or a token file makes the
+    Without that, a token kept in MATRIX_ADMIN_TOKEN or a token file makes the
     doctor report "No token in config" while every script authenticates fine.
     """
 
@@ -296,21 +302,28 @@ class CheckConfigTokenSourceTests(unittest.TestCase):
         (self.config_dir / "config.json").write_text(json.dumps(data))
 
     def test_token_file_reaches_the_token_check(self):
-        (self.config_dir / "access.token").write_text("syt_from_file\n")
-        self.write_config({**CONFIG, "access_token_file": "access.token"})
+        (self.config_dir / "admin.token").write_text("syt_from_file\n")
+        self.write_config({**CONFIG, "admin_token_file": "admin.token"})
         ok, _, config = doctor.check_config()
         self.assertIs(ok, True)
-        self.assertEqual(config["access_token"], "syt_from_file")
+        self.assertEqual(config["admin_token"], "syt_from_file")
 
     def test_environment_token_reaches_the_token_check(self):
         self.write_config(CONFIG)
-        os.environ["MATRIX_ACCESS_TOKEN"] = "syt_from_env"
+        os.environ["MATRIX_ADMIN_TOKEN"] = "syt_from_env"
         ok, _, config = doctor.check_config()
         self.assertIs(ok, True)
-        self.assertEqual(config["access_token"], "syt_from_env")
+        self.assertEqual(config["admin_token"], "syt_from_env")
+
+    def test_access_token_sources_are_not_resolved(self):
+        self.write_config({**CONFIG, "access_token_file": "absent.token"})
+        os.environ["MATRIX_ACCESS_TOKEN"] = "syt_from_env"
+        ok, message, config = doctor.check_config()
+        self.assertIs(ok, True, message)
+        self.assertNotIn("access_token", config)
 
     def test_unreadable_token_file_fails_the_config_check(self):
-        self.write_config({**CONFIG, "access_token_file": "absent.token"})
+        self.write_config({**CONFIG, "admin_token_file": "absent.token"})
         ok, message, _ = doctor.check_config()
         self.assertIs(ok, False)
         self.assertIn("absent.token", message)
@@ -443,6 +456,9 @@ class QuickFixTests(unittest.TestCase):
         # A rejected admin_token is repaired where it is set too.
         self.assertIn("MATRIX_ADMIN_TOKEN", text)
         self.assertIn("an admin_token needs a server-admin token", text)
+        # No script reads access_token any more: no advice to set one.
+        self.assertNotIn("access_token", text)
+        self.assertNotIn("MATRIX_ACCESS_TOKEN", text)
 
     def test_an_unverified_device_gets_no_force_either(self):
         self.e2ee = (
@@ -470,7 +486,7 @@ class StaleTokenRowTests(CredentialTestCase):
 
     def setUp(self):
         super().setUp()
-        config = {**CONFIG, "access_token": "syt_dead"}
+        config = {**CONFIG, "admin_token": "syt_dead"}
         patches = {
             "check_e2ee_cli": lambda install=False, offline=False: (True, "cli"),
             "check_config": lambda: (True, "Config OK", dict(config)),
@@ -501,6 +517,137 @@ class StaleTokenRowTests(CredentialTestCase):
         self.assertIn("do not mint a new token", row)
         self.assertNotIn("--force", text)
         self.assertEqual(self.requests, [("syt_dead", "GET", "/account/whoami")])
+
+
+class LeftoverAccessTokenTests(unittest.TestCase):
+    """An access_token left in the config gets a warning that it is unused.
+
+    The device it belongs to is named only when the doctor can tell without a
+    request: the token is the one in matrix-e2ee-cli's session.json.
+    """
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.session = Path(tmp.name) / "session.json"
+        self.session.write_text(
+            json.dumps({"device_id": "SKILLDEV", "access_token": "syt_device"})
+        )
+        patcher = mock.patch.object(
+            doctor, "get_session_path", return_value=self.session
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        env = {k: v for k, v in os.environ.items() if not k.startswith("MATRIX_")}
+        patcher = mock.patch.dict(os.environ, env, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.requests = []
+        real = doctor.http.matrix_request
+        doctor.http.matrix_request = lambda *a, **k: self.requests.append(a)
+        self.addCleanup(setattr, doctor.http, "matrix_request", real)
+
+    def test_the_skills_own_token_is_named_as_its_device(self):
+        message = doctor.check_leftover_token({**CONFIG, "access_token": "syt_device"})
+        self.assertIn("no longer used", message)
+        self.assertIn("SKILLDEV", message)
+        self.assertEqual(self.requests, [])
+
+    def test_another_token_gets_the_warning_without_a_device(self):
+        message = doctor.check_leftover_token({**CONFIG, "access_token": "syt_other"})
+        self.assertIn("no longer used", message)
+        self.assertNotIn("SKILLDEV", message)
+        self.assertNotIn("syt_other", message)
+        self.assertEqual(self.requests, [])
+
+    def test_a_token_file_or_variable_is_a_leftover_too(self):
+        self.assertIn(
+            "access_token_file",
+            doctor.check_leftover_token({**CONFIG, "access_token_file": "t"}),
+        )
+        os.environ["MATRIX_ACCESS_TOKEN"] = "syt_env"
+        self.assertIn("MATRIX_ACCESS_TOKEN", doctor.check_leftover_token(CONFIG))
+
+    def test_no_leftover_no_warning(self):
+        self.assertIsNone(doctor.check_leftover_token(dict(CONFIG)))
+
+    def test_the_warning_is_a_row_that_fails_nothing(self):
+        patches = {
+            "check_e2ee_cli": lambda install=False, offline=False: (True, "cli"),
+            "check_config": lambda: (
+                True,
+                "Config OK",
+                {**CONFIG, "access_token": "syt_device"},
+            ),
+            "check_e2ee_setup": lambda config, offline=False: (True, "device ok"),
+            "check_token": lambda config, offline=False, store_ok=None: (True, "ok"),
+        }
+        for name, value in patches.items():
+            patcher = mock.patch.object(doctor, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        out = io.StringIO()
+        with (
+            mock.patch.object(sys, "argv", ["matrix-doctor.py"]),
+            contextlib.redirect_stdout(out),
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            doctor.main()
+        self.assertEqual(ctx.exception.code, 0)
+        text = out.getvalue()
+        self.assertIn("[WARN] access_token", text)
+        self.assertIn("SKILLDEV", text)
+        self.assertIn("All checks passed", text)
+
+
+class RequiredSessionTests(unittest.TestCase):
+    """Every script needs the CLI session: a session that is definitely
+    missing or rejected fails the doctor; one it could not check does not."""
+
+    def run_main(self, e2ee, *argv):
+        patches = {
+            "check_e2ee_cli": lambda install=False, offline=False: (True, "cli"),
+            "check_config": lambda: (True, "Config OK", dict(CONFIG)),
+            "check_e2ee_setup": lambda config, offline=False: e2ee,
+            "check_token": lambda config, offline=False, store_ok=None: (None, "none"),
+            "check_leftover_token": lambda config: None,
+        }
+        with contextlib.ExitStack() as stack:
+            for name, value in patches.items():
+                stack.enter_context(mock.patch.object(doctor, name, value))
+            out = io.StringIO()
+            stack.enter_context(
+                mock.patch.object(sys, "argv", ["matrix-doctor.py", *argv])
+            )
+            stack.enter_context(contextlib.redirect_stdout(out))
+            with self.assertRaises(SystemExit) as ctx:
+                doctor.main()
+        return ctx.exception.code, out.getvalue()
+
+    def test_a_missing_or_rejected_session_fails(self):
+        for e2ee in (
+            (False, "E2EE not set up (no matrix-e2ee-cli session)"),
+            (False, "E2EE credential (DEV) rejected by the homeserver"),
+        ):
+            with self.subTest(e2ee=e2ee[1]):
+                code, text = self.run_main(e2ee)
+                self.assertEqual(code, 1)
+                self.assertIn("[FAIL] e2ee_setup (required)", text)
+                self.assertNotIn("Core functionality OK", text)
+                code, text = self.run_main(e2ee, "--json")
+                self.assertEqual(code, 1)
+                self.assertIs(json.loads(text)["e2ee_setup"]["critical"], True)
+
+    def test_an_unchecked_session_does_not_fail(self):
+        for e2ee in (
+            (None, "E2EE device DEV configured - not verified (--offline)"),
+            (None, "E2EE device of an older version (matrix-nio) not taken over yet"),
+        ):
+            with self.subTest(e2ee=e2ee[1]):
+                code, _ = self.run_main(e2ee)
+                self.assertEqual(code, 0)
+                code, _ = self.run_main(e2ee, "--json")
+                self.assertEqual(code, 0)
 
 
 if __name__ == "__main__":

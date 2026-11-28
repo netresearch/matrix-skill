@@ -7,8 +7,9 @@
 # ///
 """Matrix Skill health check and E2EE binary installer.
 
-Checks the matrix-e2ee-cli binary, the configuration and the tokens, and
-reports on the E2EE device.
+Checks the matrix-e2ee-cli binary, the configuration, matrix-administration's
+admin token, and the E2EE device every script of this skill logs in with. An
+access_token left in the config gets a warning: no script uses it any more.
 
 Usage:
     matrix-doctor.py [--install] [--json] [--quiet] [--offline]
@@ -174,17 +175,16 @@ def check_token(
     ``M_UNKNOWN_TOKEN`` - and a green doctor sends you looking for the problem
     everywhere except at the credential.
 
-    Every token in the config is checked, not just the first one found. The two
-    serve different scripts - ``synapse-*`` authenticates with ``admin_token``,
-    the non-E2EE ``matrix-*.py`` scripts read ``access_token`` - so verifying one
-    says nothing about the other.
+    Only ``admin_token`` is checked: ``synapse-*`` authenticates with it. The
+    config's ``access_token`` is never sent - no script uses it any more (see
+    ``check_leftover_token``).
 
-    Returns ``(True, msg)`` only when the homeserver confirmed every token
-    present, ``(False, msg)`` when it rejected any of them, and ``(None, msg)``
-    when there is nothing to verify or an answer is missing. Unknown is never OK:
-    no token in the config is normal for E2EE use (those scripts authenticate
-    from the matrix-e2ee-cli session), and an unreachable homeserver is a missing
-    answer, not a passing one.
+    Returns ``(True, msg)`` only when the homeserver confirmed the token,
+    ``(False, msg)`` when it rejected it, and ``(None, msg)`` when there is
+    nothing to verify or an answer is missing. Unknown is never OK: no token in
+    the config is normal (matrix-communication authenticates from the
+    matrix-e2ee-cli session, and matrix-administration falls back to it), and
+    an unreachable homeserver is a missing answer, not a passing one.
 
     ``store_ok`` is ``check_e2ee_setup``'s verdict on the E2EE session, and
     it only changes the *remedy*, never the verdict. A rejected config token
@@ -195,15 +195,11 @@ def check_token(
     this box are rejected" and parked as a blocker, while a working credential
     sat in the store the whole time.
     """
-    tokens = [
-        (label, config[label])
-        for label in ("admin_token", "access_token")
-        if config.get(label)
-    ]
+    tokens = [(label, config[label]) for label in ("admin_token",) if config.get(label)]
     if not tokens:
         return (
             None,
-            "No token in config (normal for E2EE - those scripts use the matrix-e2ee-cli session)",
+            "No admin token in config (normal - the scripts use the matrix-e2ee-cli session)",
         )
 
     if not config.get("homeserver"):
@@ -215,13 +211,13 @@ def check_token(
         remedy = (
             "the E2EE session holds a credential the homeserver confirmed, so this is a "
             "stale token, not a lost credential - repair or remove it where it is set "
-            "(MATRIX_ACCESS_TOKEN / MATRIX_ADMIN_TOKEN, the *_token_file, or "
-            "~/.config/matrix/config.json); do not mint a new token, and do not report no access"
+            "(MATRIX_ADMIN_TOKEN, admin_token_file, or ~/.config/matrix/config.json); "
+            "do not mint a new token, and do not report no access"
         )
     else:
         remedy = (
             "mint a new token for the skill and replace it where it is set "
-            "(MATRIX_ACCESS_TOKEN / MATRIX_ADMIN_TOKEN, the *_token_file, or config.json) "
+            "(MATRIX_ADMIN_TOKEN, admin_token_file, or config.json) "
             "- never copy one out of a client you use"
         )
 
@@ -265,10 +261,10 @@ def token_remedy(e2ee_check: dict) -> str:
     if e2ee_check.get("ok"):
         return (
             "  - Token rejected: the skill's E2EE device works, so this is a stale "
-            "config token - repair or remove it where it is set (MATRIX_ACCESS_TOKEN / "
-            "MATRIX_ADMIN_TOKEN, the *_token_file, or config.json): an access_token "
-            "can take the device's own token (setup-guide.md, step 6), an admin_token "
-            "needs a server-admin token; do not mint a new device"
+            "config token - repair or remove it where it is set (MATRIX_ADMIN_TOKEN, "
+            "admin_token_file, or config.json): an admin_token needs a server-admin "
+            "token, and without one matrix-administration uses the E2EE device's own; "
+            "do not mint a new device"
         )
     if e2ee_check.get("unknown"):
         return (
@@ -280,6 +276,41 @@ def token_remedy(e2ee_check: dict) -> str:
         "  - Token rejected: mint a new one for the skill "
         f"({setup_command()}), never copy one out of a client you use"
     )
+
+
+def check_leftover_token(config: dict) -> str | None:
+    """A warning for an access_token source left over from version 5, or None.
+
+    Nothing reads it any more. The device it belongs to is named only when
+    the token is the one of matrix-e2ee-cli's session, which the doctor can
+    tell without a request; the token itself is never sent or printed.
+    """
+    sources = [key for key in ("access_token", "access_token_file") if config.get(key)]
+    if os.environ.get("MATRIX_ACCESS_TOKEN", "").strip():
+        sources.append("MATRIX_ACCESS_TOKEN")
+    if not sources:
+        return None
+    message = (
+        f"{', '.join(sources)} is no longer used: every script logs in with the "
+        "matrix-e2ee-cli session"
+    )
+    token = config.get("access_token")
+    if token:
+        try:
+            session = json.loads(get_session_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError, cutover.CutoverError):
+            session = {}
+        if isinstance(session, dict) and session.get("access_token") == token:
+            message += (
+                f"; access_token is the token of the skill's own E2EE device "
+                f"{session.get('device_id', 'unknown')}, so removing it logs nothing out"
+            )
+        else:
+            message += (
+                "; access_token is not the E2EE device's token - if its device is "
+                "the skill's old one, log it out in Element"
+            )
+    return message + "; remove it"
 
 
 def nio_pending() -> bool:
@@ -342,13 +373,17 @@ def check_e2ee_setup(config: dict, offline: bool = False) -> tuple[bool | None, 
             ),
         )
     # matrix-e2ee-cli talks to the homeserver recorded in the session, not to
-    # config.json's: check the token where it is used.
-    config = {
-        **config,
-        "homeserver": session.get("homeserver") or config.get("homeserver"),
-    }
-    if not config.get("homeserver"):
-        return None, f"E2EE device {device_id} configured - no homeserver to verify it"
+    # config.json's: check the token there, and only there. A session without
+    # one cannot work, and its token is never sent to another homeserver.
+    if not session.get("homeserver"):
+        return (
+            False,
+            (
+                f"E2EE session for {device_id} records no homeserver - run "
+                "matrix-e2ee-setup.py --force"
+            ),
+        )
+    config = {**config, "homeserver": session["homeserver"]}
     if offline:
         return None, f"E2EE device {device_id} configured - not verified (--offline)"
 
@@ -395,13 +430,15 @@ def main():
     args = parser.parse_args()
 
     checks = {
-        # Not critical: the non-E2EE scripts work without it, and every E2EE
-        # script downloads it on first use.
+        # Not critical: every script downloads it on first use.
         "e2ee_cli": {"ok": False, "message": "", "critical": False},
         "config": {"ok": False, "message": "", "critical": True},
         "token": {"ok": False, "message": "", "critical": False},
-        "e2ee_setup": {"ok": False, "message": "", "critical": False},
+        # Critical: every script runs matrix-e2ee-cli with this session. An
+        # unchecked session (--offline, a pending takeover) fails nothing.
+        "e2ee_setup": {"ok": False, "message": "", "critical": True},
     }
+    # Added below when an access_token source is left over.
 
     # Check the E2EE binary (downloaded with --install)
     cli_ok, cli_msg = check_e2ee_cli(install=args.install, offline=args.offline)
@@ -431,10 +468,27 @@ def main():
     checks["token"]["unknown"] = token_ok is None
     checks["token"]["message"] = token_msg
 
+    leftover = check_leftover_token(config_data)
+    if leftover:
+        checks["access_token"] = {
+            "ok": True,
+            "warning": True,
+            "message": leftover,
+            "critical": False,
+        }
+
     # Output
     if args.json:
         print(json.dumps(checks, indent=2))
-        sys.exit(0 if all(c["ok"] for c in checks.values() if c.get("critical")) else 1)
+        sys.exit(
+            0
+            if all(
+                c["ok"] or c.get("unknown")
+                for c in checks.values()
+                if c.get("critical")
+            )
+            else 1
+        )
 
     # Pretty output
     all_ok = True
@@ -455,6 +509,8 @@ def main():
         if check.get("unknown"):
             icon = "??"
             unverified.append(name)
+        elif check.get("warning"):
+            icon = "WARN"
         else:
             icon = "OK" if check["ok"] else "FAIL"
         critical = " (required)" if check.get("critical") else ""
@@ -464,7 +520,7 @@ def main():
             if check.get("critical"):
                 critical_ok = False
 
-        if not args.quiet or not check["ok"]:
+        if not args.quiet or not check["ok"] or check.get("warning"):
             print(f"[{icon}] {name}{critical}")
             print(f"     {check['message']}")
             print()

@@ -128,8 +128,9 @@ Paths are shortened to `$C` below:
 C=skills/matrix-communication/scripts
 ```
 
-The `*-e2ee.py` scripts are the ones to use. Most Matrix rooms are encrypted, and
-the non-E2EE variants cannot read or write in them. Prepend `set +H` to any
+The `*-e2ee.py` scripts are the ones to use. `matrix-send.py`, `matrix-read.py`
+and `matrix-edit.py` run the same matrix-e2ee-cli commands with their older
+options. Prepend `set +H` to any
 command whose arguments contain `!`, or bash history expansion eats it.
 
 ### Send a Message
@@ -322,19 +323,19 @@ matrix-skill/
 │   │   │   ├── matrix-e2ee-setup.py     # Create the agent device
 │   │   │   ├── matrix-e2ee-verify.py    # SAS emoji verification
 │   │   │   ├── matrix-edit-e2ee.py      # Edit (E2EE) — USE THIS
-│   │   │   ├── matrix-edit.py           # Edit (non-E2EE fallback)
+│   │   │   ├── matrix-edit.py           # Edit (older options, same CLI command)
 │   │   │   ├── matrix-fetch-keys.py     # Request missing room keys
 │   │   │   ├── matrix-invite.py         # Invite a user
 │   │   │   ├── matrix-key-backup.py     # Restore keys from server backup
 │   │   │   ├── matrix-power-level.py    # Read or set power levels
 │   │   │   ├── matrix-react.py          # React to messages
 │   │   │   ├── matrix-read-e2ee.py      # Read (E2EE) — USE THIS
-│   │   │   ├── matrix-read.py           # Read (non-E2EE fallback)
+│   │   │   ├── matrix-read.py           # Read (older options, same CLI command)
 │   │   │   ├── matrix-redact.py         # Delete messages
 │   │   │   ├── matrix-resolve.py        # Resolve aliases
 │   │   │   ├── matrix-rooms.py          # List rooms
 │   │   │   ├── matrix-send-e2ee.py      # Send (E2EE) — USE THIS
-│   │   │   ├── matrix-send.py           # Send (non-E2EE fallback)
+│   │   │   ├── matrix-send.py           # Send (older options, same CLI command)
 │   │   │   ├── matrix-watch.py          # Follow a room's event log
 │   │   │   └── matrix-watchd.py         # Daemon: owns the store, follows rooms
 │   │   └── references/

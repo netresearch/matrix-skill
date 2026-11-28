@@ -5,7 +5,7 @@
 
 Endpoints used by this skill, mapped to the upstream documentation.
 
-All endpoints are reached through `_lib/admin_http.py`'s `admin_request()` (paths under `/_synapse/admin`) or `client_request()` (paths under `/_matrix/client/v3`). Authentication is a Bearer token taken from `admin_token` (or, as a fallback, `access_token`).
+All endpoints are reached through `_lib/admin_http.py`'s `admin_request()` (paths under `/_synapse/admin`) or `client_request()` (paths under `/_matrix/client/v3`). Authentication is a Bearer token taken from `admin_token`, which `load_config()` fills from `MATRIX_ADMIN_TOKEN`, `admin_token_file` or `admin_token`, else from the matrix-e2ee-cli session.
 
 Upstream docs: <https://element-hq.github.io/synapse/latest/usage/administration/admin_api/index.html>
 
@@ -81,9 +81,9 @@ ordinary `/login`.
 `user_id` it belongs to, an invalid one `401 M_UNKNOWN_TOKEN`. That proves
 validity and ownership, never admin rights; for those, probe an admin endpoint
 such as `GET /v1/rooms?limit=1` separately. **Send the token under test
-explicitly** — `admin_request()` resolves `config.get("admin_token") or
-config["access_token"]`, so a probe run through the usual config answers for the
-configured admin token and not for the token you are asking about, and it answers
+explicitly** — `admin_request()` sends `config["admin_token"]`, which `load_config()`
+filled, so a probe run through the usual config answers for the
+configured admin token (or the session's) and not for the token you are asking about, and it answers
 `200` either way. Pass a config carrying only the minted token, or issue the
 request by hand. A Netresearch scheduled job failed 17 consecutive nights on
 `401 M_UNKNOWN_TOKEN` with no code change in four months; `whoami` on the stored

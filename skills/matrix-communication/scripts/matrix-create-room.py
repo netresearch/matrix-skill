@@ -7,6 +7,9 @@
 # ///
 """Create a new Matrix room.
 
+Runs `matrix-e2ee-cli create-room` (see _lib/cli.py for how the binary is
+found). The room is unencrypted unless the homeserver's defaults encrypt it.
+
 Usage:
     matrix-create-room.py NAME [OPTIONS]
     matrix-create-room.py --help
@@ -22,7 +25,7 @@ Options:
     --preset PRESET     private_chat (default) | public_chat | trusted_private_chat
     --json              Output as JSON
     --quiet             Minimal output (just the room ID)
-    --debug             Show debug information
+    --debug             Accepted and ignored
 
 Examples:
     # Minimal private room
@@ -37,54 +40,18 @@ Examples:
         --preset public_chat
 """
 
-import json
+import argparse
 import os
 import sys
 
-# Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import load_config, matrix_request
+from _lib.wrapper import Unsupported, exit_with, refuse
 
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
-
-
-def create_room(
-    config: dict,
-    name: str,
-    alias: str | None = None,
-    topic: str | None = None,
-    invite: list[str] | None = None,
-    preset: str = "private_chat",
-) -> dict:
-    """Create a Matrix room.
-
-    Args:
-        config: Matrix config with homeserver and access_token
-        name: Room display name
-        alias: Room alias localpart (without # or :server)
-        topic: Room topic
-        invite: List of user IDs to invite on creation
-        preset: Room preset (private_chat, public_chat, trusted_private_chat)
-
-    Returns:
-        Response dict with 'room_id' on success, or 'error' on failure
-    """
-    content = {"name": name, "preset": preset}
-    if alias:
-        content["room_alias_name"] = alias
-    if topic:
-        content["topic"] = topic
-    if invite:
-        content["invite"] = invite
-
-    return matrix_request(config, "POST", "/createRoom", content)
+PRESETS = ["private_chat", "public_chat", "trusted_private_chat"]
 
 
-def main():
-    import argparse
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Create a new Matrix room")
     parser.add_argument("name", help="Room display name")
     parser.add_argument(
@@ -99,59 +66,39 @@ def main():
     )
     parser.add_argument(
         "--preset",
-        choices=["private_chat", "public_chat", "trusted_private_chat"],
+        choices=PRESETS,
         default="private_chat",
         help="Room preset (default: private_chat)",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
-    parser.add_argument("--debug", action="store_true", help="Show debug info")
+    parser.add_argument("--debug", action="store_true", help="Ignored")
+    return parser
 
-    args = parser.parse_args()
 
-    config = load_config()
+def translate(args):
+    cli = ["create-room"]
+    # Attached with "=", so a value that starts with "-" stays a value.
+    for flag in ("alias", "topic"):
+        if getattr(args, flag) is not None:
+            cli.append(f"--{flag}={getattr(args, flag)}")
+    for user in args.invite or []:
+        cli.append(f"--invite={user}")
+    cli.append(f"--preset={args.preset}")
+    for flag in ("json", "quiet"):
+        if getattr(args, flag):
+            cli.append("--" + flag)
+    cli += ["--", args.name]
+    return cli, None
 
-    if args.debug:
-        print(
-            f"Creating room name={args.name!r} alias={args.alias!r} "
-            f"preset={args.preset} invite={args.invite}",
-            file=sys.stderr,
-        )
 
-    result = create_room(
-        config,
-        args.name,
-        alias=args.alias,
-        topic=args.topic,
-        invite=args.invite,
-        preset=args.preset,
-    )
-
-    if "error" in result:
-        if args.json:
-            print(json.dumps(result))
-        else:
-            print(f"Error: {result['error']}", file=sys.stderr)
-        sys.exit(1)
-
-    if args.json:
-        print(json.dumps(result))
-    elif args.quiet:
-        print(result.get("room_id", ""))
-    else:
-        print(f"Room created: {result.get('room_id')}")
-        if args.alias:
-            # Room aliases live on the user's server_name (from user_id),
-            # not the homeserver URL — these differ when the homeserver is
-            # reached via a delegated/well-known domain (e.g. homeserver
-            # https://matrix.example.com but server_name example.com).
-            user_id = config.get("user_id")
-            if not user_id:
-                whoami = matrix_request(config, "GET", "/account/whoami")
-                user_id = whoami.get("user_id")
-            if user_id:
-                server_name = user_id.split(":", 1)[-1]
-                print(f"Alias: #{args.alias}:{server_name}")
+def main(argv=None) -> None:
+    args = build_parser().parse_args(argv)
+    try:
+        cli_args, extra_env = translate(args)
+    except Unsupported as exc:
+        refuse(str(exc))
+    exit_with(cli_args, extra_env, json_errors=args.json)
 
 
 if __name__ == "__main__":

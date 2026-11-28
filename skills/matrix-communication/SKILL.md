@@ -48,7 +48,8 @@ Send, read and download media in Matrix rooms. **Always use `*-e2ee.py`.**
 `matrix.to` link; a direct chat also goes by the other person's name or ID.
 A short name is looked up as before (alias before display name); several
 matches stop the command, so pass the ID or full alias then. Send, edit,
-react and redact take only an exact alias or name, never a partial match.
+react, redact, invite and `power-level --set` take only an exact alias or
+name, never a partial match.
 **Prepend `set +H &&` when an argument contains `!`.**
 
 ```bash
@@ -72,6 +73,7 @@ Each default below protects something; its flag turns it off for one command. Us
 - **Room keys go to verified devices only.** An encrypted send or edit into a room with unverified devices is refused and lists them (reactions go out unencrypted). Verify them (`matrix-e2ee-verify.py` for your own devices), or pass `--trust-unverified-devices` to share that one message's key with them; nothing is stored and no device is marked verified.
 - **Verification is answered for your own account's devices only.** Without a terminal, `matrix-e2ee-cli.py verify --hand-over` waits for `verify --confirm TOKEN`, which you run only after the person said the emoji match (`e2ee-guide.md`).
 - **Secrets never on the command line.** Password: `MATRIX_PASSWORD` or the prompt. Recovery key or passphrase: `--recovery-key` / `--passphrase` without a value (prompt) or `MATRIX_RECOVERY_KEY` / `MATRIX_RECOVERY_PASSPHRASE`. `--allow-secret-argument` accepts a value on argv.
+- **A message to an encrypted room is encrypted.** `--plaintext` on `matrix-send-e2ee.py` sends that one message unencrypted, readable by the homeserver and everyone who joins later: only for a bot that cannot decrypt, such as a hookshot bridge without encryption (`hookshot-integration.md`).
 - **Downloads never replace a file.** Pass `--filename` or another `--output`.
 
 ## When something fails

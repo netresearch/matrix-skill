@@ -7,6 +7,9 @@
 # ///
 """Show or set a user's power level in a Matrix room.
 
+Runs `matrix-e2ee-cli power-level` (see _lib/cli.py for how the binary is
+found).
+
 Usage:
     matrix-power-level.py ROOM --show
     matrix-power-level.py ROOM --get USER_ID
@@ -16,8 +19,10 @@ Usage:
 Arguments:
     ROOM        Room identifier. Supports multiple formats:
                 - Room ID: !abc123xyz (direct, fastest)
-                - Room alias: #room:server (resolved via directory)
-                - Room name: "agent-work" (looked up from joined rooms)
+                - Room alias: #room:server
+                - Room name: "agent-work" (looked up among the joined rooms;
+                  --set needs the exact name, no partial match)
+                - matrix.to link
 
 Options:
     --show            Print the full m.room.power_levels event content
@@ -28,15 +33,15 @@ Options:
                       0=user, 50=moderator, 100=admin — any int is valid)
     --json            Output as JSON
     --quiet           Minimal output
-    --debug           Show debug information
+    --debug           Accepted and ignored
     --help            Show this help
 
 Power levels are a single room state event: setting one user's level requires
 reading the whole event, changing just that user's entry, and writing the
 whole event back (a PUT replaces the entire content — there is no merge on
 the server side). --set does this GET-modify-PUT for you. The acting user
-(the bot) needs a power level >= the level being granted and >= the target's
-current level, otherwise the homeserver rejects the change with M_FORBIDDEN.
+needs a power level >= the level being granted and >= the target's current
+level, otherwise the homeserver rejects the change with M_FORBIDDEN.
 
 On newer room versions the room creator has implicit, permanent authority
 and must NOT appear in content.users — the server rejects an attempt to set
@@ -57,72 +62,18 @@ Examples:
     matrix-power-level.py '!abc123:netresearch.de' --set '@jane.doe:netresearch.de' 100
 """
 
-import json
+import argparse
 import os
 import sys
 
-# Add script directory to path for _lib imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _lib import (
-    load_config,
-    matrix_request,
-    path_segment,
-    resolve_room_cli,
-)
-
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+from _lib.rooms import normalize_room_input
+from _lib.utils import clean_message
+from _lib.wrapper import Unsupported, exit_with, refuse, room_chooser
 
 
-def get_power_levels(config: dict, room_id: str) -> dict:
-    """Fetch the current m.room.power_levels state event content.
-
-    Returns:
-        The power_levels content dict, or a dict with 'error' on failure.
-    """
-    return matrix_request(
-        config, "GET", f"/rooms/{path_segment(room_id)}/state/m.room.power_levels/"
-    )
-
-
-def set_power_level(config: dict, room_id: str, user_id: str, level: int) -> dict:
-    """Set a single user's power level via GET-modify-PUT.
-
-    The power_levels state event has one state key (empty string) holding
-    the whole permission model. Setting one user's level means fetching the
-    current content, mutating its "users" dict in place, and PUTting the
-    complete object back — a partial PUT would silently wipe every other
-    key (events, state_default, ban/kick/redact/invite, other users' levels).
-    """
-    content = get_power_levels(config, room_id)
-    if "error" in content:
-        return content
-
-    content.setdefault("users", {})
-    previous = content["users"].get(user_id, content.get("users_default", 0))
-    content["users"][user_id] = level
-
-    result = matrix_request(
-        config,
-        "PUT",
-        f"/rooms/{path_segment(room_id)}/state/m.room.power_levels/",
-        content,
-    )
-    if "error" in result:
-        return result
-
-    return {
-        "room_id": room_id,
-        "user_id": user_id,
-        "previous": previous,
-        "level": level,
-    }
-
-
-def main():
-    import argparse
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Show or set a user's power level in a Matrix room"
     )
@@ -142,71 +93,40 @@ def main():
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
-    parser.add_argument("--debug", action="store_true", help="Show debug info")
+    parser.add_argument("--debug", action="store_true", help="Ignored")
+    return parser
 
-    args = parser.parse_args()
 
-    config = load_config()
-    room_id = resolve_room_cli(config, args.room, args.json, args.debug)
-
+def translate(args):
+    cli = ["power-level"]
     if args.show:
-        result = get_power_levels(config, room_id)
-        if "error" in result:
-            if args.json:
-                print(json.dumps(result))
-            else:
-                print(f"Error: {result['error']}", file=sys.stderr)
-            sys.exit(1)
-        print(json.dumps(result, indent=None if args.quiet else 2))
-        return
-
-    if args.get:
-        result = get_power_levels(config, room_id)
-        if "error" in result:
-            if args.json:
-                print(json.dumps(result))
-            else:
-                print(f"Error: {result['error']}", file=sys.stderr)
-            sys.exit(1)
-        level = result.get("users", {}).get(args.get, result.get("users_default", 0))
-        if args.json:
-            print(json.dumps({"room_id": room_id, "user_id": args.get, "level": level}))
-        elif args.quiet:
-            print(level)
-        else:
-            print(f"{args.get} in {room_id}: {level}")
-        return
-
-    # --set
-    user_id, level_str = args.set
-    try:
-        level = int(level_str)
-    except ValueError:
-        msg = f"LEVEL must be an integer, got {level_str!r}"
-        if args.json:
-            print(json.dumps({"error": msg}))
-        else:
-            print(f"Error: {msg}", file=sys.stderr)
-        sys.exit(1)
-
-    if args.debug:
-        print(f"Setting {user_id} to power level {level} in {room_id}", file=sys.stderr)
-
-    result = set_power_level(config, room_id, user_id, level)
-
-    if "error" in result:
-        if args.json:
-            print(json.dumps(result))
-        else:
-            print(f"Error: {result['error']}", file=sys.stderr)
-        sys.exit(1)
-
-    if args.json:
-        print(json.dumps(result))
-    elif args.quiet:
-        print(result["level"])
+        cli.append("--show")
+    elif args.get is not None:
+        cli.append(f"--get={args.get}")
     else:
-        print(f"{user_id} in {room_id}: {result['previous']} -> {result['level']}")
+        # Two values: "--set=USER" would leave LEVEL to the next argument.
+        cli += ["--set", *args.set]
+    for flag in ("json", "quiet"):
+        if getattr(args, flag):
+            cli.append("--" + flag)
+    cli += ["--", normalize_room_input(clean_message(args.room))]
+    return cli, None
+
+
+def main(argv=None) -> None:
+    args = build_parser().parse_args(argv)
+    try:
+        cli_args, extra_env = translate(args)
+    except Unsupported as exc:
+        refuse(str(exc))
+    exit_with(
+        cli_args,
+        extra_env,
+        choose=room_chooser(
+            cli_args[cli_args.index("--") + 1], write=args.set is not None
+        ),
+        json_errors=args.json,
+    )
 
 
 if __name__ == "__main__":

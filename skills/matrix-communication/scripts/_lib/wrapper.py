@@ -46,7 +46,43 @@ def needs_takeover(args) -> bool:
     if args[0] == "watch-daemon" and NO_STORE_DAEMON_FLAGS & set(args[1:]):
         return False
     flags = args[: args.index("--")] if "--" in args else args
+    if args[0] == "send" and "--" in args:
+        # send's ROOM operand stands right before "--": a room named "--help"
+        # is no help request, and room_chooser replaces it with the room ID.
+        flags = flags[:-1]
     return not any(arg in HELP_FLAGS for arg in flags)
+
+
+def parse_intermixed(parser, argv=None):
+    """``parser.parse_intermixed_args``, with what follows "--" kept positional.
+
+    Python 3.11's two-pass parse drops "--" in its first pass and then reads
+    an operand after it, such as the room "-ops", as an option. The operands
+    after the first "--" are parsed as stand-ins that cannot look like
+    options and put back afterwards, so options stay intermixed before it.
+    A stand-in that an option took as its value is refused: after "--" there
+    are operands only.
+    """
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if "--" not in argv:
+        return parser.parse_intermixed_args(argv)
+    cut = argv.index("--")
+    operands = argv[cut + 1 :]
+    stand_ins = {f"\x00operand{i}": value for i, value in enumerate(operands)}
+    args = parser.parse_intermixed_args(argv[:cut] + list(stand_ins))
+    positionals = {a.dest for a in parser._actions if not a.option_strings}
+    for name, value in vars(args).items():
+        values = value if isinstance(value, list) else [value]
+        if not any(isinstance(v, str) and v in stand_ins for v in values):
+            continue
+        if name not in positionals:
+            # An option before "--" without its value took an operand after
+            # it ("--to -- @alice:e hello"); that operand is no option value.
+            option = next(a for a in parser._actions if a.dest == name)
+            parser.error(f"argument {option.option_strings[-1]}: expected one argument")
+        restored = [stand_ins.get(v, v) for v in values]
+        setattr(args, name, restored if isinstance(value, list) else restored[0])
+    return args
 
 
 def is_explicit_migration(args) -> bool:
@@ -114,6 +150,8 @@ def run_cli(args, extra_env=None, env=None, choose=None, json_errors=False) -> i
     except Unsupported as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
+    except room_lookup.Interrupted:
+        return 130  # as cli.run on Ctrl-C: no message
     except (cli.CliError, cutover.CutoverError, room_lookup.RoomLookupError) as exc:
         if json_errors:
             print(json.dumps({"error": str(exc)}))
@@ -135,10 +173,13 @@ def room_chooser(room: str, write=False):
 
     def choose(args, env):
         resolved = room_lookup.resolve(room, env, write=write)
-        if resolved != room:
-            separator = args.index("--")
-            index = separator - 1 if args[0] == "send" else separator + 1
-            args[index] = resolved
+        separator = args.index("--")
+        index = separator - 1 if args[0] == "send" else separator + 1
+        if args[0] == "send" and resolved.startswith("-"):
+            # Before "--" it would be read as a flag; resolve() returns room
+            # IDs and full aliases, so this only guards against a change.
+            raise Unsupported(f"room {resolved!r} starts with '-'; that is no room")
+        args[index] = resolved
         return args
 
     return choose

@@ -15,6 +15,9 @@ Usage:
 
 ROOM: room ID (!id:server), alias (#room:server), room name or matrix.to link.
 MESSAGE: Markdown. Prints "Event ID: $..." (--quiet: the id alone, --json: JSON).
+--plaintext sends this one message unencrypted, also in an encrypted room,
+where the homeserver and everyone who joins later can read it: only for a bot
+that cannot decrypt, such as a matrix-hookshot bridge without encryption.
 --debug is accepted and ignored.
 """
 
@@ -26,7 +29,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _lib.rooms import normalize_room_input
 from _lib.utils import clean_message
-from _lib.wrapper import Unsupported, exit_with, refuse, room_chooser
+from _lib.wrapper import (
+    Unsupported,
+    exit_with,
+    parse_intermixed,
+    refuse,
+    room_chooser,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -65,10 +74,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Notify everyone in the room (@room)",
     )
-    parser.add_argument(
+    keys = parser.add_mutually_exclusive_group()
+    keys.add_argument(
         "--trust-unverified-devices",
         action="store_true",
         help="Share this message's room key with unverified devices too",
+    )
+    keys.add_argument(
+        "--plaintext",
+        action="store_true",
+        help="Send unencrypted, also in an encrypted room: only for a bot that cannot decrypt, such as a hookshot bridge without encryption; the homeserver and everyone who joins later can read this message",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument(
@@ -89,6 +104,7 @@ def translate(args):
         "notice",
         "no_prefix",
         "mention_room",
+        "plaintext",
         "trust_unverified_devices",
         "json",
         "quiet",
@@ -104,16 +120,15 @@ def translate(args):
         # Before "--": with an optional ROOM, clap puts everything after "--"
         # into MESSAGE.
         room = normalize_room_input(clean_message(args.room))
-        if room.startswith("-"):
-            # Placed before "--", it would be read as a CLI flag.
-            raise Unsupported(f"room {room!r} starts with '-'; that is no room")
+        # A shorthand such as "-ops" stands here only until room_chooser puts
+        # the room ID in its place; nothing unresolved reaches the CLI.
         cli.append(room)
     cli += ["--", clean_message(args.message)]
     return cli, None
 
 
 def main(argv=None) -> None:
-    args = build_parser().parse_intermixed_args(argv)
+    args = parse_intermixed(build_parser(), argv)
     try:
         cli_args, extra_env = translate(args)
     except Unsupported as exc:

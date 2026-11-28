@@ -29,10 +29,14 @@ uv run scripts/matrix-invite.py "$ROOM" "$BOT"
 uv run scripts/matrix-power-level.py "$ROOM" --set "$BOT" 50
 
 # 3. Ask it to create the webhook (name is free text, liveDuration optional e.g. 30d)
-uv run scripts/matrix-send.py "$ROOM" "!hookshot webhook lsb-tickets" --no-prefix
+set +H && uv run scripts/matrix-send-e2ee.py "$ROOM" "!hookshot webhook lsb-tickets" --no-prefix
+
+# 3, only for a bridge without `encryption:` (see below): the homeserver and
+#    every later member can read this one message; the webhook URL is never in it
+set +H && uv run scripts/matrix-send-e2ee.py "$ROOM" "!hookshot webhook lsb-tickets" --no-prefix --plaintext
 ```
 
-Two details decide whether step 3 does anything:
+Three details decide whether step 3 does anything:
 
 - **`--no-prefix` is required whenever `bot_prefix` is configured.** The send
   scripts put that prefix (e.g. `🤖`) in front of the text; hookshot only reacts
@@ -42,14 +46,24 @@ Two details decide whether step 3 does anything:
   hookshot handles encrypted rooms only when its `encryption:` config is set.
   On a bridge without it (measured on hookshot 7.5.0) the command sent with
   `matrix-send-e2ee.py` (prefix off, key shared with every device) got no reply
-  and created no hook; sent as a plaintext `m.room.message` through the
-  Client-Server API (what `matrix-send.py` does) it was answered within seconds.
-  This is a deliberate **exception** to the rule of using non-E2EE scripts only
-  in confirmed-unencrypted rooms ([command-reference.md](command-reference.md)):
-  the plaintext event is readable by the homeserver and stored unencrypted in
-  the room's history. Use it only for the bare command, whose content (a hook
-  name) you are fine to disclose — the secret webhook URL is never part of it;
-  it arrives in the admin DM either way.
+  and created no hook, while a plaintext `m.room.message` was answered within
+  seconds. `--plaintext` sends that one message unencrypted (matrix-e2ee-cli
+  warns on stderr). The cost: the homeserver and every member who joins the
+  room later can read that message, and it stays unencrypted in the room's
+  history. Use it only for the bare command, whose content (a hook name) you
+  are fine to disclose; the secret webhook URL is never part of it, hookshot
+  sends that to the admin DM. On a bridge with `encryption:` set, leave
+  `--plaintext` off. It cannot be combined with `--trust-unverified-devices`.
+- **The encrypted command is refused while the room has unverified devices.**
+  Hookshot's own device and the devices of webhook bots are usually
+  unverified, and the encrypted step 3 then stops with "the room has devices
+  that are not verified" before anything is sent. Either verify the bridge's
+  device, or add `--trust-unverified-devices`, which shares this one
+  message's room key with the unverified devices too (nothing is stored and no
+  device is marked verified). Both keep the message encrypted: only devices of
+  room members can read it. `--plaintext` instead sends it unencrypted, for
+  the homeserver and every later member to read, and is only for a bridge
+  that cannot decrypt at all.
 
 The bot replies in the room with `"Room configured to bridge webhooks. See
 admin room for secret url."` — **the actual URL is never posted in the
@@ -60,19 +74,19 @@ between itself and whichever user issued the command.
 
 The DM room has no name — find it by joined-member set, then read it:
 
-```python
-# find the 1:1 room with hookshot (no m.room.name set)
-rooms = list_joined_rooms(config)
-for r in rooms:
-    if r["room_id"] == r["name"]:  # unnamed room
-        members = matrix_request(config, "GET", f"/rooms/{r['room_id']}/joined_members")
-        if any("hookshot" in u for u in members.get("joined", {})):
-            admin_room = r["room_id"]
-            break
-```
-
 ```bash
-uv run scripts/matrix-read.py "$ADMIN_ROOM" --limit 5 --json
+# a room without a name is named after its members and matches on their user
+# IDs; only rooms whose members include the bot itself count (a room whose
+# name or alias merely contains it does not), and exactly one must, else
+# nothing is read
+ADMIN_ROOM=$(uv run scripts/matrix-rooms.py --search "$BOT" --json | python3 -c '
+import json, sys
+rooms = [r for r in json.load(sys.stdin) if sys.argv[1] in (r.get("members") or [])]
+if len(rooms) != 1:
+    sys.exit(f"{len(rooms)} rooms match {sys.argv[1]}; pass the admin room ID")
+print(rooms[0]["room_id"])
+' "$BOT") &&
+  uv run scripts/matrix-read-e2ee.py "$ADMIN_ROOM" --limit 5 --json
 ```
 
 The reply is a message like:

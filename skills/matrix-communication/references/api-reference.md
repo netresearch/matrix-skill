@@ -213,31 +213,41 @@ GET /room_keys/version
 GET /room_keys/keys?version={version}
 ```
 
-### Reading history without the E2EE store
+### Raw, paginated history through `/messages`
 
-`matrix-read-e2ee.py` opens the encryption store, so it waits for the store's lock and
-then fails while `matrix-watchd.py` holds it (matrix-e2ee-cli's data-directory lock) —
-the documented fallback to the direct path applies to sending, not to this. When the messages you are after are
-*unencrypted* — everything a webhook, a bridge or an RSS feed posts is — the plain
-`/messages` endpoint answers with the config's own `access_token` and needs no store at
-all. It performs no `/sync` and touches no key endpoint, so it changes no device state —
-which is why it does not fall under the rule against reusing a client's token: **that
-rule still stands**, take the token from `~/.config/matrix/config.json`, never from
-Element or another running client. Where the config carries no `access_token` (E2EE set
-up by password only), this path is not available; the store holds device credentials, not
-a bearer token.
+`matrix-read-e2ee.py` and `matrix-read.py` read the last messages, decrypted;
+while `matrix-watchd.py` runs they go through the daemon (matrix-e2ee-cli
+0.4.0 or later, and a daemon started from that version). For raw events and
+deeper history than `--limit` covers, the plain `/messages` endpoint pages
+backwards as far as you need. It returns events as the homeserver stores them,
+so only *unencrypted* ones are readable, such as the unencrypted posts of a
+webhook, an RSS feed or a bridge; an encrypted event, from a bridge or anyone
+else, stays unreadable there. It answers with the skill's own device token, performs no
+`/sync` and touches no key endpoint, so it changes no device state — which is
+why it does not fall under the rule against reusing a client's token: **that
+rule still stands**, take the token from matrix-e2ee-cli's `session.json` (the
+skill's device), never from Element or another running client.
+
+The token never goes on a command line, where other local users can read it
+in the process list: curl reads the header from stdin (`-H @-`, curl 7.55.0 or
+later), fed by a here-string (bash or zsh).
 
 ```bash
-HS=$(python3 -c 'import json;print(json.load(open("'$HOME'/.config/matrix/config.json"))["homeserver"])')
-TOKEN=$(python3 -c 'import json;print(json.load(open("'$HOME'/.config/matrix/config.json"))["access_token"])')
-ROOM=$(curl -s -H "Authorization: Bearer $TOKEN" \
-  "$HS/_matrix/client/v3/directory/room/%23room%3Aserver" | python3 -c 'import json,sys;print(json.load(sys.stdin)["room_id"])')
-
-# newest first; page with the returned `end` token until `origin_server_ts` is old enough
-curl -s -H "Authorization: Bearer $TOKEN" --get \
-  --data-urlencode 'dir=b' --data-urlencode 'limit=100' \
-  --data-urlencode 'filter={"types":["m.room.message","m.room.encrypted"]}' \
-  "$HS/_matrix/client/v3/rooms/$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$ROOM")/messages"
+SESSION="${XDG_DATA_HOME:-$HOME/.local/share}/matrix-e2ee-cli/session.json"
+# One parse of session.json: line 1 the homeserver, line 2 the header. If it
+# fails, nothing is requested.
+if CREDS=$(python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); print(s["homeserver"]); print("Authorization: Bearer " + s["access_token"])' "$SESSION"); then
+  HS=${CREDS%%$'\n'*}
+  AUTH=${CREDS#*$'\n'}
+  ROOM=$(curl -s -H @- "${HS%/}/_matrix/client/v3/directory/room/%23room%3Aserver" <<<"$AUTH" \
+    | python3 -c 'import json,sys;print(json.load(sys.stdin)["room_id"])') &&
+  # newest first; page with the returned `end` token until `origin_server_ts` is old enough
+  curl -s -H @- --get \
+    --data-urlencode 'dir=b' --data-urlencode 'limit=100' \
+    --data-urlencode 'filter={"types":["m.room.message","m.room.encrypted"]}' \
+    "${HS%/}/_matrix/client/v3/rooms/$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$ROOM")/messages" \
+    <<<"$AUTH"
+fi
 ```
 
 The response holds `chunk` (the events, newest first) and `end` (pass it back as `from`).
