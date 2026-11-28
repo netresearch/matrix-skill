@@ -9,6 +9,38 @@ For the canonical narrative version of each release (rewritten after CI publishe
 
 ## [Unreleased]
 
+## [6.0.0] - 2026-11-28
+
+### Upgrading from 5.0
+
+- Breaking: the skill logs in once, with the matrix-e2ee-cli session (`matrix-e2ee-setup.py`). `matrix-send.py`, `matrix-read.py`, `matrix-edit.py`, `matrix-rooms.py`, `matrix-resolve.py`, `matrix-create-room.py`, `matrix-invite.py` and `matrix-power-level.py` run matrix-e2ee-cli instead of sending HTTP requests with the config's token, so `access_token`, `access_token_file` and `MATRIX_ACCESS_TOKEN` are no longer read by any script. A setup that has only an `access_token` and no E2EE device has to run `matrix-e2ee-setup.py` first; then remove the `access_token` from `config.json` (`matrix-doctor.py` warns while it is there, and names the skill's device when the token is that device's own) ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- Breaking: matrix-administration no longer reads `access_token`, `access_token_file` or `MATRIX_ACCESS_TOKEN`. Its token comes from `MATRIX_ADMIN_TOKEN`, `admin_token_file` or `admin_token`, else from the access token of the matrix-e2ee-cli session, which is sent to the homeserver recorded in that session and works only when that account is a server admin. A session without a homeserver counts as absent; its token is never sent to config.json's homeserver. A set admin token still wins, even a dead one. Move a server-admin token kept in `access_token` to `admin_token` ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- Breaking: a `matrix-watchd.py` started with matrix-e2ee-cli 0.3.0 answers the new requests (`rooms`, `resolve`, `create-room`, `invite`, `power-level`, `send --plaintext`) with "unknown op", and the commands then stop instead of taking the direct path; that includes every lookup of a short room name. `matrix-read.py` and `matrix-read-e2ee.py` also go through the daemon while it runs (its `read` request, new in matrix-e2ee-cli 0.4.0), so they too need a daemon started from 0.4.0. Run `matrix-watchd.py --stop` and `--start` after the upgrade ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- Breaking: `matrix-send.py`, `matrix-read.py`, `matrix-edit.py`, `matrix-rooms.py`, `matrix-resolve.py`, `matrix-create-room.py`, `matrix-invite.py` and `matrix-power-level.py` sent plain HTTP requests before and now need the matrix-e2ee-cli binary, downloaded on first use. Release builds exist for Linux on x86_64 and aarch64, macOS on x86_64 and aarch64 (Apple silicon), and Windows on x86_64 (`_lib/cli_release.json`); on any other platform build matrix-e2ee-cli yourself and set `MATRIX_E2EE_CLI` to that binary ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- Breaking: `matrix-send.py --format text` exits 2 with an error instead of sending, because matrix-e2ee-cli always renders Markdown; drop the option ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- Breaking: `matrix-invite.py` and `matrix-power-level.py --set` refuse a room name that matches only partially, like the other commands that write; pass the exact name, the full alias or the room ID ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- Breaking: `matrix-send.py '#alias:server'` with an alias that does not resolve is an error; version 5.0.0 then looked the room up by the alias's local part. Pass a resolvable alias, the room ID or the name ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- Breaking: `--debug` of `matrix-send.py`, `matrix-edit.py`, `matrix-invite.py`, `matrix-create-room.py` and `matrix-power-level.py` printed how the room and the request were resolved; it is now accepted and ignored, and `matrix-rooms.py`, `matrix-resolve.py` and `matrix-read.py` accept it too ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- Breaking: a short room name (`ops`, `#ops`) without a matrix-e2ee-cli session stops the command with a hint to run `matrix-e2ee-setup.py`; version 5.0.0's E2EE scripts passed it on to the CLI unchanged. On a machine with a matrix-nio device the takeover runs first and creates the session, so the name is looked up after it ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- Breaking: `matrix-doctor.py` exits 1, also with `--json`, when the matrix-e2ee-cli session is missing or the homeserver rejects it, because every script needs that session now; an unchecked session (`--offline`, a pending takeover) still fails nothing ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+
+### Added
+
+- `matrix-send.py --plaintext` and `matrix-send-e2ee.py --plaintext` send one message unencrypted, also in an encrypted room (matrix-e2ee-cli's `send --plaintext`, which warns on stderr; `--json` reports `"encrypted": false`). The homeserver and everyone who joins later can read that message: it is meant for a bot that cannot decrypt, such as a matrix-hookshot bridge without encryption, whose `!hookshot webhook <name>` command the hookshot guide now sends this way. Not combinable with `--trust-unverified-devices` ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+
+### Changed
+
+- A short room name is looked up in the list `matrix-e2ee-cli rooms --json` prints (from the CLI's store, or from the watch daemon while it runs) instead of two or three HTTP requests per joined room, in the order of version 4. For `matrix-send.py`, `matrix-read.py`, `matrix-edit.py`, `matrix-invite.py` and `matrix-power-level.py`, which used `find_room_by_name` in version 5.0.0, that order differs: a single exact name now wins even when another room's name contains it (version 5.0.0 refused `test` beside `test-archive` for a room without alias), and several rooms with the same alias name are refused instead of taking the first. A listing that fails, or a warning that the members of a room could not be read, stops the command as a failed request did ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- `matrix-rooms.py`, `matrix-resolve.py`, `matrix-create-room.py`, `matrix-invite.py` and `matrix-power-level.py` keep their usage and arguments and pass the output of matrix-e2ee-cli's `rooms`, `resolve`, `create-room`, `invite` and `power-level` through. A room is created unencrypted unless the homeserver's defaults encrypt it, as before ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- `matrix-send.py`, `matrix-read.py` and `matrix-edit.py` keep their options and run the CLI's `send`, `read` and `edit`: encrypted in an encrypted room, unencrypted in an unencrypted one. `matrix-read.py` prints the messages newest first in the format of `matrix-read-e2ee.py`, decrypted where the device holds the keys. `matrix-edit.py` edits only your own messages ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- `matrix-doctor.py` checks `admin_token` only; a leftover `access_token` gets a warning row and is never sent ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- `matrix-send.py` and `matrix-send-e2ee.py` take an exact room name that starts with "-" (`matrix-send.py -- -ops hello`): it is looked up first and only the room ID reaches matrix-e2ee-cli. Version 5.0.0's `matrix-send-e2ee.py` refused such a name ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+- The pinned matrix-e2ee-cli is 0.4.0 (`_lib/cli_release.json`), which adds `rooms`, `resolve`, `create-room`, `invite`, `power-level`, `send --plaintext` and reads through the watch daemon ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+
+### Removed
+
+- The HTTP room helpers of `_lib/rooms.py` (`list_joined_rooms`, `find_room_by_name`, `find_direct_room`, `resolve_room_alias`, `get_room_info`, `resolve_room_cli`), `load_config` of `_lib/config.py`, and the strict mode, timeout and `path_segment` of `_lib/http.py`, which only `matrix-doctor.py` still uses ([#235](https://github.com/netresearch/matrix-skill/pull/235))
+
 ## [5.0.0] - 2026-11-27
 
 ### Upgrading from 4.4
@@ -514,7 +546,8 @@ Added the **`matrix-administration` skill** — Synapse server operations (snaps
 
 Older releases (before this changelog was introduced) are documented on the [releases page](https://github.com/netresearch/matrix-skill/releases).
 
-[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v5.0.0...HEAD
+[Unreleased]: https://github.com/netresearch/matrix-skill/compare/v6.0.0...HEAD
+[6.0.0]: https://github.com/netresearch/matrix-skill/compare/v5.0.0...v6.0.0
 [5.0.0]: https://github.com/netresearch/matrix-skill/compare/v4.4.2...v5.0.0
 [4.4.2]: https://github.com/netresearch/matrix-skill/compare/v4.4.1...v4.4.2
 [4.4.1]: https://github.com/netresearch/matrix-skill/compare/v4.4.0...v4.4.1
