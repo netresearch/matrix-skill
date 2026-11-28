@@ -68,6 +68,11 @@ set +H && uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-send-e2ee.py --to '@user:ser
   only `m.mentions` does. `--mention-room` for `@room`.
 - `--notice` sends `m.notice`, which other bots do not auto-reply to. Use it for
   unattended automation; mutually exclusive with `--emote`.
+- `--plaintext` (also on `matrix-send.py`) sends this one message unencrypted,
+  also in an encrypted room; the homeserver and everyone who joins later can
+  read it. Only for a bot that cannot decrypt, such as a hookshot bridge
+  without encryption (`hookshot-integration.md`). Mutually exclusive with
+  `--trust-unverified-devices`.
 - In an encrypted room the message key goes to verified devices only. If the
   room has unverified devices, the send is refused and lists them. Verify them,
   or pass `--trust-unverified-devices` to share this one message's key with

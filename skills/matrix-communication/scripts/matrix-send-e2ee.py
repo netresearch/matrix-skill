@@ -15,6 +15,9 @@ Usage:
 
 ROOM: room ID (!id:server), alias (#room:server), room name or matrix.to link.
 MESSAGE: Markdown. Prints "Event ID: $..." (--quiet: the id alone, --json: JSON).
+--plaintext sends this one message unencrypted, also in an encrypted room,
+where the homeserver and everyone who joins later can read it: only for a bot
+that cannot decrypt, such as a matrix-hookshot bridge without encryption.
 --debug is accepted and ignored.
 """
 
@@ -65,10 +68,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Notify everyone in the room (@room)",
     )
-    parser.add_argument(
+    keys = parser.add_mutually_exclusive_group()
+    keys.add_argument(
         "--trust-unverified-devices",
         action="store_true",
         help="Share this message's room key with unverified devices too",
+    )
+    keys.add_argument(
+        "--plaintext",
+        action="store_true",
+        help="Send unencrypted, also in an encrypted room: only for a bot that cannot decrypt, such as a hookshot bridge without encryption; the homeserver and everyone who joins later can read this message",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument(
@@ -89,6 +98,7 @@ def translate(args):
         "notice",
         "no_prefix",
         "mention_room",
+        "plaintext",
         "trust_unverified_devices",
         "json",
         "quiet",

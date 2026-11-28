@@ -1,2 +1,1 @@
 - The HTTP room helpers of `_lib/rooms.py` (`list_joined_rooms`, `find_room_by_name`, `find_direct_room`, `resolve_room_alias`, `get_room_info`, `resolve_room_cli`), `load_config` of `_lib/config.py`, and the strict mode, timeout and `path_segment` of `_lib/http.py`, which only `matrix-doctor.py` still uses
-- The plaintext path into an encrypted room: `matrix-send.py` sent through the Client-Server API without encryption, which the hookshot guide used for a bridge that does not decrypt; set up the bridge's `encryption:` or provision the webhook in an unencrypted room

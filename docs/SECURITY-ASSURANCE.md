@@ -107,6 +107,7 @@ Which of these checks must pass before a pull request can merge is set in the br
 - Sessions imported from the server-side key backup (`m.megolm_backup.v1`) are authenticated only by the backup's public key, as the algorithm defines; the homeserver could add sessions to the backup that decrypt as if they came from a room member. Restoring them is matrix-e2ee-cli's (matrix-sdk's) job.
 - `synapse-search.py` sees only unencrypted events; an empty result does not mean there were no messages.
 - The E2EE binary comes from the matrix-e2ee-cli GitHub release. The skill trusts the SHA-256 it pins, so a new binary needs a change of `C/_lib/cli_release.json` in this repository; no dependency review covers what that binary contains. `MATRIX_E2EE_CLI` runs any binary the user names, unchecked.
+- `--plaintext` on `matrix-send.py` and `matrix-send-e2ee.py` sends that one message unencrypted, also in an encrypted room (matrix-e2ee-cli `send --plaintext`, which warns on stderr); the homeserver and every later member can read it. It exists for bots that cannot decrypt and is never the default.
 - The old matrix-nio store and the takeover backup stay on disk, with the device's access token and keys, until the user deletes them.
 - `allowed-tools` in a `SKILL.md` pre-approves tools for the agent; it does not remove any tool the agent already has and is not a sandbox.
 - Security fixes follow the supported-versions rules of the organisation's security policy; older releases may not receive them.

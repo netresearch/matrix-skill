@@ -10,7 +10,8 @@ Detailed guide for Matrix E2EE setup, device verification, and key management.
 | Scenario | Script | Notes |
 |----------|--------|-------|
 | Any room | `matrix-send-e2ee.py` | Encrypted when the room is; requires setup; downloads matrix-e2ee-cli on first use |
-| Any room, older options only | `matrix-send.py` | The same matrix-e2ee-cli command, so the same setup; no plaintext path into an encrypted room |
+| Any room, older options only | `matrix-send.py` | The same matrix-e2ee-cli command, so the same setup |
+| A bot that cannot decrypt (hookshot without encryption) | `matrix-send-e2ee.py --plaintext` | Unencrypted even in an encrypted room: the homeserver and later members can read it ([hookshot-integration.md](hookshot-integration.md)) |
 
 ## E2EE Setup
 

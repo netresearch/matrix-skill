@@ -36,6 +36,10 @@ Options:
     --thread EVENT    Reply in thread (event ID of thread root)
     --reply EVENT     Reply to message (event ID to reply to)
     --no-prefix       Don't add bot_prefix from config
+    --plaintext       Send unencrypted, also in an encrypted room, where the
+                      homeserver and everyone who joins later can read it:
+                      only for a bot that cannot decrypt, such as a
+                      matrix-hookshot bridge without encryption
     --json            Output as JSON
     --quiet           Minimal output
     --debug           Accepted and ignored
@@ -96,6 +100,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--no-prefix", action="store_true", help="Don't add bot_prefix from config"
     )
+    parser.add_argument(
+        "--plaintext",
+        action="store_true",
+        help="Send unencrypted, also in an encrypted room: only for a bot that cannot decrypt, such as a hookshot bridge without encryption; the homeserver and everyone who joins later can read this message",
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     parser.add_argument("--debug", action="store_true", help="Ignored")
@@ -111,7 +120,7 @@ def translate(args):
             "renders Markdown; send without --format"
         )
     cli = ["send"]
-    for flag in ("emote", "notice", "no_prefix", "json", "quiet"):
+    for flag in ("emote", "notice", "no_prefix", "plaintext", "json", "quiet"):
         if getattr(args, flag):
             cli.append("--" + flag.replace("_", "-"))
     for flag in ("thread", "reply"):

@@ -507,6 +507,37 @@ class TranslationTests(WrapperTestCase):
             ["edit", "--no-prefix", "--json", "--quiet", "--", "!r:e", "$e", "new !"],
         )
 
+    def test_send_plaintext(self):
+        for script in ("matrix-send-e2ee.py", "matrix-send.py"):
+            with self.subTest(script=script):
+                self.log.unlink(missing_ok=True)
+                self.assertTranslates(
+                    script,
+                    ["!o:e", "!hookshot webhook x", "--no-prefix", "--plaintext"],
+                    [
+                        "send",
+                        "--no-prefix",
+                        "--plaintext",
+                        "!o:e",
+                        "--",
+                        "!hookshot webhook x",
+                    ],
+                )
+
+    def test_send_plaintext_with_trust_unverified_devices_is_refused(self):
+        # The CLI refuses the pair (exit 2); the wrapper refuses it first, as
+        # it does --emote with --notice.
+        result = self.run_script(
+            "matrix-send-e2ee.py",
+            "!o:e",
+            "hi",
+            "--plaintext",
+            "--trust-unverified-devices",
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("not allowed with argument", result.stderr)
+        self.assertEqual(self.calls(), [])
+
     def test_passthrough(self):
         self.assertTranslates(
             "matrix-e2ee-cli.py",

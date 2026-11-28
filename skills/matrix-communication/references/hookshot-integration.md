@@ -28,8 +28,9 @@ uv run scripts/matrix-invite.py "$ROOM" "$BOT"
 # 2. Promote it — hookshot refuses to configure a bridge without moderator+
 uv run scripts/matrix-power-level.py "$ROOM" --set "$BOT" 50
 
-# 3. Ask it to create the webhook (name is free text, liveDuration optional e.g. 30d)
-uv run scripts/matrix-send-e2ee.py "$ROOM" "!hookshot webhook lsb-tickets" --no-prefix
+# 3. Ask it to create the webhook (name is free text, liveDuration optional e.g. 30d);
+#    --plaintext only for a bridge without encryption, see below
+set +H && uv run scripts/matrix-send-e2ee.py "$ROOM" "!hookshot webhook lsb-tickets" --no-prefix --plaintext
 ```
 
 Two details decide whether step 3 does anything:
@@ -43,10 +44,13 @@ Two details decide whether step 3 does anything:
   On a bridge without it (measured on hookshot 7.5.0) the command sent with
   `matrix-send-e2ee.py` (prefix off, key shared with every device) got no reply
   and created no hook, while a plaintext `m.room.message` was answered within
-  seconds. Version 5 sent that plaintext with `matrix-send.py`; every send
-  script now runs matrix-e2ee-cli, which encrypts in an encrypted room, so the
-  skill has no plaintext path any more. Set up the bridge's `encryption:`, or
-  provision the webhook in an unencrypted room.
+  seconds. `--plaintext` sends that one message unencrypted (matrix-e2ee-cli
+  warns on stderr). The cost: the homeserver and every member who joins the
+  room later can read that message, and it stays unencrypted in the room's
+  history. Use it only for the bare command, whose content (a hook name) you
+  are fine to disclose; the secret webhook URL is never part of it, hookshot
+  sends that to the admin DM. On a bridge with `encryption:` set, leave
+  `--plaintext` off. It cannot be combined with `--trust-unverified-devices`.
 
 The bot replies in the room with `"Room configured to bridge webhooks. See
 admin room for secret url."` — **the actual URL is never posted in the
