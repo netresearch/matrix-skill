@@ -97,11 +97,7 @@ class ResolveTests(unittest.TestCase):
         # The CLI lists the rooms with its own session; the lookup needs none
         # of its fields, so a session without a token is still looked up in.
         self.session.write_text("{}")
-        try:
-            resolved = self.resolve("ops")
-        except room_lookup.RoomLookupError as exc:
-            self.fail(f"refused: {exc}")
-        self.assertEqual(resolved, "!a:e")
+        self.assertEqual(self.resolve("ops"), "!a:e")
 
     def test_a_write_refuses_a_partial_only_match_and_names_it(self):
         with self.assertRaises(room_lookup.RoomLookupError) as ctx:

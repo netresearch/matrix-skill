@@ -522,7 +522,9 @@ class LeftoverAccessTokenTests(unittest.TestCase):
         self.session.write_text(
             json.dumps({"device_id": "SKILLDEV", "access_token": "syt_device"})
         )
-        patcher = mock.patch.object(doctor, "get_session_path", lambda: self.session)
+        patcher = mock.patch.object(
+            doctor, "get_session_path", return_value=self.session
+        )
         patcher.start()
         self.addCleanup(patcher.stop)
         env = {k: v for k, v in os.environ.items() if not k.startswith("MATRIX_")}

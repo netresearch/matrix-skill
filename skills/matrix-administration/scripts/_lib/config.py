@@ -145,6 +145,26 @@ def session_credentials(path: Path) -> tuple[str, str] | None:
     return str(session["access_token"]), str(session["homeserver"])
 
 
+def resolve_admin_token(config: dict) -> tuple[dict, Path | None]:
+    """``config`` with ``admin_token`` from its strongest source, and the
+    session path when the session was consulted (else None).
+
+    MATRIX_ADMIN_TOKEN, admin_token_file and admin_token first (a set one
+    wins, even a dead one), else the matrix-e2ee-cli session, whose token is
+    paired with the session's own homeserver. Raises TokenSourceError when a
+    token source cannot be used.
+    """
+    config = resolve_tokens(config, keys=("admin_token",))
+    if config.get("admin_token"):
+        return config, None
+    session_path = cli_session_path()
+    credentials = session_credentials(session_path)
+    if credentials:
+        # The session's token belongs to the session's homeserver.
+        config["admin_token"], config["homeserver"] = credentials
+    return config, session_path
+
+
 def load_config(require_admin: bool = True) -> dict:
     """Load Matrix config from ``$XDG_CONFIG_HOME/matrix/config.json``.
 
@@ -187,13 +207,7 @@ def load_config(require_admin: bool = True) -> dict:
     session_path = None
     if require_admin:
         try:
-            config = resolve_tokens(config, keys=("admin_token",))
-            if not config.get("admin_token"):
-                session_path = cli_session_path()
-                credentials = session_credentials(session_path)
-                if credentials:
-                    # The session's token belongs to the session's homeserver.
-                    config["admin_token"], config["homeserver"] = credentials
+            config, session_path = resolve_admin_token(config)
         except TokenSourceError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
