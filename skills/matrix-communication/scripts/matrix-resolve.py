@@ -52,6 +52,11 @@ def translate(args):
 
 def main(argv=None) -> None:
     args = build_parser().parse_args(argv)
+    if not args.alias.startswith("#"):
+        # Checked before anything runs, as in version 5.0.0: no takeover, no
+        # session, no CLI.
+        print("Error: Alias must start with #", file=sys.stderr)
+        sys.exit(1)
     try:
         cli_args, extra_env = translate(args)
     except Unsupported as exc:

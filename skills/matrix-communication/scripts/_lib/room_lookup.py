@@ -40,6 +40,14 @@ class RoomLookupError(Exception):
     """The shorthand matched no room, several rooms, or could not be looked up."""
 
 
+class Interrupted(Exception):
+    """Ctrl-C ended the listing; the command ends as the CLI's own does (130)."""
+
+
+# Ctrl-C: the runner's 130, or a child killed by SIGINT (as matrix-watch.py).
+INTERRUPTED = {130, -2}
+
+
 def is_shorthand(room: str) -> bool:
     """Not a room ID and not an alias with its server part."""
     return not room.startswith("!") and not (room.startswith("#") and ":" in room)
@@ -99,6 +107,8 @@ def cli_rooms(env) -> list:
     """
     binary = cli.ensure_binary(env=env, log=cli.stderr_log)
     result = cli.run_captured(binary, ["rooms", "--json"], env=env)
+    if result.returncode in INTERRUPTED:
+        raise Interrupted
     unreadable, errors = [], []
     for line in result.stderr.splitlines():
         if line.startswith(MEMBERS_WARNING):
@@ -129,8 +139,10 @@ def cli_rooms(env) -> list:
 def resolve(room: str, env, lister=cli_rooms, write=False) -> str:
     """The room ID the old scripts chose for ROOM; ROOM itself when it is exact.
 
-    Without a session there is nothing to look up with, and the CLI, which
-    needs the session too, reports that itself. With WRITE (send, edit,
+    Without a session there is nothing to look up with: a shorthand is
+    refused then, because passed on, the CLI would pick by display name
+    once a session exists. The wrappers ask only after a pending takeover
+    of a matrix-nio device, which creates the session. With WRITE (send, edit,
     react, redact, invite, power-level --set) only an exact alias or an exact name counts: a room
     name is chosen by whoever named the room, and a partial match would
     let such a name decide where a message goes.
@@ -140,10 +152,15 @@ def resolve(room: str, env, lister=cli_rooms, write=False) -> str:
     # matrix-send-e2ee.py and friends looked "#ops" up as the name "ops".
     term = room.removeprefix("#")
     try:
-        if not cutover.cli_session_path(env).exists():
-            return room
+        has_session = cutover.cli_session_path(env).exists()
     except cutover.CutoverError:
-        return room
+        has_session = False
+    if not has_session:
+        raise RoomLookupError(
+            f"cannot look {room!r} up: there is no matrix-e2ee-cli session; run "
+            "matrix-e2ee-setup.py, or pass the room ID (!…) or full alias "
+            "(#name:server)"
+        )
     try:
         rooms = lister(env)
     except (OSError, ValueError) as exc:  # a failed or unreadable listing

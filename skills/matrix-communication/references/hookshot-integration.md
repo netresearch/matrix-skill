@@ -59,10 +59,12 @@ The DM room has no name — find it by joined-member set, then read it:
 
 ```bash
 # a room without a name is named after its members and matches on their user
-# IDs; exactly one such room must match, else nothing is read
+# IDs; only rooms whose members include the bot itself count (a room whose
+# name or alias merely contains it does not), and exactly one must, else
+# nothing is read
 ADMIN_ROOM=$(uv run scripts/matrix-rooms.py --search "$BOT" --json | python3 -c '
 import json, sys
-rooms = json.load(sys.stdin)
+rooms = [r for r in json.load(sys.stdin) if sys.argv[1] in (r.get("members") or [])]
 if len(rooms) != 1:
     sys.exit(f"{len(rooms)} rooms match {sys.argv[1]}; pass the admin room ID")
 print(rooms[0]["room_id"])

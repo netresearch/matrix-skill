@@ -587,5 +587,55 @@ class LeftoverAccessTokenTests(unittest.TestCase):
         self.assertIn("All checks passed", text)
 
 
+class RequiredSessionTests(unittest.TestCase):
+    """Every script needs the CLI session: a session that is definitely
+    missing or rejected fails the doctor; one it could not check does not."""
+
+    def run_main(self, e2ee, *argv):
+        patches = {
+            "check_e2ee_cli": lambda install=False, offline=False: (True, "cli"),
+            "check_config": lambda: (True, "Config OK", dict(CONFIG)),
+            "check_e2ee_setup": lambda config, offline=False: e2ee,
+            "check_token": lambda config, offline=False, store_ok=None: (None, "none"),
+            "check_leftover_token": lambda config: None,
+        }
+        with contextlib.ExitStack() as stack:
+            for name, value in patches.items():
+                stack.enter_context(mock.patch.object(doctor, name, value))
+            out = io.StringIO()
+            stack.enter_context(
+                mock.patch.object(sys, "argv", ["matrix-doctor.py", *argv])
+            )
+            stack.enter_context(contextlib.redirect_stdout(out))
+            with self.assertRaises(SystemExit) as ctx:
+                doctor.main()
+        return ctx.exception.code, out.getvalue()
+
+    def test_a_missing_or_rejected_session_fails(self):
+        for e2ee in (
+            (False, "E2EE not set up (no matrix-e2ee-cli session)"),
+            (False, "E2EE credential (DEV) rejected by the homeserver"),
+        ):
+            with self.subTest(e2ee=e2ee[1]):
+                code, text = self.run_main(e2ee)
+                self.assertEqual(code, 1)
+                self.assertIn("[FAIL] e2ee_setup (required)", text)
+                self.assertNotIn("Core functionality OK", text)
+                code, text = self.run_main(e2ee, "--json")
+                self.assertEqual(code, 1)
+                self.assertIs(json.loads(text)["e2ee_setup"]["critical"], True)
+
+    def test_an_unchecked_session_does_not_fail(self):
+        for e2ee in (
+            (None, "E2EE device DEV configured - not verified (--offline)"),
+            (None, "E2EE device of an older version (matrix-nio) not taken over yet"),
+        ):
+            with self.subTest(e2ee=e2ee[1]):
+                code, _ = self.run_main(e2ee)
+                self.assertEqual(code, 0)
+                code, _ = self.run_main(e2ee, "--json")
+                self.assertEqual(code, 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -100,7 +100,7 @@ class TranslationTests(WrapperTestCase):
         self.assertTranslates(
             "matrix-send-e2ee.py",
             [
-                "ops",
+                "!o:e",
                 "hi \\!",
                 "--notice",
                 "--thread",
@@ -134,7 +134,7 @@ class TranslationTests(WrapperTestCase):
                 "@a:e",
                 "--mention",
                 "@b:e",
-                "ops",
+                "!o:e",
                 "--",
                 "hi !",
             ],
@@ -159,18 +159,11 @@ class TranslationTests(WrapperTestCase):
             "matrix-send-e2ee.py", ["--to", "@a:e", "room", "x"], "exactly one"
         )
 
-    def test_send_refuses_a_room_that_reads_as_a_flag(self):
-        self.assertRefused(
-            "matrix-send-e2ee.py",
-            ["--", "--trust-unverified-devices", "hi"],
-            "starts with '-'",
-        )
-
     def test_read(self):
         self.assertTranslates(
             "matrix-read-e2ee.py",
-            ["ops", "--limit", "5", "-k", "--json", "--debug"],
-            ["read", "--limit", "5", "--request-keys", "--json", "--", "ops"],
+            ["!o:e", "--limit", "5", "-k", "--json", "--debug"],
+            ["read", "--limit", "5", "--request-keys", "--json", "--", "!o:e"],
         )
 
     def test_edit(self):
@@ -183,20 +176,20 @@ class TranslationTests(WrapperTestCase):
     def test_download(self):
         self.assertTranslates(
             "matrix-download-e2ee.py",
-            ["ops", "$e", "--output", "d", "--filename", "f", "--debug"],
-            ["download", "--output=d", "--filename=f", "--", "ops", "$e"],
+            ["!o:e", "$e", "--output", "d", "--filename", "f", "--debug"],
+            ["download", "--output=d", "--filename=f", "--", "!o:e", "$e"],
         )
 
     def test_download_overwrite_is_refused(self):
         self.assertRefused(
-            "matrix-download-e2ee.py", ["ops", "$e", "--overwrite"], "--overwrite"
+            "matrix-download-e2ee.py", ["!o:e", "$e", "--overwrite"], "--overwrite"
         )
 
     def test_fetch_keys(self):
         self.assertTranslates(
             "matrix-fetch-keys.py",
-            ["ops", "--limit", "50", "--sync-time", "9", "--debug"],
-            ["fetch-keys", "--limit", "50", "--sync-time", "9", "--", "ops"],
+            ["!o:e", "--limit", "50", "--sync-time", "9", "--debug"],
+            ["fetch-keys", "--limit", "50", "--sync-time", "9", "--", "!o:e"],
         )
 
     def test_verify(self):
@@ -455,7 +448,7 @@ class TranslationTests(WrapperTestCase):
         self.assertTranslates(
             "matrix-send.py",
             [
-                "ops",
+                "!o:e",
                 "hi \\!",
                 "--emote",
                 "--thread",
@@ -479,7 +472,7 @@ class TranslationTests(WrapperTestCase):
                 "$t",
                 "--reply",
                 "$r",
-                "ops",
+                "!o:e",
                 "--",
                 "hi !",
             ],
@@ -497,14 +490,11 @@ class TranslationTests(WrapperTestCase):
             "matrix-send.py", ["!r:e", "*x*", "--format", "text"], "--format text"
         )
 
-    def test_plain_send_refuses_a_room_that_reads_as_a_flag(self):
-        self.assertRefused("matrix-send.py", ["--", "--json", "hi"], "starts with '-'")
-
     def test_plain_read(self):
         self.assertTranslates(
             "matrix-read.py",
-            ["ops", "-l", "5", "--json"],
-            ["read", "--limit", "5", "--json", "--", "ops"],
+            ["!o:e", "-l", "5", "--json"],
+            ["read", "--limit", "5", "--json", "--", "!o:e"],
         )
 
     def test_plain_read_default_limit_is_the_clis(self):
@@ -527,7 +517,7 @@ class TranslationTests(WrapperTestCase):
 
 class OutputAndSecretTests(WrapperTestCase):
     def test_stdout_and_exit_code_pass_through(self):
-        result = self.run_script("matrix-send-e2ee.py", "ops", "hi", FAKE_CLI_RC="3")
+        result = self.run_script("matrix-send-e2ee.py", "!o:e", "hi", FAKE_CLI_RC="3")
         self.assertEqual(result.returncode, 3)
         self.assertEqual(result.stdout, "Event ID: $fake:example.org\n")
 
@@ -578,19 +568,34 @@ class TakeoverTests(WrapperTestCase):
             json.dumps({"user_id": "@u:e", "device_id": "DEV", "access_token": "syt_x"})
         )
 
+    def takeover_env(self, rooms):
+        session = self.root / "data" / "matrix-e2ee-cli" / "session.json"
+        return {"FAKE_MIGRATE_SESSION": str(session), "FAKE_ROOMS": json.dumps(rooms)}
+
     def test_the_first_command_takes_the_nio_device_over_first(self):
-        result = self.run_script("matrix-read-e2ee.py", "ops", "--json")
+        # The takeover creates the session; the shorthand is looked up after it.
+        env = self.takeover_env([{"room_id": "!a:e", "name": "ops", "alias": None}])
+        result = self.run_script("matrix-read-e2ee.py", "ops", "--json", **env)
         self.assertEqual(result.returncode, 0, result.stderr)
         argvs = [c["argv"] for c in self.calls()]
         self.assertEqual(argvs[0][:2], ["migrate-nio", "--yes"])
-        self.assertEqual(argvs[1], ["read", "--json", "--", "ops"])
+        self.assertEqual(
+            argvs[1:], [["rooms", "--json"], ["read", "--json", "--", "!a:e"]]
+        )
         # migrate-nio's report goes to stderr; stdout carries the command alone.
         self.assertEqual(result.stdout, "Event ID: $fake:example.org\n")
         self.assertIn("Migrated device DEV", result.stderr)
 
         self.log.unlink()
-        self.run_script("matrix-read-e2ee.py", "ops")
-        self.assertEqual([c["argv"][0] for c in self.calls()], ["read"])
+        self.run_script("matrix-read-e2ee.py", "ops", **env)
+        self.assertEqual([c["argv"][0] for c in self.calls()], ["rooms", "read"])
+
+    def test_without_the_takeover_a_shorthand_needs_a_session(self):
+        # A takeover that creates no session leaves nothing to look up with.
+        result = self.run_script("matrix-read-e2ee.py", "ops")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("matrix-e2ee-setup.py", result.stderr)
+        self.assertEqual([c["argv"][0] for c in self.calls()], ["migrate-nio"])
 
     def test_setup_right_after_the_takeover_keeps_the_migrated_device(self):
         session = self.root / "data" / "matrix-e2ee-cli" / "session.json"
@@ -633,10 +638,11 @@ class TakeoverTests(WrapperTestCase):
         self.assertEqual([c["argv"][0] for c in self.calls()], ["migrate-nio"])
 
     def test_a_message_or_room_named_like_a_command_still_takes_over(self):
-        self.run_script("matrix-send-e2ee.py", "logout", "help")
+        env = self.takeover_env([{"room_id": "!l:e", "name": "logout", "alias": None}])
+        self.run_script("matrix-send-e2ee.py", "logout", "help", **env)
         argvs = [c["argv"] for c in self.calls()]
         self.assertEqual(argvs[0][0], "migrate-nio")
-        self.assertEqual(argvs[1], ["send", "logout", "--", "help"])
+        self.assertEqual(argvs[-1], ["send", "!l:e", "--", "help"])
 
     def test_logout_and_help_never_trigger_a_takeover(self):
         self.run_script("matrix-e2ee-cli.py", "logout")
@@ -648,8 +654,8 @@ class FlagValueTests(WrapperTestCase):
     def test_a_filename_starting_with_a_dash_stays_a_value(self):
         self.assertTranslates(
             "matrix-download-e2ee.py",
-            ["ops", "$e", "--filename=--draft.pdf"],
-            ["download", "--filename=--draft.pdf", "--", "ops", "$e"],
+            ["!o:e", "$e", "--filename=--draft.pdf"],
+            ["download", "--filename=--draft.pdf", "--", "!o:e", "$e"],
         )
 
     def test_status_wins_over_import_keys(self):
@@ -670,7 +676,7 @@ class FlagValueTests(WrapperTestCase):
 class JsonErrorTests(WrapperTestCase):
     def test_a_failure_prints_the_old_error_object_on_stdout(self):
         for script, args in (
-            ("matrix-send-e2ee.py", ["ops", "hi", "--json"]),
+            ("matrix-send-e2ee.py", ["!o:e", "hi", "--json"]),
             ("matrix-edit-e2ee.py", ["!r:e", "$e", "new", "--json"]),
             ("matrix-redact.py", ["!r:e", "$e", "--json"]),
         ):
@@ -760,7 +766,7 @@ class JsonErrorTests(WrapperTestCase):
     def test_without_json_a_failure_prints_nothing_on_stdout(self):
         result = self.run_script(
             "matrix-send-e2ee.py",
-            "ops",
+            "!o:e",
             "hi",
             FAKE_CLI_RC="1",
             FAKE_CLI_STDERR="error: no room\n",
@@ -769,7 +775,7 @@ class JsonErrorTests(WrapperTestCase):
         self.assertEqual(result.stdout, "")
 
     def test_success_output_is_not_wrapped(self):
-        result = self.run_script("matrix-send-e2ee.py", "ops", "hi", "--json")
+        result = self.run_script("matrix-send-e2ee.py", "!o:e", "hi", "--json")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "Event ID: $fake:example.org\n")
 
@@ -867,6 +873,45 @@ class RoomLookupTests(WrapperTestCase):
     def calls(self):
         # Without the lookup's own `rooms --json`: the commands it chose rooms for.
         return [c for c in super().calls() if c["argv"] != LOOKUP]
+
+    def test_ctrl_c_during_the_lookup_exits_130_quietly(self):
+        result = self.run_script(
+            "matrix-send-e2ee.py", "ops", "hi", FAKE_ROOMS_RC="130"
+        )
+        self.assertEqual(result.returncode, 130, result.stderr)
+        self.assertNotIn("Error", result.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_an_exact_name_starting_with_a_dash_is_resolved_first(self):
+        rooms = [*LOOKUP_ROOMS, {"room_id": "!dash:e", "name": "-ops", "alias": None}]
+        self.env["FAKE_ROOMS"] = json.dumps(rooms)
+        for script in ("matrix-send.py", "matrix-send-e2ee.py"):
+            with self.subTest(script=script):
+                self.log.unlink(missing_ok=True)
+                self.assertTranslates(
+                    script, ["--", "-ops", "hi"], ["send", "!dash:e", "--", "hi"]
+                )
+        for script, args, expected in (
+            (
+                "matrix-edit.py",
+                ["--", "-ops", "$e", "x"],
+                ["edit", "--", "!dash:e", "$e", "x"],
+            ),
+            ("matrix-read.py", ["--", "-ops"], ["read", "--", "!dash:e"]),
+            (
+                "matrix-invite.py",
+                ["--", "-ops", "@a:e"],
+                ["invite", "--", "!dash:e", "@a:e"],
+            ),
+            (
+                "matrix-power-level.py",
+                ["--show", "--", "-ops"],
+                ["power-level", "--show", "--", "!dash:e"],
+            ),
+        ):
+            with self.subTest(script=script):
+                self.log.unlink(missing_ok=True)
+                self.assertTranslates(script, args, expected)
 
     def test_the_rooms_are_listed_by_the_cli_once(self):
         self.assertTranslates("matrix-read-e2ee.py", ["ops"], ["read", "--", "!a:e"])
@@ -1031,6 +1076,34 @@ class RoomLookupTests(WrapperTestCase):
         self.assertEqual(result.returncode, 1)
         self.assertTrue(result.stdout.strip(), "no JSON on stdout")
         self.assertIn("several rooms", json.loads(result.stdout)["error"])
+        self.assertEqual(self.calls(), [])
+
+
+class NoSessionTests(WrapperTestCase):
+    """Without a matrix-e2ee-cli session no shorthand reaches the CLI."""
+
+    def test_a_shorthand_stops_with_the_setup_hint(self):
+        for script, args in (
+            ("matrix-send.py", ["ops", "hi"]),
+            ("matrix-send-e2ee.py", ["--", "-ops", "hi"]),
+            ("matrix-read-e2ee.py", ["ops"]),
+            ("matrix-invite.py", ["ops", "@a:e"]),
+            ("matrix-power-level.py", ["ops", "--show"]),
+        ):
+            with self.subTest(script=script):
+                self.log.unlink(missing_ok=True)
+                result = self.run_script(script, *args)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn("matrix-e2ee-setup.py", result.stderr)
+                self.assertEqual(self.calls(), [])
+
+    def test_ids_and_full_aliases_still_pass(self):
+        self.assertTranslates("matrix-read.py", ["#ops:e"], ["read", "--", "#ops:e"])
+
+    def test_resolve_checks_the_hash_before_anything_runs(self):
+        result = self.run_script("matrix-resolve.py", "ops")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "Error: Alias must start with #\n")
         self.assertEqual(self.calls(), [])
 
 

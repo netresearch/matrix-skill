@@ -114,6 +114,8 @@ def run_cli(args, extra_env=None, env=None, choose=None, json_errors=False) -> i
     except Unsupported as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
+    except room_lookup.Interrupted:
+        return 130  # as cli.run on Ctrl-C: no message
     except (cli.CliError, cutover.CutoverError, room_lookup.RoomLookupError) as exc:
         if json_errors:
             print(json.dumps({"error": str(exc)}))
@@ -135,10 +137,13 @@ def room_chooser(room: str, write=False):
 
     def choose(args, env):
         resolved = room_lookup.resolve(room, env, write=write)
-        if resolved != room:
-            separator = args.index("--")
-            index = separator - 1 if args[0] == "send" else separator + 1
-            args[index] = resolved
+        separator = args.index("--")
+        index = separator - 1 if args[0] == "send" else separator + 1
+        if args[0] == "send" and resolved.startswith("-"):
+            # Before "--" it would be read as a flag; resolve() returns room
+            # IDs and full aliases, so this only guards against a change.
+            raise Unsupported(f"room {resolved!r} starts with '-'; that is no room")
+        args[index] = resolved
         return args
 
     return choose

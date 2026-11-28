@@ -120,9 +120,8 @@ def translate(args):
     # Before "--": with an optional ROOM, clap puts everything after "--" into
     # MESSAGE.
     room = normalize_room_input(clean_message(args.room))
-    if room.startswith("-"):
-        # Placed before "--", it would be read as a CLI flag.
-        raise Unsupported(f"room {room!r} starts with '-'; that is no room")
+    # A shorthand such as "-ops" stands here only until room_chooser puts the
+    # room ID in its place; nothing unresolved reaches the CLI.
     cli += [room, "--", clean_message(args.message)]
     return cli, None
 

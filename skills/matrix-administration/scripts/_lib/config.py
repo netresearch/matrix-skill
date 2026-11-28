@@ -124,7 +124,8 @@ def cli_session_path(env=None) -> Path:
 def session_credentials(path: Path) -> tuple[str, str] | None:
     """(access_token, homeserver) of the matrix-e2ee-cli session, or None.
 
-    None when the file does not exist or carries no access token. A file
+    None when the file does not exist or carries no access token or no
+    homeserver. A file
     that exists but cannot be read or parsed raises TokenSourceError.
     """
     try:
@@ -137,7 +138,11 @@ def session_credentials(path: Path) -> tuple[str, str] | None:
         ) from exc
     if not isinstance(session, dict) or not session.get("access_token"):
         return None
-    return str(session["access_token"]), str(session.get("homeserver") or "")
+    if not session.get("homeserver"):
+        # Its token belongs to its own homeserver only: never pair it with
+        # config.json's.
+        return None
+    return str(session["access_token"]), str(session["homeserver"])
 
 
 def load_config(require_admin: bool = True) -> dict:
@@ -187,10 +192,8 @@ def load_config(require_admin: bool = True) -> dict:
                 session_path = cli_session_path()
                 credentials = session_credentials(session_path)
                 if credentials:
-                    config["admin_token"] = credentials[0]
                     # The session's token belongs to the session's homeserver.
-                    if credentials[1]:
-                        config["homeserver"] = credentials[1]
+                    config["admin_token"], config["homeserver"] = credentials
         except TokenSourceError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)

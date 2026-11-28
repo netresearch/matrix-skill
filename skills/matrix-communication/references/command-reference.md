@@ -27,7 +27,12 @@ rule of version 5.0.0 (matrix-e2ee-cli's `rooms --lookup`), and it may return a
 single partial match: pass the name itself to a command that writes, which
 looks it up with the stricter rule.
 A listing that fails, or a room whose members the CLI could not read, stops
-the command. Send, edit, react, redact, invite and `power-level --set`
+the command. Only this lookup of the scripts that take a ROOM stops there:
+`matrix-rooms.py --lookup` and `--search` print the warning and still
+answer, so their result is no proof that the listing was complete. Without a
+matrix-e2ee-cli session a short name stops the command too (run
+`matrix-e2ee-setup.py`); on a machine with a matrix-nio device the takeover
+runs first and creates the session. Send, edit, react, redact, invite and `power-level --set`
 accept only an exact alias or exact name: anyone who
 can name a room you are in could otherwise steer a partial match. A name
 that matches several rooms, or none, stops the command before anything is
@@ -177,7 +182,9 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/matrix-doctor.py --offline
 dependency. Its `e2ee_cli` row checks the pinned matrix-e2ee-cli binary (or
 `MATRIX_E2EE_CLI`); `--install` downloads it. `--offline` skips the homeserver
 calls and the download, and the token and E2EE rows then read `not verified`
-rather than OK.
+rather than OK. `e2ee_setup` is required: a missing or rejected session
+fails the doctor (exit 1, also with `--json`), because every script needs it;
+`--offline` or a pending takeover leaves it unchecked, which fails nothing.
 
 ## Script selection
 

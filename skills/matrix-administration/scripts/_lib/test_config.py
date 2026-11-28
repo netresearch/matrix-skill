@@ -115,7 +115,9 @@ class AdminTokenSourceTests(unittest.TestCase):
         os.environ["XDG_DATA_HOME"] = str(self.home / "elsewhere")
         session = self.home / "elsewhere" / "matrix-e2ee-cli" / "session.json"
         session.parent.mkdir(parents=True)
-        session.write_text(json.dumps({"access_token": "syt_xdg"}))
+        session.write_text(
+            json.dumps({"access_token": "syt_xdg", "homeserver": BASE["homeserver"]})
+        )
         self.write_config(BASE)
         loaded, err = self.load()
         self.assertIsNotNone(loaded, err)
@@ -127,6 +129,19 @@ class AdminTokenSourceTests(unittest.TestCase):
         loaded, err = self.load()
         self.assertIsNotNone(loaded, err)
         self.assertEqual(loaded["homeserver"], BASE["homeserver"])
+
+    def test_a_session_without_homeserver_is_absent(self):
+        # Its token must never be paired with config.json's homeserver.
+        for homeserver in (None, ""):
+            with self.subTest(homeserver=homeserver):
+                fields = {"access_token": "syt_device"}
+                if homeserver is not None:
+                    fields["homeserver"] = homeserver
+                self.write_config(BASE)
+                self.write_session(**fields)
+                loaded, err = self.load()
+                self.assertIsNone(loaded, "the session token was used")
+                self.assertIn("MATRIX_ADMIN_TOKEN", err)
 
     def test_a_set_admin_token_wins_over_the_session(self):
         for source in ("inline", "file", "env"):

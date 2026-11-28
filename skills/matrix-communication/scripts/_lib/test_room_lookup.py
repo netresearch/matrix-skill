@@ -184,10 +184,18 @@ class ResolveTests(unittest.TestCase):
                 else:
                     self.fail("a broken listing resolved a room")
 
-    def test_without_a_session_the_room_passes_unchanged(self):
+    def test_without_a_session_a_shorthand_is_refused_not_passed_on(self):
+        # Passed on, the CLI would pick by display name once a session exists.
         self.session.unlink()
-        self.assertEqual(self.resolve("ops"), "ops")
+        with self.assertRaises(room_lookup.RoomLookupError) as ctx:
+            self.resolve("ops")
+        self.assertIn("matrix-e2ee-setup.py", str(ctx.exception))
         self.assertEqual(self.configs, [])
+
+    def test_without_a_session_ids_and_full_aliases_still_pass(self):
+        self.session.unlink()
+        for room in ("!b:e", "#ops:e"):
+            self.assertEqual(self.resolve(room), room)
 
 
 FAKE_ROOMS_CLI = """#!{python}
@@ -269,6 +277,10 @@ class CliRoomsTests(unittest.TestCase):
         )
         self.assertIsInstance(resolved, room_lookup.RoomLookupError)
         self.assertIn("not logged in", str(resolved))
+
+    def test_ctrl_c_in_the_listing_is_an_interruption_not_a_lookup_error(self):
+        with self.assertRaises(room_lookup.Interrupted):
+            room_lookup.cli_rooms({**self.env, "FAKE_RC": "130", "FAKE_STDOUT": ""})
 
     def test_output_that_is_no_room_list_is_refused(self):
         for stdout in ("<html>", "{}", "[1]"):

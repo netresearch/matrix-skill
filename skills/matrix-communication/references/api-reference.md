@@ -231,17 +231,20 @@ later), fed by a here-string (bash or zsh).
 
 ```bash
 SESSION="${XDG_DATA_HOME:-$HOME/.local/share}/matrix-e2ee-cli/session.json"
-HS=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["homeserver"])' "$SESSION")
-AUTH="Authorization: Bearer $(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["access_token"])' "$SESSION")"
-ROOM=$(curl -s -H @- "$HS/_matrix/client/v3/directory/room/%23room%3Aserver" <<<"$AUTH" \
-  | python3 -c 'import json,sys;print(json.load(sys.stdin)["room_id"])')
-
-# newest first; page with the returned `end` token until `origin_server_ts` is old enough
-curl -s -H @- --get \
-  --data-urlencode 'dir=b' --data-urlencode 'limit=100' \
-  --data-urlencode 'filter={"types":["m.room.message","m.room.encrypted"]}' \
-  "$HS/_matrix/client/v3/rooms/$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$ROOM")/messages" \
-  <<<"$AUTH"
+# One parse of session.json: line 1 the homeserver, line 2 the header. If it
+# fails, nothing is requested.
+if CREDS=$(python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); print(s["homeserver"]); print("Authorization: Bearer " + s["access_token"])' "$SESSION"); then
+  HS=${CREDS%%$'\n'*}
+  AUTH=${CREDS#*$'\n'}
+  ROOM=$(curl -s -H @- "${HS%/}/_matrix/client/v3/directory/room/%23room%3Aserver" <<<"$AUTH" \
+    | python3 -c 'import json,sys;print(json.load(sys.stdin)["room_id"])') &&
+  # newest first; page with the returned `end` token until `origin_server_ts` is old enough
+  curl -s -H @- --get \
+    --data-urlencode 'dir=b' --data-urlencode 'limit=100' \
+    --data-urlencode 'filter={"types":["m.room.message","m.room.encrypted"]}' \
+    "${HS%/}/_matrix/client/v3/rooms/$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$ROOM")/messages" \
+    <<<"$AUTH"
+fi
 ```
 
 The response holds `chunk` (the events, newest first) and `end` (pass it back as `from`).

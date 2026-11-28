@@ -430,7 +430,9 @@ def main():
         "e2ee_cli": {"ok": False, "message": "", "critical": False},
         "config": {"ok": False, "message": "", "critical": True},
         "token": {"ok": False, "message": "", "critical": False},
-        "e2ee_setup": {"ok": False, "message": "", "critical": False},
+        # Critical: every script runs matrix-e2ee-cli with this session. An
+        # unchecked session (--offline, a pending takeover) fails nothing.
+        "e2ee_setup": {"ok": False, "message": "", "critical": True},
     }
     # Added below when an access_token source is left over.
 
@@ -474,7 +476,15 @@ def main():
     # Output
     if args.json:
         print(json.dumps(checks, indent=2))
-        sys.exit(0 if all(c["ok"] for c in checks.values() if c.get("critical")) else 1)
+        sys.exit(
+            0
+            if all(
+                c["ok"] or c.get("unknown")
+                for c in checks.values()
+                if c.get("critical")
+            )
+            else 1
+        )
 
     # Pretty output
     all_ok = True
