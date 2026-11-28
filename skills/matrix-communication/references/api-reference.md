@@ -220,8 +220,9 @@ while `matrix-watchd.py` runs they go through the daemon (matrix-e2ee-cli
 0.4.0 or later, and a daemon started from that version). For raw events and
 deeper history than `--limit` covers, the plain `/messages` endpoint pages
 backwards as far as you need. It returns events as the homeserver stores them,
-so only *unencrypted* ones are readable — everything a webhook, a bridge or an
-RSS feed posts is. It answers with the skill's own device token, performs no
+so only *unencrypted* ones are readable, such as the unencrypted posts of a
+webhook, an RSS feed or a bridge; an encrypted event, from a bridge or anyone
+else, stays unreadable there. It answers with the skill's own device token, performs no
 `/sync` and touches no key endpoint, so it changes no device state — which is
 why it does not fall under the rule against reusing a client's token: **that
 rule still stands**, take the token from matrix-e2ee-cli's `session.json` (the

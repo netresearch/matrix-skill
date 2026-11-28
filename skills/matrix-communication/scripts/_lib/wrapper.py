@@ -60,6 +60,8 @@ def parse_intermixed(parser, argv=None):
     an operand after it, such as the room "-ops", as an option. The operands
     after the first "--" are parsed as stand-ins that cannot look like
     options and put back afterwards, so options stay intermixed before it.
+    A stand-in that an option took as its value is refused: after "--" there
+    are operands only.
     """
     argv = list(sys.argv[1:] if argv is None else argv)
     if "--" not in argv:
@@ -68,9 +70,18 @@ def parse_intermixed(parser, argv=None):
     operands = argv[cut + 1 :]
     stand_ins = {f"\x00operand{i}": value for i, value in enumerate(operands)}
     args = parser.parse_intermixed_args(argv[:cut] + list(stand_ins))
+    positionals = {a.dest for a in parser._actions if not a.option_strings}
     for name, value in vars(args).items():
-        if isinstance(value, str) and value in stand_ins:
-            setattr(args, name, stand_ins[value])
+        values = value if isinstance(value, list) else [value]
+        if not any(isinstance(v, str) and v in stand_ins for v in values):
+            continue
+        if name not in positionals:
+            # An option before "--" without its value took an operand after
+            # it ("--to -- @alice:e hello"); that operand is no option value.
+            option = next(a for a in parser._actions if a.dest == name)
+            parser.error(f"argument {option.option_strings[-1]}: expected one argument")
+        restored = [stand_ins.get(v, v) for v in values]
+        setattr(args, name, restored if isinstance(value, list) else restored[0])
     return args
 
 

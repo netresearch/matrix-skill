@@ -36,7 +36,7 @@ set +H && uv run scripts/matrix-send-e2ee.py "$ROOM" "!hookshot webhook lsb-tick
 set +H && uv run scripts/matrix-send-e2ee.py "$ROOM" "!hookshot webhook lsb-tickets" --no-prefix --plaintext
 ```
 
-Two details decide whether step 3 does anything:
+Three details decide whether step 3 does anything:
 
 - **`--no-prefix` is required whenever `bot_prefix` is configured.** The send
   scripts put that prefix (e.g. `🤖`) in front of the text; hookshot only reacts
@@ -54,6 +54,16 @@ Two details decide whether step 3 does anything:
   are fine to disclose; the secret webhook URL is never part of it, hookshot
   sends that to the admin DM. On a bridge with `encryption:` set, leave
   `--plaintext` off. It cannot be combined with `--trust-unverified-devices`.
+- **The encrypted command is refused while the room has unverified devices.**
+  Hookshot's own device and the devices of webhook bots are usually
+  unverified, and the encrypted step 3 then stops with "the room has devices
+  that are not verified" before anything is sent. Either verify the bridge's
+  device, or add `--trust-unverified-devices`, which shares this one
+  message's room key with the unverified devices too (nothing is stored and no
+  device is marked verified). Both keep the message encrypted: only devices of
+  room members can read it. `--plaintext` instead sends it unencrypted, for
+  the homeserver and every later member to read, and is only for a bridge
+  that cannot decrypt at all.
 
 The bot replies in the room with `"Room configured to bridge webhooks. See
 admin room for secret url."` — **the actual URL is never posted in the

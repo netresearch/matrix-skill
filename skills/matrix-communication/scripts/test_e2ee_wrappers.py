@@ -538,6 +538,22 @@ class TranslationTests(WrapperTestCase):
         self.assertIn("not allowed with argument", result.stderr)
         self.assertEqual(self.calls(), [])
 
+    def test_send_to_with_an_operand_after_the_separator(self):
+        self.assertTranslates(
+            "matrix-send-e2ee.py",
+            ["--to", "@alice:e", "--", "-hello"],
+            ["send", "--to", "@alice:e", "--", "-hello"],
+        )
+
+    def test_an_option_cannot_take_an_operand_after_the_separator(self):
+        # --to has no value before "--"; "@alice:e" after it is an operand.
+        result = self.run_script(
+            "matrix-send-e2ee.py", "--to", "--", "@alice:e", "hello"
+        )
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("--to", result.stderr)
+        self.assertEqual(self.calls(), [])
+
     def test_passthrough(self):
         self.assertTranslates(
             "matrix-e2ee-cli.py",
